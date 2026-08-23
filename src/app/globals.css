@@ -1,0 +1,52 @@
+@import "tailwindcss";
+
+/*
+  Light-only on purpose. The managers use this on a phone in bright rooms and
+  on a laptop; one well-tuned theme is less to maintain than two.
+*/
+
+@theme inline {
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+
+  /* Brand — app chrome, primary actions. */
+  --color-brand-50: #f0fdfa;
+  --color-brand-100: #ccfbf1;
+  --color-brand-200: #99f6e4;
+  --color-brand-600: #0d9488;
+  --color-brand-700: #0f766e;
+  --color-brand-800: #115e59;
+  --color-brand-900: #134e4a;
+
+  /* Booking sources — used consistently in badges and on the calendar. */
+  --color-airbnb-50: #fff1f2;
+  --color-airbnb-200: #fecdd3;
+  --color-airbnb-600: #e11d48;
+  --color-airbnb-700: #be123c;
+
+  --color-direct-50: #eef2ff;
+  --color-direct-200: #c7d2fe;
+  --color-direct-600: #4f46e5;
+  --color-direct-700: #4338ca;
+}
+
+html {
+  color-scheme: light;
+}
+
+body {
+  background: #f8fafc;
+  color: #0f172a;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Keep the native date/number controls from looking alien next to the rest. */
+input[type="date"] {
+  min-height: 2.5rem;
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+}
