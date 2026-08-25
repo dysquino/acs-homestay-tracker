@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 const stats = [
   { label: "Upcoming check-ins", value: "4", tone: "sky" },
   { label: "This month income", value: "$6,420", tone: "emerald" },
@@ -26,9 +28,12 @@ export default function Home() {
             <p className="text-sm uppercase tracking-[0.2em] text-slate-300">ACs Homestay</p>
             <h1 className="mt-1 text-2xl font-semibold">Operations dashboard</h1>
           </div>
-          <button className="rounded-full bg-white px-4 py-2 text-sm font-medium text-slate-900 transition hover:bg-slate-200">
+          <Link
+            href="/bookings"
+            className="rounded-full bg-white px-4 py-2 text-sm font-medium text-slate-900 transition hover:bg-slate-200"
+          >
             + Add booking
-          </button>
+          </Link>
         </header>
 
         <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -54,7 +59,9 @@ export default function Home() {
           <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-lg font-semibold">Upcoming bookings</h2>
-              <span className="text-sm text-slate-500">Calendar view</span>
+              <Link href="/bookings" className="text-sm font-medium text-slate-700 hover:text-slate-900">
+                View all
+              </Link>
             </div>
 
             <div className="grid gap-3">

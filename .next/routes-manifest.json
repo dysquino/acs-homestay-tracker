@@ -42,6 +42,12 @@
       "namedRegex": "^/_not\\-found(?:/)?$"
     },
     {
+      "page": "/bookings",
+      "regex": "^/bookings(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/bookings(?:/)?$"
+    },
+    {
       "page": "/favicon.ico",
       "regex": "^/favicon\\.ico(?:/)?$",
       "routeKeys": {},
