@@ -1,0 +1,106 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum BookingSource {
+  AIRBNB
+  DIRECT
+}
+
+enum PaymentStatus {
+  PAID
+  PENDING
+  PARTIAL
+}
+
+enum ExpenseCategory {
+  UTILITY_BILL
+  ASSOCIATION_DUES
+  REPAIRS
+  SUPPLIES
+  CLEANING_PAYMENT
+  OTHER
+}
+
+enum CleaningStatus {
+  SCHEDULED
+  COMPLETED
+}
+
+enum CleaningPaymentStatus {
+  PAID
+  UNPAID
+}
+
+model User {
+  id            String             @id @default(cuid())
+  name          String
+  email         String             @unique
+  passwordHash  String?
+  role          String?            @default("manager")
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  bookings      Booking[]
+  expenses      Expense[]
+  cleanings     CleaningSchedule[]
+}
+
+model Booking {
+  id            String        @id @default(cuid())
+  guestName     String
+  source        BookingSource
+  checkIn       DateTime
+  checkOut      DateTime
+  guestsCount   Int
+  totalPayout   Decimal       @db.Decimal(10, 2)
+  platformFee   Decimal?      @db.Decimal(10, 2)
+  paymentStatus PaymentStatus
+  contactInfo   String?
+  notes         String?
+  createdBy     String
+  user          User          @relation(fields: [createdBy], references: [id])
+  cleanings     CleaningSchedule[]
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  @@index([checkIn, checkOut])
+}
+
+model Expense {
+  id          String          @id @default(cuid())
+  date        DateTime
+  category    ExpenseCategory
+  description String
+  amount      Decimal         @db.Decimal(10, 2)
+  paidBy      String
+  receiptUrl  String?
+  createdBy   String
+  user        User            @relation(fields: [createdBy], references: [id])
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  @@index([date, category])
+}
+
+model CleaningSchedule {
+  id              String                 @id @default(cuid())
+  date            DateTime
+  bookingId       String?
+  booking         Booking?               @relation(fields: [bookingId], references: [id])
+  cleanerName     String?
+  status          CleaningStatus         @default(SCHEDULED)
+  paymentAmount   Decimal?               @db.Decimal(10, 2)
+  paymentStatus   CleaningPaymentStatus  @default(UNPAID)
+  notes           String?
+  createdBy       String
+  user            User                   @relation(fields: [createdBy], references: [id])
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+
+  @@index([date, cleanerName])
+}
