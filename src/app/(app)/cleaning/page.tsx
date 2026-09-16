@@ -160,12 +160,13 @@ export default function CleaningPage() {
                 </option>
               ))}
             </Select>
-            <div className="flex items-center gap-2">
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
               <Input
                 type="date"
                 value={from}
                 onChange={(e) => setFrom(e.target.value)}
                 aria-label="From date"
+                className="min-w-0 flex-1"
               />
               <span className="text-xs text-slate-400">to</span>
               <Input
@@ -173,6 +174,7 @@ export default function CleaningPage() {
                 value={to}
                 onChange={(e) => setTo(e.target.value)}
                 aria-label="To date"
+                className="min-w-0 flex-1"
               />
             </div>
             {filtersActive ? (
