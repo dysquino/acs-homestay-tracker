@@ -8,11 +8,11 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader } from "@/components/ui/card";
 import { Input, Select } from "@/components/ui/field";
-import { PlusIcon } from "@/components/ui/icons";
+import { ChevronLeftIcon, ChevronRightIcon, PlusIcon } from "@/components/ui/icons";
 import { ConfirmDialog } from "@/components/ui/modal";
 import { StatTile } from "@/components/ui/stat";
 import { EmptyState, Table, TableWrap, Td, Th } from "@/components/ui/table";
-import { today } from "@/lib/dates";
+import { addMonths, startOfMonth, today } from "@/lib/dates";
 import { formatCurrency, formatDate, formatMonth } from "@/lib/format";
 import { expensesByMonth, monthSummary } from "@/lib/selectors";
 import { useStore } from "@/lib/store";
@@ -41,9 +41,13 @@ export default function ExpensesPage() {
     dir: "desc",
   });
 
+  const t = today();
+  const [monthCursor, setMonthCursor] = useState(() => startOfMonth(t));
+  const isCurrentMonth = monthCursor === startOfMonth(t);
+
   const summary = useMemo(
-    () => monthSummary(bookings, expenses, today()),
-    [bookings, expenses],
+    () => monthSummary(bookings, expenses, monthCursor),
+    [bookings, expenses, monthCursor],
   );
 
   const filtered = useMemo(() => {
@@ -101,11 +105,36 @@ export default function ExpensesPage() {
         }
       />
 
+      <div className="mb-3 flex items-center gap-2">
+        <Button
+          size="sm"
+          aria-label="Previous month"
+          onClick={() => setMonthCursor((m) => addMonths(m, -1))}
+        >
+          <ChevronLeftIcon className="h-4 w-4" />
+        </Button>
+        <Button
+          size="sm"
+          aria-label="Next month"
+          onClick={() => setMonthCursor((m) => addMonths(m, 1))}
+        >
+          <ChevronRightIcon className="h-4 w-4" />
+        </Button>
+        {!isCurrentMonth ? (
+          <Button size="sm" onClick={() => setMonthCursor(startOfMonth(t))}>
+            This month
+          </Button>
+        ) : null}
+        <h2 className="ml-1 text-sm font-semibold text-slate-900">
+          {formatMonth(monthCursor)}
+        </h2>
+      </div>
+
       <div className="mb-5 grid gap-3 sm:grid-cols-3">
         <StatTile
           label={`Income — ${formatMonth(summary.month)}`}
           value={formatCurrency(summary.income)}
-          hint="Net of platform fees"
+          hint="Net of platform fees, split by nights per month"
           tone="brand"
         />
         <StatTile
@@ -113,7 +142,7 @@ export default function ExpensesPage() {
           value={formatCurrency(summary.expenses)}
         />
         <StatTile
-          label="Profit this month"
+          label={`Profit — ${formatMonth(summary.month)}`}
           value={formatCurrency(summary.net)}
           tone={summary.net >= 0 ? "positive" : "negative"}
           hint={summary.net >= 0 ? "In the black" : "Spending exceeds income"}

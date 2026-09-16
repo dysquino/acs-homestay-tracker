@@ -25,16 +25,18 @@ export async function resetSampleData(): Promise<void> {
       bookingIdMap.set(id, created.id);
     }
 
-    for (const { id: _id, ...rest } of seed.expenses) {
-      await tx.expense.create({ data: expenseToDb(rest) });
+    // expenseToDb/cleaningToDb only read the fields they need, so passing
+    // the full seed record (which also has `id`) is fine structurally.
+    for (const expense of seed.expenses) {
+      await tx.expense.create({ data: expenseToDb(expense) });
     }
 
-    for (const { id: _id, ...rest } of seed.cleaning) {
-      const bookingId = rest.bookingId
-        ? (bookingIdMap.get(rest.bookingId) ?? null)
+    for (const record of seed.cleaning) {
+      const bookingId = record.bookingId
+        ? (bookingIdMap.get(record.bookingId) ?? null)
         : null;
       await tx.cleaningSchedule.create({
-        data: cleaningToDb({ ...rest, bookingId }),
+        data: cleaningToDb({ ...record, bookingId }),
       });
     }
   });

@@ -11,12 +11,18 @@ import {
 } from "@/components/ui/badge";
 import { Button, LinkButton } from "@/components/ui/button";
 import { Card, CardHeader } from "@/components/ui/card";
+import { ChevronLeftIcon, ChevronRightIcon } from "@/components/ui/icons";
 import { ConfirmDialog } from "@/components/ui/modal";
 import { EmptyState } from "@/components/ui/table";
 import { StatTile } from "@/components/ui/stat";
 import { useAuth } from "@/lib/auth";
-import { daysBetween, today } from "@/lib/dates";
-import { formatCurrency, formatDate, formatDateRange } from "@/lib/format";
+import { addMonths, daysBetween, startOfMonth, today } from "@/lib/dates";
+import {
+  formatCurrency,
+  formatDate,
+  formatDateRange,
+  formatMonth,
+} from "@/lib/format";
 import {
   amountOwedByCleaner,
   bookingNetIncome,
@@ -32,10 +38,12 @@ export default function DashboardPage() {
   const { user } = useAuth();
   const t = today();
   const [confirmingReset, setConfirmingReset] = useState(false);
+  const [monthCursor, setMonthCursor] = useState(() => startOfMonth(t));
+  const isCurrentMonth = monthCursor === startOfMonth(t);
 
   const summary = useMemo(
-    () => monthSummary(bookings, expenses, t),
-    [bookings, expenses, t],
+    () => monthSummary(bookings, expenses, monthCursor),
+    [bookings, expenses, monthCursor],
   );
   const events = useMemo(() => upcomingEvents(bookings, 7, t), [bookings, t]);
   const unpaid = useMemo(() => unpaidCleanings(cleaning), [cleaning]);
@@ -53,19 +61,44 @@ export default function DashboardPage() {
         description="Here's where things stand today."
       />
 
+      <div className="mb-3 flex items-center gap-2">
+        <Button
+          size="sm"
+          aria-label="Previous month"
+          onClick={() => setMonthCursor((m) => addMonths(m, -1))}
+        >
+          <ChevronLeftIcon className="h-4 w-4" />
+        </Button>
+        <Button
+          size="sm"
+          aria-label="Next month"
+          onClick={() => setMonthCursor((m) => addMonths(m, 1))}
+        >
+          <ChevronRightIcon className="h-4 w-4" />
+        </Button>
+        {!isCurrentMonth ? (
+          <Button size="sm" onClick={() => setMonthCursor(startOfMonth(t))}>
+            This month
+          </Button>
+        ) : null}
+        <h2 className="ml-1 text-sm font-semibold text-slate-900">
+          {formatMonth(monthCursor)}
+        </h2>
+      </div>
+
       <div className="mb-5 grid gap-3 grid-cols-2 lg:grid-cols-4">
         <StatTile
-          label="Income this month"
+          label={`Income — ${formatMonth(monthCursor)}`}
           value={formatCurrency(summary.income)}
-          hint="Net of platform fees"
+          hint="Net of platform fees, split by nights per month"
           tone="brand"
         />
         <StatTile
-          label="Expenses this month"
+          label={`Expenses — ${formatMonth(monthCursor)}`}
           value={formatCurrency(summary.expenses)}
         />
         <StatTile
-          label="Profit this month"
+          label={`Profit — ${formatMonth(monthCursor)}`}
           value={formatCurrency(summary.net)}
           tone={summary.net >= 0 ? "positive" : "negative"}
         />

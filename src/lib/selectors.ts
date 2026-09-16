@@ -2,6 +2,7 @@ import {
   addDays,
   endOfMonth,
   isWithin,
+  occupiedNights,
   rangesOverlap,
   startOfMonth,
   today,
@@ -32,10 +33,16 @@ export function incomeInRange(
   from: ISODate,
   to: ISODate,
 ): number {
-  // Attributed to the check-in date — that's when the stay is booked in.
-  return bookings
-    .filter((b) => isWithin(b.checkIn, from, to))
-    .reduce((sum, b) => sum + bookingNetIncome(b), 0);
+  // A stay that spans a month boundary has its net income split
+  // proportionally by how many of its nights fall in the range, rather
+  // than attributing the whole thing to check-in (or check-out) month.
+  return bookings.reduce((sum, b) => {
+    const nights = occupiedNights(b.checkIn, b.checkOut);
+    if (nights.length === 0) return sum;
+    const nightsInRange = nights.filter((n) => isWithin(n, from, to)).length;
+    if (nightsInRange === 0) return sum;
+    return sum + (bookingNetIncome(b) * nightsInRange) / nights.length;
+  }, 0);
 }
 
 export function expensesInRange(

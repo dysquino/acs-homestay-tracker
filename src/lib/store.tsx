@@ -96,8 +96,18 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    refresh().finally(() => setReady(true));
-  }, [refresh]);
+    let cancelled = false;
+    Promise.all([listBookings(), listExpenses(), listCleaning()]).then(
+      ([bookings, expenses, cleaning]) => {
+        if (cancelled) return;
+        setData({ bookings, expenses, cleaning });
+        setReady(true);
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const addBooking = useCallback(
     async (input: Omit<Booking, "id">) => {
