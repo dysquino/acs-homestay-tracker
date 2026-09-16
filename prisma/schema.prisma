@@ -12,8 +12,12 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  // Used only by `prisma db push`/`migrate` for schema changes, which need
+  // session-level features (locks, multi-statement transactions) that the
+  // transaction pooler in DATABASE_URL doesn't support.
+  directUrl = env("DIRECT_URL")
 }
 
 enum BookingSource {
