@@ -1,11 +1,21 @@
 // Prisma schema for ACs Homestay Tracker.
 //
-// Ported from the `foundation-001` branch (originally authored by cinodeo),
-// which modeled this after the data fields specified in Requirements.md.
-// Field names line up with the frontend's domain types in
-// `src/lib/types.ts` — only the enum casing differs (Prisma convention is
-// UPPER_SNAKE_CASE); a mapping layer in the data access layer will
-// translate between the two.
+// Originally ported from the `foundation-001` branch (by cinodeo), then
+// reconciled with the frontend's actual domain types in `src/lib/types.ts`
+// (the frontend is the final design — this schema follows it, not the
+// other way around):
+//
+// - `createdBy` is a free-text display label ("Owner", "Manager", ...),
+//   set from whoever is signed in — not a foreign key to User. The
+//   frontend has never treated it as one (see booking-form.tsx), so no
+//   relation is enforced here.
+// - Fields the frontend always sends a value for (contactInfo, notes,
+//   platformFee, etc.) are non-optional with a default, instead of
+//   nullable, to avoid null-handling in the mapping layer.
+//
+// Enum casing is UPPER_SNAKE_CASE (Prisma convention) while the frontend
+// uses lowercase string literals; `src/lib/data/mappers.ts` translates
+// between the two.
 
 generator client {
   provider = "prisma-client-js"
@@ -50,17 +60,17 @@ enum CleaningPaymentStatus {
   UNPAID
 }
 
+/// Not yet wired to anything — a placeholder for when Supabase Auth lands
+/// (a common pattern is mirroring `auth.users` into a profile table like
+/// this one). `createdBy` on the models below does NOT reference this.
 model User {
-  id           String             @id @default(cuid())
+  id           String   @id @default(cuid())
   name         String
-  email        String             @unique
+  email        String   @unique
   passwordHash String?
-  role         String?            @default("manager")
-  createdAt    DateTime           @default(now())
-  updatedAt    DateTime           @updatedAt
-  bookings     Booking[]
-  expenses     Expense[]
-  cleanings    CleaningSchedule[]
+  role         String?  @default("manager")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 }
 
 model Booking {
@@ -71,12 +81,11 @@ model Booking {
   checkOut      DateTime
   guestsCount   Int
   totalPayout   Decimal            @db.Decimal(10, 2)
-  platformFee   Decimal?           @db.Decimal(10, 2)
+  platformFee   Decimal            @default(0) @db.Decimal(10, 2)
   paymentStatus PaymentStatus
-  contactInfo   String?
-  notes         String?
+  contactInfo   String             @default("")
+  notes         String             @default("")
   createdBy     String
-  user          User               @relation(fields: [createdBy], references: [id])
   cleanings     CleaningSchedule[]
   createdAt     DateTime           @default(now())
   updatedAt     DateTime           @updatedAt
@@ -91,9 +100,8 @@ model Expense {
   description String
   amount      Decimal         @db.Decimal(10, 2)
   paidBy      String
-  receiptUrl  String?
+  receiptUrl  String          @default("")
   createdBy   String
-  user        User            @relation(fields: [createdBy], references: [id])
   createdAt   DateTime        @default(now())
   updatedAt   DateTime        @updatedAt
 
@@ -105,13 +113,12 @@ model CleaningSchedule {
   date          DateTime
   bookingId     String?
   booking       Booking?              @relation(fields: [bookingId], references: [id])
-  cleanerName   String?
+  cleanerName   String                @default("")
   status        CleaningStatus        @default(SCHEDULED)
-  paymentAmount Decimal?              @db.Decimal(10, 2)
+  paymentAmount Decimal               @default(0) @db.Decimal(10, 2)
   paymentStatus CleaningPaymentStatus @default(UNPAID)
-  notes         String?
+  notes         String                @default("")
   createdBy     String
-  user          User                  @relation(fields: [createdBy], references: [id])
   createdAt     DateTime              @default(now())
   updatedAt     DateTime              @updatedAt
 

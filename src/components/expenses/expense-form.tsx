@@ -92,11 +92,12 @@ function ExpenseFields({
   const [errors, setErrors] = useState<Partial<Record<keyof FormState, string>>>(
     {},
   );
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const set = <K extends keyof FormState>(key: K, value: FormState[K]) =>
     setForm((f) => ({ ...f, [key]: value }));
 
-  function onSubmit(e: React.FormEvent) {
+  async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     const next: Partial<Record<keyof FormState, string>> = {};
     if (!form.date) next.date = "Date is required.";
@@ -116,9 +117,14 @@ function ExpenseFields({
       createdBy: expense?.createdBy ?? user?.name ?? "Unknown",
     };
 
-    if (expense) updateExpense(expense.id, payload);
-    else addExpense(payload);
-    onClose();
+    setSubmitError(null);
+    try {
+      if (expense) await updateExpense(expense.id, payload);
+      else await addExpense(payload);
+      onClose();
+    } catch {
+      setSubmitError("Couldn't save this expense. Please try again.");
+    }
   }
 
   return (
@@ -201,6 +207,12 @@ function ExpenseFields({
           )}
         </Field>
       </div>
+
+      {submitError ? (
+        <p className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700">
+          {submitError}
+        </p>
+      ) : null}
 
       <p className="text-xs text-slate-500">
         Receipt uploads are planned for a later version — note the reference in

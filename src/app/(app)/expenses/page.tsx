@@ -336,9 +336,15 @@ export default function ExpensesPage() {
           ) : null
         }
         onCancel={() => setPendingDelete(null)}
-        onConfirm={() => {
-          if (pendingDelete) deleteExpense(pendingDelete.id);
+        onConfirm={async () => {
+          const target = pendingDelete;
           setPendingDelete(null);
+          if (!target) return;
+          try {
+            await deleteExpense(target.id);
+          } catch {
+            alert("Couldn't delete this expense. Please try again.");
+          }
         }}
       />
     </>

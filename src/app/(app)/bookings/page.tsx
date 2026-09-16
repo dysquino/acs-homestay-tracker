@@ -261,9 +261,15 @@ export default function BookingsPage() {
           ) : null
         }
         onCancel={() => setPendingDelete(null)}
-        onConfirm={() => {
-          if (pendingDelete) deleteBooking(pendingDelete.id);
+        onConfirm={async () => {
+          const target = pendingDelete;
           setPendingDelete(null);
+          if (!target) return;
+          try {
+            await deleteBooking(target.id);
+          } catch {
+            alert("Couldn't delete this booking. Please try again.");
+          }
         }}
       />
     </>

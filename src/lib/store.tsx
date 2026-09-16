@@ -6,26 +6,48 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useState,
   type ReactNode,
 } from "react";
 
-import { buildSeedData } from "./seed";
-import { useClientState } from "./use-client-state";
+import {
+  createBooking,
+  deleteBooking as deleteBookingAction,
+  listBookings,
+  updateBooking as updateBookingAction,
+} from "./data/bookings";
+import {
+  createCleaning,
+  deleteCleaning as deleteCleaningAction,
+  listCleaning,
+  updateCleaning as updateCleaningAction,
+} from "./data/cleaning";
+import {
+  createExpense,
+  deleteExpense as deleteExpenseAction,
+  listExpenses,
+  updateExpense as updateExpenseAction,
+} from "./data/expenses";
+import { resetSampleData } from "./data/reset";
 import type { Booking, CleaningRecord, Expense } from "./types";
+
+export { DEFAULT_CLEANING_FEE } from "./constants";
 
 /**
  * Client-side data layer.
  *
- * For now records live in localStorage so the UI can be built and tested
- * before the Supabase/Prisma backend exists. Every read and write goes
- * through this module, so swapping in real API calls later means changing
- * this file only — no page or component touches storage directly.
+ * Backed by Supabase Postgres via Prisma Server Actions (see `./data/`).
+ * Every read and write still goes through this module — pages and
+ * components never call the server actions directly — so this remains the
+ * one place that knows how data gets in and out.
+ *
+ * Mutations use a refresh-after-write pattern: after a create/update/delete
+ * resolves, all three lists are refetched from the server rather than
+ * patched optimistically in local state. Simpler and less error-prone than
+ * mirroring the server's cross-table logic (e.g. a booking's auto-created
+ * turnover cleaning) in the client, at the cost of an extra round trip per
+ * mutation — an acceptable trade for a small internal tool.
  */
-
-const STORAGE_KEY = "acs-homestay-tracker:v1";
-
-/** Default cleaner fee pre-filled on auto-created turnover records. */
-export const DEFAULT_CLEANING_FEE = 800;
 
 type Data = {
   bookings: Booking[];
@@ -35,160 +57,127 @@ type Data = {
 
 type StoreValue = Data & {
   ready: boolean;
-  addBooking: (input: Omit<Booking, "id">) => Booking;
-  updateBooking: (id: string, patch: Partial<Omit<Booking, "id">>) => void;
-  deleteBooking: (id: string) => void;
-  addExpense: (input: Omit<Expense, "id">) => Expense;
-  updateExpense: (id: string, patch: Partial<Omit<Expense, "id">>) => void;
-  deleteExpense: (id: string) => void;
-  addCleaning: (input: Omit<CleaningRecord, "id">) => CleaningRecord;
+  addBooking: (input: Omit<Booking, "id">) => Promise<Booking>;
+  updateBooking: (
+    id: string,
+    patch: Partial<Omit<Booking, "id">>,
+  ) => Promise<void>;
+  deleteBooking: (id: string) => Promise<void>;
+  addExpense: (input: Omit<Expense, "id">) => Promise<Expense>;
+  updateExpense: (
+    id: string,
+    patch: Partial<Omit<Expense, "id">>,
+  ) => Promise<void>;
+  deleteExpense: (id: string) => Promise<void>;
+  addCleaning: (input: Omit<CleaningRecord, "id">) => Promise<CleaningRecord>;
   updateCleaning: (
     id: string,
     patch: Partial<Omit<CleaningRecord, "id">>,
-  ) => void;
-  deleteCleaning: (id: string) => void;
-  resetToSampleData: () => void;
+  ) => Promise<void>;
+  deleteCleaning: (id: string) => Promise<void>;
+  resetToSampleData: () => Promise<void>;
 };
 
 const StoreContext = createContext<StoreValue | null>(null);
 
 const EMPTY: Data = { bookings: [], expenses: [], cleaning: [] };
 
-function uid(prefix: string): string {
-  return `${prefix}_${Math.random().toString(36).slice(2, 10)}`;
-}
-
-function load(): Data {
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return buildSeedData();
-    const parsed = JSON.parse(raw) as Partial<Data>;
-    return {
-      bookings: parsed.bookings ?? [],
-      expenses: parsed.expenses ?? [],
-      cleaning: parsed.cleaning ?? [],
-    };
-  } catch {
-    return buildSeedData();
-  }
-}
-
 export function StoreProvider({ children }: { children: ReactNode }) {
-  const [data, ready, setData] = useClientState<Data>(load, EMPTY);
+  const [data, setData] = useState<Data>(EMPTY);
+  const [ready, setReady] = useState(false);
+
+  const refresh = useCallback(async () => {
+    const [bookings, expenses, cleaning] = await Promise.all([
+      listBookings(),
+      listExpenses(),
+      listCleaning(),
+    ]);
+    setData({ bookings, expenses, cleaning });
+  }, []);
 
   useEffect(() => {
-    if (!ready) return;
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-  }, [data, ready]);
+    refresh().finally(() => setReady(true));
+  }, [refresh]);
 
-  const addBooking = useCallback((input: Omit<Booking, "id">) => {
-    const booking: Booking = { ...input, id: uid("bk") };
-    // Confirmed requirement: every booking auto-suggests the turnover clean
-    // for its check-out date. The user can reassign or delete it afterward.
-    const turnover: CleaningRecord = {
-      id: uid("cl"),
-      date: booking.checkOut,
-      bookingId: booking.id,
-      cleanerName: "",
-      status: "scheduled",
-      paymentAmount: DEFAULT_CLEANING_FEE,
-      paymentStatus: "unpaid",
-      notes: "",
-      createdBy: booking.createdBy,
-    };
-    setData((d) => ({
-      ...d,
-      bookings: [...d.bookings, booking],
-      cleaning: [...d.cleaning, turnover],
-    }));
-    return booking;
-  }, [setData]);
+  const addBooking = useCallback(
+    async (input: Omit<Booking, "id">) => {
+      const booking = await createBooking(input);
+      await refresh();
+      return booking;
+    },
+    [refresh],
+  );
 
   const updateBooking = useCallback(
-    (id: string, patch: Partial<Omit<Booking, "id">>) => {
-      setData((d) => {
-        const bookings = d.bookings.map((b) =>
-          b.id === id ? { ...b, ...patch } : b,
-        );
-        // Keep an untouched auto-created turnover in step with its check-out
-        // date. Once someone marks it completed we leave it alone.
-        const cleaning =
-          patch.checkOut === undefined
-            ? d.cleaning
-            : d.cleaning.map((c) =>
-                c.bookingId === id && c.status === "scheduled"
-                  ? { ...c, date: patch.checkOut as string }
-                  : c,
-              );
-        return { ...d, bookings, cleaning };
-      });
+    async (id: string, patch: Partial<Omit<Booking, "id">>) => {
+      await updateBookingAction(id, patch);
+      await refresh();
     },
-    [setData],
+    [refresh],
   );
 
-  const deleteBooking = useCallback((id: string) => {
-    setData((d) => ({
-      ...d,
-      bookings: d.bookings.filter((b) => b.id !== id),
-      // Drop turnovers that were auto-created and never touched; keep any
-      // real work that happened, just unlinked from the deleted booking.
-      cleaning: d.cleaning
-        .filter(
-          (c) =>
-            !(
-              c.bookingId === id &&
-              c.status === "scheduled" &&
-              c.paymentStatus === "unpaid" &&
-              c.cleanerName.trim() === ""
-            ),
-        )
-        .map((c) => (c.bookingId === id ? { ...c, bookingId: null } : c)),
-    }));
-  }, [setData]);
+  const deleteBooking = useCallback(
+    async (id: string) => {
+      await deleteBookingAction(id);
+      await refresh();
+    },
+    [refresh],
+  );
 
-  const addExpense = useCallback((input: Omit<Expense, "id">) => {
-    const expense: Expense = { ...input, id: uid("ex") };
-    setData((d) => ({ ...d, expenses: [...d.expenses, expense] }));
-    return expense;
-  }, [setData]);
+  const addExpense = useCallback(
+    async (input: Omit<Expense, "id">) => {
+      const expense = await createExpense(input);
+      await refresh();
+      return expense;
+    },
+    [refresh],
+  );
 
   const updateExpense = useCallback(
-    (id: string, patch: Partial<Omit<Expense, "id">>) => {
-      setData((d) => ({
-        ...d,
-        expenses: d.expenses.map((e) => (e.id === id ? { ...e, ...patch } : e)),
-      }));
+    async (id: string, patch: Partial<Omit<Expense, "id">>) => {
+      await updateExpenseAction(id, patch);
+      await refresh();
     },
-    [setData],
+    [refresh],
   );
 
-  const deleteExpense = useCallback((id: string) => {
-    setData((d) => ({ ...d, expenses: d.expenses.filter((e) => e.id !== id) }));
-  }, [setData]);
+  const deleteExpense = useCallback(
+    async (id: string) => {
+      await deleteExpenseAction(id);
+      await refresh();
+    },
+    [refresh],
+  );
 
-  const addCleaning = useCallback((input: Omit<CleaningRecord, "id">) => {
-    const record: CleaningRecord = { ...input, id: uid("cl") };
-    setData((d) => ({ ...d, cleaning: [...d.cleaning, record] }));
-    return record;
-  }, [setData]);
+  const addCleaning = useCallback(
+    async (input: Omit<CleaningRecord, "id">) => {
+      const record = await createCleaning(input);
+      await refresh();
+      return record;
+    },
+    [refresh],
+  );
 
   const updateCleaning = useCallback(
-    (id: string, patch: Partial<Omit<CleaningRecord, "id">>) => {
-      setData((d) => ({
-        ...d,
-        cleaning: d.cleaning.map((c) => (c.id === id ? { ...c, ...patch } : c)),
-      }));
+    async (id: string, patch: Partial<Omit<CleaningRecord, "id">>) => {
+      await updateCleaningAction(id, patch);
+      await refresh();
     },
-    [setData],
+    [refresh],
   );
 
-  const deleteCleaning = useCallback((id: string) => {
-    setData((d) => ({ ...d, cleaning: d.cleaning.filter((c) => c.id !== id) }));
-  }, [setData]);
+  const deleteCleaning = useCallback(
+    async (id: string) => {
+      await deleteCleaningAction(id);
+      await refresh();
+    },
+    [refresh],
+  );
 
-  const resetToSampleData = useCallback(() => {
-    setData(buildSeedData());
-  }, [setData]);
+  const resetToSampleData = useCallback(async () => {
+    await resetSampleData();
+    await refresh();
+  }, [refresh]);
 
   const value = useMemo<StoreValue>(
     () => ({

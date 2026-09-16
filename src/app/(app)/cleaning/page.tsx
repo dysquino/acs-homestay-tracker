@@ -264,12 +264,18 @@ export default function CleaningPage() {
                                 size="sm"
                                 variant="ghost"
                                 className="text-emerald-700 hover:bg-emerald-50"
-                                onClick={() =>
-                                  updateCleaning(c.id, {
-                                    paymentStatus: "paid",
-                                    status: "completed",
-                                  })
-                                }
+                                onClick={async () => {
+                                  try {
+                                    await updateCleaning(c.id, {
+                                      paymentStatus: "paid",
+                                      status: "completed",
+                                    });
+                                  } catch {
+                                    alert(
+                                      "Couldn't update this record. Please try again.",
+                                    );
+                                  }
+                                }}
                               >
                                 Mark paid
                               </Button>
@@ -357,9 +363,15 @@ export default function CleaningPage() {
           ) : null
         }
         onCancel={() => setPendingDelete(null)}
-        onConfirm={() => {
-          if (pendingDelete) deleteCleaning(pendingDelete.id);
+        onConfirm={async () => {
+          const target = pendingDelete;
           setPendingDelete(null);
+          if (!target) return;
+          try {
+            await deleteCleaning(target.id);
+          } catch {
+            alert("Couldn't delete this record. Please try again.");
+          }
         }}
       />
     </>

@@ -104,6 +104,7 @@ function CleaningFields({
   const [errors, setErrors] = useState<Partial<Record<keyof FormState, string>>>(
     {},
   );
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const set = <K extends keyof FormState>(key: K, value: FormState[K]) =>
     setForm((f) => ({ ...f, [key]: value }));
@@ -118,7 +119,7 @@ function CleaningFields({
     }));
   }
 
-  function onSubmit(e: React.FormEvent) {
+  async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     const next: Partial<Record<keyof FormState, string>> = {};
     if (!form.date) next.date = "Date is required.";
@@ -138,9 +139,14 @@ function CleaningFields({
       createdBy: record?.createdBy ?? user?.name ?? "Unknown",
     };
 
-    if (record) updateCleaning(record.id, payload);
-    else addCleaning(payload);
-    onClose();
+    setSubmitError(null);
+    try {
+      if (record) await updateCleaning(record.id, payload);
+      else await addCleaning(payload);
+      onClose();
+    } catch {
+      setSubmitError("Couldn't save this cleaning record. Please try again.");
+    }
   }
 
   const sortedBookings = [...bookings].sort((a, b) =>
@@ -259,6 +265,12 @@ function CleaningFields({
           )}
         </Field>
       </div>
+
+      {submitError ? (
+        <p className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700">
+          {submitError}
+        </p>
+      ) : null}
     </form>
   );
 }

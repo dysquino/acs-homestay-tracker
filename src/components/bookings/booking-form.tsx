@@ -123,6 +123,7 @@ function BookingFields({
   const [errors, setErrors] = useState<Partial<Record<keyof FormState, string>>>(
     {},
   );
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const set = <K extends keyof FormState>(key: K, value: FormState[K]) =>
     setForm((f) => ({ ...f, [key]: value }));
@@ -148,7 +149,7 @@ function BookingFields({
     return Object.keys(next).length === 0;
   }
 
-  function onSubmit(e: React.FormEvent) {
+  async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!validate()) return;
 
@@ -166,9 +167,14 @@ function BookingFields({
       createdBy: booking?.createdBy ?? user?.name ?? "Unknown",
     };
 
-    if (booking) updateBooking(booking.id, payload);
-    else addBooking(payload);
-    onClose();
+    setSubmitError(null);
+    try {
+      if (booking) await updateBooking(booking.id, payload);
+      else await addBooking(payload);
+      onClose();
+    } catch {
+      setSubmitError("Couldn't save this booking. Please try again.");
+    }
   }
 
   return (
@@ -318,6 +324,12 @@ function BookingFields({
           )}
         </Field>
       </div>
+
+      {submitError ? (
+        <p className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700">
+          {submitError}
+        </p>
+      ) : null}
 
       {conflicts.length > 0 ? (
         <div className="flex gap-2.5 rounded-lg border border-amber-200 bg-amber-50 p-3">

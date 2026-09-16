@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 
 import { PageHeader } from "@/components/layout/app-shell";
 import {
@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/badge";
 import { Button, LinkButton } from "@/components/ui/button";
 import { Card, CardHeader } from "@/components/ui/card";
+import { ConfirmDialog } from "@/components/ui/modal";
 import { EmptyState } from "@/components/ui/table";
 import { StatTile } from "@/components/ui/stat";
 import { useAuth } from "@/lib/auth";
@@ -30,6 +31,7 @@ export default function DashboardPage() {
   const { bookings, expenses, cleaning, resetToSampleData } = useStore();
   const { user } = useAuth();
   const t = today();
+  const [confirmingReset, setConfirmingReset] = useState(false);
 
   const summary = useMemo(
     () => monthSummary(bookings, expenses, t),
@@ -202,15 +204,28 @@ export default function DashboardPage() {
 
       <div className="mt-6 rounded-lg border border-slate-200 bg-white p-3 text-xs text-slate-500">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <p>
-            Frontend preview — records are saved in this browser only, not in a
-            database yet.
-          </p>
-          <Button size="sm" onClick={resetToSampleData}>
+          <p>Records are saved in Supabase — shared across everyone signed in.</p>
+          <Button size="sm" onClick={() => setConfirmingReset(true)}>
             Reset sample data
           </Button>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={confirmingReset}
+        title="Reset all data?"
+        message="This wipes every booking, expense, and cleaning record and replaces them with sample data. This can't be undone."
+        confirmLabel="Reset"
+        onCancel={() => setConfirmingReset(false)}
+        onConfirm={async () => {
+          setConfirmingReset(false);
+          try {
+            await resetToSampleData();
+          } catch {
+            alert("Couldn't reset sample data. Please try again.");
+          }
+        }}
+      />
     </>
   );
 }
