@@ -20,8 +20,12 @@ import {
 } from "@/components/ui/icons";
 import { EmptyState } from "@/components/ui/table";
 import { StatTile } from "@/components/ui/stat";
+import {
+  ExpenseCategoryDonut,
+  type CategorySlice,
+} from "@/components/dashboard/expense-category-donut";
 import { useIdentity } from "@/lib/identity";
-import { addMonths, daysBetween, startOfMonth, today } from "@/lib/dates";
+import { addMonths, daysBetween, isSameMonth, startOfMonth, today } from "@/lib/dates";
 import {
   formatCurrency,
   formatDate,
@@ -37,6 +41,7 @@ import {
   upcomingEvents,
 } from "@/lib/selectors";
 import { useStore } from "@/lib/store";
+import { EXPENSE_CATEGORIES } from "@/lib/types";
 
 export default function DashboardPage() {
   const { bookings, expenses, cleaning } = useStore();
@@ -57,6 +62,16 @@ export default function DashboardPage() {
   );
   const pending = useMemo(() => pendingGuestPayments(bookings), [bookings]);
   const pendingTotal = pending.reduce((s, b) => s + bookingNetIncome(b), 0);
+
+  const expensesByCategory = useMemo<CategorySlice[]>(() => {
+    const monthExpenses = expenses.filter((e) => isSameMonth(e.date, monthCursor));
+    return EXPENSE_CATEGORIES.map(({ value }) => ({
+      category: value,
+      amount: monthExpenses
+        .filter((e) => e.category === value)
+        .reduce((s, e) => s + e.amount, 0),
+    }));
+  }, [expenses, monthCursor]);
 
   // Last 6 months of each metric, for the stat tiles' sparklines.
   const monthlyTrend = useMemo(() => {
@@ -174,7 +189,7 @@ export default function DashboardPage() {
 
         <Card>
           <CardHeader
-            icon={ReceiptIcon}
+            icon={CalendarIcon}
             title="Pending guest payments"
             description={
               pending.length > 0
@@ -254,6 +269,15 @@ export default function DashboardPage() {
               ))}
             </ul>
           )}
+        </Card>
+
+        <Card>
+          <CardHeader
+            icon={ReceiptIcon}
+            title="Expenses by category"
+            description={formatMonth(monthCursor)}
+          />
+          <ExpenseCategoryDonut data={expensesByCategory} />
         </Card>
       </div>
     </>
