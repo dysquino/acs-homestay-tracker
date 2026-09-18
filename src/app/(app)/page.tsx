@@ -14,10 +14,6 @@ import { Card, CardHeader } from "@/components/ui/card";
 import { ChevronLeftIcon, ChevronRightIcon } from "@/components/ui/icons";
 import { EmptyState } from "@/components/ui/table";
 import { StatTile } from "@/components/ui/stat";
-import {
-  IncomeExpenseChart,
-  type MonthPoint,
-} from "@/components/dashboard/income-expense-chart";
 import { useIdentity } from "@/lib/identity";
 import { addMonths, daysBetween, startOfMonth, today } from "@/lib/dates";
 import {
@@ -25,7 +21,6 @@ import {
   formatDate,
   formatDateRange,
   formatMonth,
-  formatMonthShort,
 } from "@/lib/format";
 import {
   amountOwedByCleaner,
@@ -57,18 +52,16 @@ export default function DashboardPage() {
   const pending = useMemo(() => pendingGuestPayments(bookings), [bookings]);
   const pendingTotal = pending.reduce((s, b) => s + bookingNetIncome(b), 0);
 
-  const trend = useMemo<MonthPoint[]>(() => {
+  // Last 6 months of each metric, for the stat tiles' sparklines.
+  const monthlyTrend = useMemo(() => {
     const months: string[] = [];
     for (let i = 5; i >= 0; i--) months.push(addMonths(startOfMonth(t), -i));
-    return months.map((m) => {
-      const s = monthSummary(bookings, expenses, m);
-      return {
-        month: m,
-        label: formatMonthShort(m),
-        income: s.income,
-        expenses: s.expenses,
-      };
-    });
+    const summaries = months.map((m) => monthSummary(bookings, expenses, m));
+    return {
+      income: summaries.map((s) => s.income),
+      expenses: summaries.map((s) => s.expenses),
+      profit: summaries.map((s) => s.net),
+    };
   }, [bookings, expenses, t]);
 
   return (
@@ -109,15 +102,18 @@ export default function DashboardPage() {
           value={formatCurrency(summary.income)}
           hint="Net of platform fees, split by nights per month"
           tone="brand"
+          trend={monthlyTrend.income}
         />
         <StatTile
           label={`Expenses — ${formatMonth(monthCursor)}`}
           value={formatCurrency(summary.expenses)}
+          trend={monthlyTrend.expenses}
         />
         <StatTile
           label={`Profit — ${formatMonth(monthCursor)}`}
           value={formatCurrency(summary.net)}
           tone={summary.net >= 0 ? "positive" : "negative"}
+          trend={monthlyTrend.profit}
         />
         <StatTile
           label="Owed to cleaners"
@@ -126,16 +122,6 @@ export default function DashboardPage() {
           tone={owedTotal > 0 ? "negative" : "positive"}
         />
       </div>
-
-      <Card className="mb-5">
-        <CardHeader
-          title="Income vs. expenses"
-          description="Last 6 months, net of platform fees."
-        />
-        <div className="px-4 pb-4 sm:px-5">
-          <IncomeExpenseChart data={trend} />
-        </div>
-      </Card>
 
       <div className="grid gap-5 lg:grid-cols-2">
         <Card className="lg:col-span-2">
