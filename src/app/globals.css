@@ -9,14 +9,17 @@
   --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, monospace;
 
-  /* Brand — app chrome, primary actions. */
-  --color-brand-50: #f0fdfa;
-  --color-brand-100: #ccfbf1;
-  --color-brand-200: #99f6e4;
-  --color-brand-600: #0d9488;
-  --color-brand-700: #0f766e;
-  --color-brand-800: #115e59;
-  --color-brand-900: #134e4a;
+  /* Brand — app chrome, primary actions. Matches the ACs Homestay logo's
+     gold key (#f7d37f sampled, hue ~42°) — snapped to Tailwind's amber
+     ramp, which sits on the same hue and is already contrast-tested at
+     every step (brand-700 vs white: 5.02:1, clears WCAG AA). */
+  --color-brand-50: #fffbeb;
+  --color-brand-100: #fef3c7;
+  --color-brand-200: #fde68a;
+  --color-brand-600: #d97706;
+  --color-brand-700: #b45309;
+  --color-brand-800: #92400e;
+  --color-brand-900: #78350f;
 
   /* Booking sources — used consistently in badges and on the calendar. */
   --color-airbnb-50: #fff1f2;

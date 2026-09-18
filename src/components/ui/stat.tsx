@@ -6,7 +6,7 @@ const TONE_COLOR: Record<NonNullable<Props["tone"]>, string> = {
   neutral: "#0f172a", // slate-900
   positive: "#047857", // emerald-700
   negative: "#b91c1c", // red-700
-  brand: "#115e59", // brand-800
+  brand: "#92400e", // brand-800
 };
 
 type Props = {
