@@ -11,7 +11,13 @@ import {
 } from "@/components/ui/badge";
 import { Button, LinkButton } from "@/components/ui/button";
 import { Card, CardHeader } from "@/components/ui/card";
-import { ChevronLeftIcon, ChevronRightIcon } from "@/components/ui/icons";
+import {
+  CalendarIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  ReceiptIcon,
+  SparklesIcon,
+} from "@/components/ui/icons";
 import { EmptyState } from "@/components/ui/table";
 import { StatTile } from "@/components/ui/stat";
 import { useIdentity } from "@/lib/identity";
@@ -126,6 +132,7 @@ export default function DashboardPage() {
       <div className="grid gap-5 lg:grid-cols-2">
         <Card className="lg:col-span-2">
           <CardHeader
+            icon={CalendarIcon}
             title="Next 7 days"
             description="Check-ins and check-outs coming up."
             action={
@@ -167,6 +174,7 @@ export default function DashboardPage() {
 
         <Card>
           <CardHeader
+            icon={ReceiptIcon}
             title="Pending guest payments"
             description={
               pending.length > 0
@@ -208,6 +216,7 @@ export default function DashboardPage() {
 
         <Card>
           <CardHeader
+            icon={SparklesIcon}
             title="Unpaid cleanings"
             description={
               unpaid.length > 0 ? `${formatCurrency(owedTotal)} owed` : undefined

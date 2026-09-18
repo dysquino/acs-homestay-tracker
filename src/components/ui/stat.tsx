@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 
+import { SOFT_SHADOW } from "@/components/ui/card";
 import { cn } from "@/lib/cn";
 
 const TONE_COLOR: Record<NonNullable<Props["tone"]>, string> = {
@@ -22,7 +23,7 @@ type Props = {
 
 export function StatTile({ label, value, hint, tone = "neutral", trend }: Props) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+    <div className={cn("rounded-2xl border border-slate-200 bg-white p-4", SOFT_SHADOW)}>
       <div className="flex items-start justify-between gap-2">
         <p className="text-xs font-medium text-slate-500">{label}</p>
         {trend && trend.length > 1 ? (

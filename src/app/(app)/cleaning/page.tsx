@@ -11,7 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader } from "@/components/ui/card";
 import { Input, Select } from "@/components/ui/field";
-import { PlusIcon } from "@/components/ui/icons";
+import { PlusIcon, SparklesIcon } from "@/components/ui/icons";
 import { ConfirmDialog } from "@/components/ui/modal";
 import { StatTile } from "@/components/ui/stat";
 import {
@@ -393,6 +393,7 @@ export default function CleaningPage() {
 
         <Card className="h-fit">
           <CardHeader
+            icon={SparklesIcon}
             title="Unpaid cleaners"
             description="Who's still owed, and how much."
           />

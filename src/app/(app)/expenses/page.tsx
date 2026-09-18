@@ -8,7 +8,12 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader } from "@/components/ui/card";
 import { Input, Select } from "@/components/ui/field";
-import { ChevronLeftIcon, ChevronRightIcon, PlusIcon } from "@/components/ui/icons";
+import {
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  ListIcon,
+  PlusIcon,
+} from "@/components/ui/icons";
 import { ConfirmDialog } from "@/components/ui/modal";
 import { StatTile } from "@/components/ui/stat";
 import {
@@ -358,6 +363,7 @@ export default function ExpensesPage() {
 
         <Card className="h-fit">
           <CardHeader
+            icon={ListIcon}
             title="Monthly totals"
             description="Every month with recorded expenses."
           />
