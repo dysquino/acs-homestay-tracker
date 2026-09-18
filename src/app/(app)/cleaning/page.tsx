@@ -144,88 +144,93 @@ export default function CleaningPage() {
 
       <div className="grid gap-5 lg:grid-cols-3">
         <Card className="overflow-hidden lg:col-span-2">
-          <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 bg-slate-50/60 p-3">
-            <div className="w-40">
-              <Select
-                value={cleaner}
-                onChange={(e) => setCleaner(e.target.value)}
-                aria-label="Filter by cleaner"
-              >
-                <option value="all">All cleaners</option>
-                {cleanerOptions.map((c) => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
-                ))}
-              </Select>
-            </div>
-            <div className="w-36">
-              <Select
-                value={status}
-                onChange={(e) =>
-                  setStatus(e.target.value as CleaningStatus | "all")
-                }
-                aria-label="Filter by status"
-              >
-                <option value="all">Any status</option>
-                {CLEANING_STATUSES.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </Select>
-            </div>
-            <div className="w-40">
-              <Select
-                value={payment}
-                onChange={(e) =>
-                  setPayment(e.target.value as CleaningPaymentStatus | "all")
-                }
-                aria-label="Filter by payment status"
-              >
-                <option value="all">Any payment</option>
-                {CLEANING_PAYMENT_STATUSES.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </Select>
-            </div>
-            <div className="flex items-center gap-2">
+          <div className="space-y-2 border-b border-slate-200 bg-slate-50/60 p-3">
+            <div className="flex flex-wrap items-center gap-2">
               <div className="w-40">
-                <Input
-                  type="date"
-                  value={from}
-                  onChange={(e) => setFrom(e.target.value)}
-                  aria-label="From date"
-                />
+                <Select
+                  value={cleaner}
+                  onChange={(e) => setCleaner(e.target.value)}
+                  aria-label="Filter by cleaner"
+                >
+                  <option value="all">All cleaners</option>
+                  {cleanerOptions.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </Select>
               </div>
-              <span className="text-xs text-slate-400">to</span>
+              <div className="w-36">
+                <Select
+                  value={status}
+                  onChange={(e) =>
+                    setStatus(e.target.value as CleaningStatus | "all")
+                  }
+                  aria-label="Filter by status"
+                >
+                  <option value="all">Any status</option>
+                  {CLEANING_STATUSES.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </Select>
+              </div>
               <div className="w-40">
-                <Input
-                  type="date"
-                  value={to}
-                  onChange={(e) => setTo(e.target.value)}
-                  aria-label="To date"
-                />
+                <Select
+                  value={payment}
+                  onChange={(e) =>
+                    setPayment(e.target.value as CleaningPaymentStatus | "all")
+                  }
+                  aria-label="Filter by payment status"
+                >
+                  <option value="all">Any payment</option>
+                  {CLEANING_PAYMENT_STATUSES.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </Select>
               </div>
             </div>
-            {filtersActive ? (
-              <Button
-                size="sm"
-                variant="ghost"
-                className="ml-auto"
-                onClick={() => {
-                  setCleaner("all");
-                  setStatus("all");
-                  setPayment("all");
-                  setFrom("");
-                  setTo("");
-                }}
-              >
-                Clear filters
-              </Button>
-            ) : null}
+
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex items-center gap-2">
+                <div className="w-40">
+                  <Input
+                    type="date"
+                    value={from}
+                    onChange={(e) => setFrom(e.target.value)}
+                    aria-label="From date"
+                  />
+                </div>
+                <span className="text-xs text-slate-400">to</span>
+                <div className="w-40">
+                  <Input
+                    type="date"
+                    value={to}
+                    onChange={(e) => setTo(e.target.value)}
+                    aria-label="To date"
+                  />
+                </div>
+              </div>
+              {filtersActive ? (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="ml-auto"
+                  onClick={() => {
+                    setCleaner("all");
+                    setStatus("all");
+                    setPayment("all");
+                    setFrom("");
+                    setTo("");
+                  }}
+                >
+                  Clear filters
+                </Button>
+              ) : null}
+            </div>
           </div>
 
           {filtered.length === 0 ? (

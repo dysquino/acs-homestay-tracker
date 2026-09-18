@@ -151,88 +151,93 @@ export default function BookingsPage() {
 
       {view === "list" ? (
         <Card className="overflow-hidden">
-          <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 bg-slate-50/60 p-3">
-            <div className="min-w-[220px] flex-1">
-              <Input
-                type="search"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search guest, notes, contact…"
-                aria-label="Search bookings"
-              />
-            </div>
-            <div className="w-36">
-              <Select
-                value={source}
-                onChange={(e) =>
-                  setSource(e.target.value as BookingSource | "all")
-                }
-                aria-label="Filter by source"
-              >
-                <option value="all">All sources</option>
-                {BOOKING_SOURCES.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </Select>
-            </div>
-            <div className="w-44">
-              <Select
-                value={payment}
-                onChange={(e) =>
-                  setPayment(e.target.value as PaymentStatus | "all")
-                }
-                aria-label="Filter by payment status"
-              >
-                <option value="all">Any payment status</option>
-                {PAYMENT_STATUSES.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </Select>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-40">
+          <div className="space-y-2 border-b border-slate-200 bg-slate-50/60 p-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="min-w-[220px] flex-1">
                 <Input
-                  type="date"
-                  value={from}
-                  onChange={(e) => setFrom(e.target.value)}
-                  aria-label="From date"
+                  type="search"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search guest, notes, contact…"
+                  aria-label="Search bookings"
                 />
               </div>
-              <span className="text-xs text-slate-400">to</span>
-              <div className="w-40">
-                <Input
-                  type="date"
-                  value={to}
-                  onChange={(e) => setTo(e.target.value)}
-                  aria-label="To date"
-                />
+              <div className="w-36">
+                <Select
+                  value={source}
+                  onChange={(e) =>
+                    setSource(e.target.value as BookingSource | "all")
+                  }
+                  aria-label="Filter by source"
+                >
+                  <option value="all">All sources</option>
+                  {BOOKING_SOURCES.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+              <div className="w-52">
+                <Select
+                  value={payment}
+                  onChange={(e) =>
+                    setPayment(e.target.value as PaymentStatus | "all")
+                  }
+                  aria-label="Filter by payment status"
+                >
+                  <option value="all">Any payment status</option>
+                  {PAYMENT_STATUSES.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </Select>
               </div>
             </div>
 
-            <label className="flex items-center gap-2 text-xs text-slate-600">
-              <input
-                type="checkbox"
-                checked={includePast}
-                onChange={(e) => setIncludePast(e.target.checked)}
-                className="h-3.5 w-3.5 rounded border-slate-300 text-brand-700 focus:ring-brand-600"
-              />
-              Include past bookings
-            </label>
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex items-center gap-2">
+                <div className="w-40">
+                  <Input
+                    type="date"
+                    value={from}
+                    onChange={(e) => setFrom(e.target.value)}
+                    aria-label="From date"
+                  />
+                </div>
+                <span className="text-xs text-slate-400">to</span>
+                <div className="w-40">
+                  <Input
+                    type="date"
+                    value={to}
+                    onChange={(e) => setTo(e.target.value)}
+                    aria-label="To date"
+                  />
+                </div>
+              </div>
 
-            {filtersActive ? (
-              <Button
-                size="sm"
-                variant="ghost"
-                className="ml-auto"
-                onClick={clearFilters}
-              >
-                Clear filters
-              </Button>
-            ) : null}
+              <label className="flex items-center gap-2 text-xs text-slate-600">
+                <input
+                  type="checkbox"
+                  checked={includePast}
+                  onChange={(e) => setIncludePast(e.target.checked)}
+                  className="h-3.5 w-3.5 rounded border-slate-300 text-brand-700 focus:ring-brand-600"
+                />
+                Include past bookings
+              </label>
+
+              {filtersActive ? (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="ml-auto"
+                  onClick={clearFilters}
+                >
+                  Clear filters
+                </Button>
+              ) : null}
+            </div>
           </div>
 
           <BookingTable

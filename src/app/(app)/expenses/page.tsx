@@ -163,66 +163,71 @@ export default function ExpensesPage() {
 
       <div className="grid gap-5 lg:grid-cols-3">
         <Card className="overflow-hidden lg:col-span-2">
-          <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 bg-slate-50/60 p-3">
-            <div className="min-w-[220px] flex-1">
-              <Input
-                type="search"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search description or payer…"
-                aria-label="Search expenses"
-              />
-            </div>
-            <div className="w-44">
-              <Select
-                value={category}
-                onChange={(e) =>
-                  setCategory(e.target.value as ExpenseCategory | "all")
-                }
-                aria-label="Filter by category"
-              >
-                <option value="all">All categories</option>
-                {EXPENSE_CATEGORIES.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </Select>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-40">
+          <div className="space-y-2 border-b border-slate-200 bg-slate-50/60 p-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="min-w-[220px] flex-1">
                 <Input
-                  type="date"
-                  value={from}
-                  onChange={(e) => setFrom(e.target.value)}
-                  aria-label="From date"
+                  type="search"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search description or payer…"
+                  aria-label="Search expenses"
                 />
               </div>
-              <span className="text-xs text-slate-400">to</span>
-              <div className="w-40">
-                <Input
-                  type="date"
-                  value={to}
-                  onChange={(e) => setTo(e.target.value)}
-                  aria-label="To date"
-                />
+              <div className="w-52">
+                <Select
+                  value={category}
+                  onChange={(e) =>
+                    setCategory(e.target.value as ExpenseCategory | "all")
+                  }
+                  aria-label="Filter by category"
+                >
+                  <option value="all">All categories</option>
+                  {EXPENSE_CATEGORIES.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </Select>
               </div>
             </div>
-            {filtersActive ? (
-              <Button
-                size="sm"
-                variant="ghost"
-                className="ml-auto"
-                onClick={() => {
-                  setSearch("");
-                  setCategory("all");
-                  setFrom("");
-                  setTo("");
-                }}
-              >
-                Clear filters
-              </Button>
-            ) : null}
+
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex items-center gap-2">
+                <div className="w-40">
+                  <Input
+                    type="date"
+                    value={from}
+                    onChange={(e) => setFrom(e.target.value)}
+                    aria-label="From date"
+                  />
+                </div>
+                <span className="text-xs text-slate-400">to</span>
+                <div className="w-40">
+                  <Input
+                    type="date"
+                    value={to}
+                    onChange={(e) => setTo(e.target.value)}
+                    aria-label="To date"
+                  />
+                </div>
+              </div>
+              {filtersActive ? (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="ml-auto"
+                  onClick={() => {
+                    setSearch("");
+                    setCategory("all");
+                    setFrom("");
+                    setTo("");
+                  }}
+                >
+                  Clear filters
+                </Button>
+              ) : null}
+            </div>
           </div>
 
           {sorted.length === 0 ? (
