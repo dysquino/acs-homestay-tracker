@@ -4,13 +4,13 @@ import { useMemo, useState } from "react";
 
 import { PageHeader } from "@/components/layout/app-shell";
 import { BookingCalendar } from "@/components/bookings/booking-calendar";
-import { BookingForm } from "@/components/bookings/booking-form";
 import {
-  BookingTable,
+  BookingCards,
   sortBookings,
   type BookingSortKey,
   type Sort,
-} from "@/components/bookings/booking-table";
+} from "@/components/bookings/booking-cards";
+import { BookingForm } from "@/components/bookings/booking-form";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input, Select } from "@/components/ui/field";
@@ -34,7 +34,7 @@ type View = "list" | "calendar";
 export default function BookingsPage() {
   const { bookings, deleteBooking } = useStore();
 
-  const [view, setView] = useState<View>("list");
+  const [view, setView] = useState<View>("calendar");
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Booking | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Booking | null>(null);
@@ -87,14 +87,6 @@ export default function BookingsPage() {
     setFormOpen(true);
   }
 
-  function toggleSort(key: BookingSortKey) {
-    setSort((s) =>
-      s.key === key
-        ? { key, dir: s.dir === "asc" ? "desc" : "asc" }
-        : { key, dir: "asc" },
-    );
-  }
-
   function clearFilters() {
     setSource("all");
     setPayment("all");
@@ -119,27 +111,60 @@ export default function BookingsPage() {
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <div className="inline-flex rounded-md bg-slate-100 p-0.5">
           <ViewTab
-            active={view === "list"}
-            onClick={() => setView("list")}
-            icon={<ListIcon className="h-4 w-4" />}
-            label="List"
-          />
-          <ViewTab
             active={view === "calendar"}
             onClick={() => setView("calendar")}
             icon={<CalendarIcon className="h-4 w-4" />}
             label="Calendar"
           />
+          <ViewTab
+            active={view === "list"}
+            onClick={() => setView("list")}
+            icon={<ListIcon className="h-4 w-4" />}
+            label="List"
+          />
         </div>
 
         {view === "list" ? (
-          <p className="ml-auto text-xs text-slate-500">
-            {totals.count} booking{totals.count === 1 ? "" : "s"} ·{" "}
-            <span className="font-medium text-slate-700">
-              {formatCurrency(totals.net)}
-            </span>{" "}
-            net
-          </p>
+          <div className="ml-auto flex items-center gap-2">
+            <p className="text-xs text-slate-500">
+              {totals.count} booking{totals.count === 1 ? "" : "s"} ·{" "}
+              <span className="font-medium text-slate-700">
+                {formatCurrency(totals.net)}
+              </span>{" "}
+              net
+            </p>
+            <div className="w-36">
+              <Select
+                value={sort.key}
+                onChange={(e) =>
+                  setSort((s) => ({
+                    ...s,
+                    key: e.target.value as BookingSortKey,
+                  }))
+                }
+                aria-label="Sort by"
+              >
+                <option value="checkIn">Sort: Check-in</option>
+                <option value="guestName">Sort: Guest name</option>
+                <option value="totalPayout">Sort: Amount</option>
+                <option value="paymentStatus">Sort: Payment</option>
+              </Select>
+            </div>
+            <button
+              type="button"
+              onClick={() =>
+                setSort((s) => ({
+                  ...s,
+                  dir: s.dir === "asc" ? "desc" : "asc",
+                }))
+              }
+              aria-label={sort.dir === "asc" ? "Ascending" : "Descending"}
+              title={sort.dir === "asc" ? "Ascending" : "Descending"}
+              className="rounded-md border border-slate-300 bg-white px-2 py-2 text-xs text-slate-600 hover:bg-slate-50"
+            >
+              {sort.dir === "asc" ? "▲" : "▼"}
+            </button>
+          </div>
         ) : null}
       </div>
 
@@ -225,19 +250,19 @@ export default function BookingsPage() {
             </div>
           </div>
 
-          <BookingTable
-            bookings={sorted}
-            sort={sort}
-            onSort={toggleSort}
-            onEdit={openEdit}
-            onDelete={setPendingDelete}
-            emptyAction={
-              <Button variant="primary" onClick={openAdd}>
-                <PlusIcon className="h-4 w-4" />
-                Add booking
-              </Button>
-            }
-          />
+          <div className="p-3">
+            <BookingCards
+              bookings={sorted}
+              onEdit={openEdit}
+              onDelete={setPendingDelete}
+              emptyAction={
+                <Button variant="primary" onClick={openAdd}>
+                  <PlusIcon className="h-4 w-4" />
+                  Add booking
+                </Button>
+              }
+            />
+          </div>
         </Card>
       ) : (
         <Card>
