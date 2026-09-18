@@ -39,7 +39,6 @@ export default function BookingsPage() {
   const [editing, setEditing] = useState<Booking | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Booking | null>(null);
 
-  const [search, setSearch] = useState("");
   const [source, setSource] = useState<BookingSource | "all">("all");
   const [payment, setPayment] = useState<PaymentStatus | "all">("all");
   const [from, setFrom] = useState("");
@@ -50,10 +49,7 @@ export default function BookingsPage() {
   const t = today();
 
   const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
     return bookings.filter((b) => {
-      if (q && !`${b.guestName} ${b.notes} ${b.contactInfo}`.toLowerCase().includes(q))
-        return false;
       if (source !== "all" && b.source !== source) return false;
       if (payment !== "all" && b.paymentStatus !== payment) return false;
       if (from && b.checkOut < from) return false;
@@ -61,7 +57,7 @@ export default function BookingsPage() {
       if (!includePast && b.checkOut < t) return false;
       return true;
     });
-  }, [bookings, search, source, payment, from, to, includePast, t]);
+  }, [bookings, source, payment, from, to, includePast, t]);
 
   const sorted = useMemo(() => sortBookings(filtered, sort), [filtered, sort]);
 
@@ -75,7 +71,6 @@ export default function BookingsPage() {
   );
 
   const filtersActive =
-    search !== "" ||
     source !== "all" ||
     payment !== "all" ||
     from !== "" ||
@@ -101,7 +96,6 @@ export default function BookingsPage() {
   }
 
   function clearFilters() {
-    setSearch("");
     setSource("all");
     setPayment("all");
     setFrom("");
@@ -153,15 +147,6 @@ export default function BookingsPage() {
         <Card className="overflow-hidden">
           <div className="space-y-2 border-b border-slate-200 bg-slate-50/60 p-3">
             <div className="flex flex-wrap items-center gap-2">
-              <div className="min-w-[220px] flex-1">
-                <Input
-                  type="search"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Search guest, notes, contact…"
-                  aria-label="Search bookings"
-                />
-              </div>
               <div className="w-36">
                 <Select
                   value={source}

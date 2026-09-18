@@ -44,7 +44,6 @@ export default function ExpensesPage() {
   const [editing, setEditing] = useState<Expense | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Expense | null>(null);
 
-  const [search, setSearch] = useState("");
   const [category, setCategory] = useState<ExpenseCategory | "all">("all");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
@@ -63,16 +62,13 @@ export default function ExpensesPage() {
   );
 
   const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
     return expenses.filter((e) => {
-      if (q && !`${e.description} ${e.paidBy}`.toLowerCase().includes(q))
-        return false;
       if (category !== "all" && e.category !== category) return false;
       if (from && e.date < from) return false;
       if (to && e.date > to) return false;
       return true;
     });
-  }, [expenses, search, category, from, to]);
+  }, [expenses, category, from, to]);
 
   const sorted = useMemo(() => {
     const factor = sort.dir === "asc" ? 1 : -1;
@@ -86,8 +82,7 @@ export default function ExpensesPage() {
 
   const filteredTotal = filtered.reduce((s, e) => s + e.amount, 0);
   const byMonth = useMemo(() => expensesByMonth(expenses), [expenses]);
-  const filtersActive =
-    search !== "" || category !== "all" || from !== "" || to !== "";
+  const filtersActive = category !== "all" || from !== "" || to !== "";
 
   function openAdd() {
     setEditing(null);
@@ -165,15 +160,6 @@ export default function ExpensesPage() {
         <Card className="overflow-hidden lg:col-span-2">
           <div className="space-y-2 border-b border-slate-200 bg-slate-50/60 p-3">
             <div className="flex flex-wrap items-center gap-2">
-              <div className="min-w-[220px] flex-1">
-                <Input
-                  type="search"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Search description or payer…"
-                  aria-label="Search expenses"
-                />
-              </div>
               <div className="w-52">
                 <Select
                   value={category}
@@ -218,7 +204,6 @@ export default function ExpensesPage() {
                   variant="ghost"
                   className="ml-auto"
                   onClick={() => {
-                    setSearch("");
                     setCategory("all");
                     setFrom("");
                     setTo("");
