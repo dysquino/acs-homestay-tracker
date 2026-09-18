@@ -160,61 +160,65 @@ export default function ExpensesPage() {
 
       <div className="grid gap-5 lg:grid-cols-3">
         <Card className="overflow-hidden lg:col-span-2">
-          <div className="grid gap-2 border-b border-slate-200 bg-slate-50/60 p-3 sm:grid-cols-2 lg:grid-cols-4">
-            <Input
-              type="search"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search description or payer…"
-              aria-label="Search expenses"
-              className="lg:col-span-2"
-            />
-            <Select
-              value={category}
-              onChange={(e) =>
-                setCategory(e.target.value as ExpenseCategory | "all")
-              }
-              aria-label="Filter by category"
-            >
-              <option value="all">All categories</option>
-              {EXPENSE_CATEGORIES.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </Select>
-            <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 bg-slate-50/60 p-3">
+            <div className="min-w-[220px] flex-1">
               <Input
-                type="date"
-                value={from}
-                onChange={(e) => setFrom(e.target.value)}
-                aria-label="From date"
-                className="min-w-0 flex-1"
-              />
-              <span className="text-xs text-slate-400">to</span>
-              <Input
-                type="date"
-                value={to}
-                onChange={(e) => setTo(e.target.value)}
-                aria-label="To date"
-                className="min-w-0 flex-1"
+                type="search"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search description or payer…"
+                aria-label="Search expenses"
               />
             </div>
-            {filtersActive ? (
-              <div className="sm:col-span-2 lg:col-span-4">
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => {
-                    setSearch("");
-                    setCategory("all");
-                    setFrom("");
-                    setTo("");
-                  }}
-                >
-                  Clear filters
-                </Button>
+            <div className="w-44">
+              <Select
+                value={category}
+                onChange={(e) =>
+                  setCategory(e.target.value as ExpenseCategory | "all")
+                }
+                aria-label="Filter by category"
+              >
+                <option value="all">All categories</option>
+                {EXPENSE_CATEGORIES.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-40">
+                <Input
+                  type="date"
+                  value={from}
+                  onChange={(e) => setFrom(e.target.value)}
+                  aria-label="From date"
+                />
               </div>
+              <span className="text-xs text-slate-400">to</span>
+              <div className="w-40">
+                <Input
+                  type="date"
+                  value={to}
+                  onChange={(e) => setTo(e.target.value)}
+                  aria-label="To date"
+                />
+              </div>
+            </div>
+            {filtersActive ? (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="ml-auto"
+                onClick={() => {
+                  setSearch("");
+                  setCategory("all");
+                  setFrom("");
+                  setTo("");
+                }}
+              >
+                Clear filters
+              </Button>
             ) : null}
           </div>
 

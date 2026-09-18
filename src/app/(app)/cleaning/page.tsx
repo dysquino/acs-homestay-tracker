@@ -141,78 +141,87 @@ export default function CleaningPage() {
 
       <div className="grid gap-5 lg:grid-cols-3">
         <Card className="overflow-hidden lg:col-span-2">
-          <div className="grid gap-2 border-b border-slate-200 bg-slate-50/60 p-3 sm:grid-cols-2 lg:grid-cols-4">
-            <Select
-              value={cleaner}
-              onChange={(e) => setCleaner(e.target.value)}
-              aria-label="Filter by cleaner"
-            >
-              <option value="all">All cleaners</option>
-              {cleanerOptions.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-            </Select>
-            <Select
-              value={status}
-              onChange={(e) => setStatus(e.target.value as CleaningStatus | "all")}
-              aria-label="Filter by status"
-            >
-              <option value="all">Any status</option>
-              {CLEANING_STATUSES.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </Select>
-            <Select
-              value={payment}
-              onChange={(e) =>
-                setPayment(e.target.value as CleaningPaymentStatus | "all")
-              }
-              aria-label="Filter by payment status"
-            >
-              <option value="all">Any payment</option>
-              {CLEANING_PAYMENT_STATUSES.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </Select>
-            <div className="flex min-w-0 flex-wrap items-center gap-2">
-              <Input
-                type="date"
-                value={from}
-                onChange={(e) => setFrom(e.target.value)}
-                aria-label="From date"
-                className="min-w-0 flex-1"
-              />
+          <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 bg-slate-50/60 p-3">
+            <div className="w-40">
+              <Select
+                value={cleaner}
+                onChange={(e) => setCleaner(e.target.value)}
+                aria-label="Filter by cleaner"
+              >
+                <option value="all">All cleaners</option>
+                {cleanerOptions.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            <div className="w-36">
+              <Select
+                value={status}
+                onChange={(e) =>
+                  setStatus(e.target.value as CleaningStatus | "all")
+                }
+                aria-label="Filter by status"
+              >
+                <option value="all">Any status</option>
+                {CLEANING_STATUSES.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            <div className="w-40">
+              <Select
+                value={payment}
+                onChange={(e) =>
+                  setPayment(e.target.value as CleaningPaymentStatus | "all")
+                }
+                aria-label="Filter by payment status"
+              >
+                <option value="all">Any payment</option>
+                {CLEANING_PAYMENT_STATUSES.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-40">
+                <Input
+                  type="date"
+                  value={from}
+                  onChange={(e) => setFrom(e.target.value)}
+                  aria-label="From date"
+                />
+              </div>
               <span className="text-xs text-slate-400">to</span>
-              <Input
-                type="date"
-                value={to}
-                onChange={(e) => setTo(e.target.value)}
-                aria-label="To date"
-                className="min-w-0 flex-1"
-              />
+              <div className="w-40">
+                <Input
+                  type="date"
+                  value={to}
+                  onChange={(e) => setTo(e.target.value)}
+                  aria-label="To date"
+                />
+              </div>
             </div>
             {filtersActive ? (
-              <div className="sm:col-span-2 lg:col-span-4">
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => {
-                    setCleaner("all");
-                    setStatus("all");
-                    setPayment("all");
-                    setFrom("");
-                    setTo("");
-                  }}
-                >
-                  Clear filters
-                </Button>
-              </div>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="ml-auto"
+                onClick={() => {
+                  setCleaner("all");
+                  setStatus("all");
+                  setPayment("all");
+                  setFrom("");
+                  setTo("");
+                }}
+              >
+                Clear filters
+              </Button>
             ) : null}
           </div>
 
