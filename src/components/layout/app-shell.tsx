@@ -4,9 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ComponentType, ReactNode, SVGProps } from "react";
 
-import { Select } from "@/components/ui/field";
 import { cn } from "@/lib/cn";
-import { ACCOUNTS, useIdentity } from "@/lib/identity";
 import {
   CalendarIcon,
   HomeIcon,
@@ -34,12 +32,6 @@ function isActive(pathname: string, href: string): boolean {
 
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const { user, setUser } = useIdentity();
-
-  function onPickUser(id: string) {
-    const next = ACCOUNTS.find((a) => a.id === id);
-    if (next) setUser(next);
-  }
 
   return (
     <div className="flex min-h-full flex-col lg:flex-row">
@@ -69,41 +61,11 @@ export function AppShell({ children }: { children: ReactNode }) {
             );
           })}
         </nav>
-        <div className="border-t border-slate-200 p-3">
-          <label className="block px-2 text-xs font-medium text-slate-500">
-            Acting as
-          </label>
-          <Select
-            value={user.id}
-            onChange={(e) => onPickUser(e.target.value)}
-            className="mt-1"
-            aria-label="Switch who you're acting as"
-          >
-            {ACCOUNTS.map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.name}
-              </option>
-            ))}
-          </Select>
-        </div>
       </aside>
 
       {/* Mobile top bar */}
       <header className="no-print flex items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-3 lg:hidden">
         <Brand />
-        <div className="w-32 shrink-0">
-          <Select
-            value={user.id}
-            onChange={(e) => onPickUser(e.target.value)}
-            aria-label="Switch who you're acting as"
-          >
-            {ACCOUNTS.map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.name}
-              </option>
-            ))}
-          </Select>
-        </div>
       </header>
 
       <main className="min-w-0 flex-1 pb-20 lg:pb-0">
