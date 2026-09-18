@@ -40,6 +40,8 @@ const monthFmt = new Intl.DateTimeFormat("en-PH", {
   year: "numeric",
 });
 
+const monthShortFmt = new Intl.DateTimeFormat("en-PH", { month: "short" });
+
 const weekdayFmt = new Intl.DateTimeFormat("en-PH", { weekday: "short" });
 
 export function formatDate(iso: ISODate): string {
@@ -52,6 +54,11 @@ export function formatShortDate(iso: ISODate): string {
 
 export function formatMonth(iso: ISODate): string {
   return monthFmt.format(parseISO(iso));
+}
+
+/** "Apr" — for compact chart axes. */
+export function formatMonthShort(iso: ISODate): string {
+  return monthShortFmt.format(parseISO(iso));
 }
 
 export function formatWeekday(iso: ISODate): string {
