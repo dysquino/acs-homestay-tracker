@@ -2,10 +2,42 @@ import type { ReactNode } from "react";
 
 import { cn } from "@/lib/cn";
 
+/**
+ * Wraps a <Table>, hidden below `sm` in favor of a <CardList> — dense
+ * multi-column tables don't shrink to phone width usefully even with
+ * horizontal scroll, so narrow screens get a stacked-card layout instead.
+ * Every table in this app has a CardList counterpart; see bookings/
+ * expenses/cleaning pages.
+ */
 export function TableWrap({ children }: { children: ReactNode }) {
   return (
-    <div className="-mx-4 overflow-x-auto sm:mx-0">
+    <div className="-mx-4 hidden overflow-x-auto sm:mx-0 sm:block">
       <div className="inline-block min-w-full align-middle">{children}</div>
+    </div>
+  );
+}
+
+/** Mobile counterpart to <TableWrap>/<Table> — a stacked list of <CardRow>s. */
+export function CardList({ children }: { children: ReactNode }) {
+  return <ul className="divide-y divide-slate-100 sm:hidden">{children}</ul>;
+}
+
+export function CardRow({ children }: { children: ReactNode }) {
+  return <li className="p-4">{children}</li>;
+}
+
+/** A label/value pair within a CardRow, for secondary details. */
+export function CardField({
+  label,
+  children,
+}: {
+  label: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="flex items-baseline justify-between gap-3 text-xs">
+      <span className="text-slate-500">{label}</span>
+      <span className="text-right text-slate-700">{children}</span>
     </div>
   );
 }

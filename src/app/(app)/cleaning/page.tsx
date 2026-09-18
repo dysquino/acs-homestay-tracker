@@ -14,7 +14,16 @@ import { Input, Select } from "@/components/ui/field";
 import { PlusIcon } from "@/components/ui/icons";
 import { ConfirmDialog } from "@/components/ui/modal";
 import { StatTile } from "@/components/ui/stat";
-import { EmptyState, Table, TableWrap, Td, Th } from "@/components/ui/table";
+import {
+  CardField,
+  CardList,
+  CardRow,
+  EmptyState,
+  Table,
+  TableWrap,
+  Td,
+  Th,
+} from "@/components/ui/table";
 import { formatCurrency, formatDate } from "@/lib/format";
 import {
   amountOwedByCleaner,
@@ -84,6 +93,17 @@ export default function CleaningPage() {
   function openAdd() {
     setEditing(null);
     setFormOpen(true);
+  }
+
+  async function markPaid(record: CleaningRecord) {
+    try {
+      await updateCleaning(record.id, {
+        paymentStatus: "paid",
+        status: "completed",
+      });
+    } catch {
+      alert("Couldn't update this record. Please try again.");
+    }
   }
 
   return (
@@ -208,7 +228,82 @@ export default function CleaningPage() {
               }
             />
           ) : (
-            <TableWrap>
+            <>
+              <CardList>
+                {filtered.map((c) => {
+                  const booking = c.bookingId
+                    ? bookingById.get(c.bookingId)
+                    : undefined;
+                  return (
+                    <CardRow key={c.id}>
+                      <div className="mb-2 flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="font-medium text-slate-900">
+                            {c.cleanerName || (
+                              <span className="font-normal text-slate-400">
+                                Unassigned
+                              </span>
+                            )}
+                          </p>
+                          <p className="mt-0.5 text-xs text-slate-500">
+                            {formatDate(c.date)}
+                            {booking ? ` · ${booking.guestName}` : ""}
+                          </p>
+                        </div>
+                        <CleaningStatusBadge status={c.status} />
+                      </div>
+
+                      <div className="space-y-1 rounded-md bg-slate-50 p-2.5">
+                        <CardField label="Amount">
+                          {formatCurrency(c.paymentAmount)}
+                        </CardField>
+                        <CardField label="Payment">
+                          <CleaningPaymentBadge status={c.paymentStatus} />
+                        </CardField>
+                      </div>
+
+                      {c.notes ? (
+                        <p className="mt-2 truncate text-xs text-slate-400">
+                          {c.notes}
+                        </p>
+                      ) : null}
+
+                      <div className="mt-2.5 flex justify-end gap-1">
+                        {c.paymentStatus === "unpaid" ? (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="text-emerald-700 hover:bg-emerald-50"
+                            onClick={() => markPaid(c)}
+                          >
+                            Mark paid
+                          </Button>
+                        ) : null}
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => {
+                            setEditing(c);
+                            setFormOpen(true);
+                          }}
+                        >
+                          Edit
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="text-red-600 hover:bg-red-50 hover:text-red-700"
+                          onClick={() => setPendingDelete(c)}
+                        >
+                          Delete
+                        </Button>
+                      </div>
+                    </CardRow>
+                  );
+                })}
+              </CardList>
+
+              <TableWrap>
               <Table>
                 <thead>
                   <tr className="bg-slate-50">
@@ -266,18 +361,7 @@ export default function CleaningPage() {
                                 size="sm"
                                 variant="ghost"
                                 className="text-emerald-700 hover:bg-emerald-50"
-                                onClick={async () => {
-                                  try {
-                                    await updateCleaning(c.id, {
-                                      paymentStatus: "paid",
-                                      status: "completed",
-                                    });
-                                  } catch {
-                                    alert(
-                                      "Couldn't update this record. Please try again.",
-                                    );
-                                  }
-                                }}
+                                onClick={() => markPaid(c)}
                               >
                                 Mark paid
                               </Button>
@@ -307,7 +391,8 @@ export default function CleaningPage() {
                   })}
                 </tbody>
               </Table>
-            </TableWrap>
+              </TableWrap>
+            </>
           )}
         </Card>
 

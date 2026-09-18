@@ -11,7 +11,16 @@ import { Input, Select } from "@/components/ui/field";
 import { ChevronLeftIcon, ChevronRightIcon, PlusIcon } from "@/components/ui/icons";
 import { ConfirmDialog } from "@/components/ui/modal";
 import { StatTile } from "@/components/ui/stat";
-import { EmptyState, Table, TableWrap, Td, Th } from "@/components/ui/table";
+import {
+  CardField,
+  CardList,
+  CardRow,
+  EmptyState,
+  Table,
+  TableWrap,
+  Td,
+  Th,
+} from "@/components/ui/table";
 import { addMonths, startOfMonth, today } from "@/lib/dates";
 import { formatCurrency, formatDate, formatMonth } from "@/lib/format";
 import { expensesByMonth, monthSummary } from "@/lib/selectors";
@@ -221,7 +230,66 @@ export default function ExpensesPage() {
               }
             />
           ) : (
-            <TableWrap>
+            <>
+              <CardList>
+                {sorted.map((e) => (
+                  <CardRow key={e.id}>
+                    <div className="mb-2 flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="font-medium text-slate-900">
+                          {e.description}
+                        </p>
+                        <p className="mt-0.5 text-xs text-slate-500">
+                          {formatDate(e.date)}
+                        </p>
+                      </div>
+                      <Badge>{labelFor(EXPENSE_CATEGORIES, e.category)}</Badge>
+                    </div>
+
+                    <div className="space-y-1 rounded-md bg-slate-50 p-2.5">
+                      <CardField label="Amount">
+                        <span className="font-medium text-slate-900">
+                          {formatCurrency(e.amount)}
+                        </span>
+                      </CardField>
+                      {e.paidBy ? (
+                        <CardField label="Paid by">{e.paidBy}</CardField>
+                      ) : null}
+                    </div>
+
+                    <div className="mt-2.5 flex justify-end gap-1">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => {
+                          setEditing(e);
+                          setFormOpen(true);
+                        }}
+                      >
+                        Edit
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="text-red-600 hover:bg-red-50 hover:text-red-700"
+                        onClick={() => setPendingDelete(e)}
+                      >
+                        Delete
+                      </Button>
+                    </div>
+                  </CardRow>
+                ))}
+                <li className="flex items-baseline justify-between gap-3 bg-slate-50 px-4 py-2.5 text-sm">
+                  <span className="font-medium text-slate-700">
+                    {filtered.length} shown
+                  </span>
+                  <span className="font-semibold text-slate-900">
+                    {formatCurrency(filteredTotal)}
+                  </span>
+                </li>
+              </CardList>
+
+              <TableWrap>
               <Table>
                 <thead>
                   <tr className="bg-slate-50">
@@ -312,7 +380,8 @@ export default function ExpensesPage() {
                   </tr>
                 </tfoot>
               </Table>
-            </TableWrap>
+              </TableWrap>
+            </>
           )}
         </Card>
 

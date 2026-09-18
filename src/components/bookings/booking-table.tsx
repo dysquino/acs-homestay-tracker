@@ -2,7 +2,16 @@
 
 import { PaymentBadge, SourceBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { EmptyState, Table, TableWrap, Td, Th } from "@/components/ui/table";
+import {
+  CardField,
+  CardList,
+  CardRow,
+  EmptyState,
+  Table,
+  TableWrap,
+  Td,
+  Th,
+} from "@/components/ui/table";
 import { nightCount } from "@/lib/dates";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { bookingNetIncome } from "@/lib/selectors";
@@ -63,7 +72,65 @@ export function BookingTable({
   const dirFor = (key: BookingSortKey) => (sort.key === key ? sort.dir : null);
 
   return (
-    <TableWrap>
+    <>
+      <CardList>
+        {bookings.map((b) => {
+          const nights = nightCount(b.checkIn, b.checkOut);
+          return (
+            <CardRow key={b.id}>
+              <div className="mb-2 flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="font-medium text-slate-900">
+                      {b.guestName}
+                    </span>
+                    <SourceBadge source={b.source} />
+                  </div>
+                  <p className="mt-0.5 text-xs text-slate-500">
+                    {formatDate(b.checkIn)} → {formatDate(b.checkOut)} ·{" "}
+                    {nights}n
+                  </p>
+                </div>
+                <PaymentBadge status={b.paymentStatus} />
+              </div>
+
+              <div className="space-y-1 rounded-md bg-slate-50 p-2.5">
+                <CardField label="Payout">
+                  {formatCurrency(b.totalPayout)}
+                </CardField>
+                <CardField label="Net">
+                  <span className="font-medium text-slate-900">
+                    {formatCurrency(bookingNetIncome(b))}
+                  </span>
+                </CardField>
+                <CardField label="Guests">{b.guestsCount}</CardField>
+              </div>
+
+              {b.notes || b.contactInfo ? (
+                <p className="mt-2 truncate text-xs text-slate-400">
+                  {b.contactInfo || b.notes}
+                </p>
+              ) : null}
+
+              <div className="mt-2.5 flex justify-end gap-1">
+                <Button size="sm" variant="ghost" onClick={() => onEdit(b)}>
+                  Edit
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="text-red-600 hover:bg-red-50 hover:text-red-700"
+                  onClick={() => onDelete(b)}
+                >
+                  Delete
+                </Button>
+              </div>
+            </CardRow>
+          );
+        })}
+      </CardList>
+
+      <TableWrap>
       <Table>
         <thead>
           <tr className="bg-slate-50">
@@ -176,5 +243,6 @@ export function BookingTable({
         </tbody>
       </Table>
     </TableWrap>
+    </>
   );
 }
