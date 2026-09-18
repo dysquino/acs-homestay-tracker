@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useActionState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -14,9 +15,14 @@ export function GateForm({ from }: { from: string }) {
     <div className="flex min-h-full flex-1 items-center justify-center px-4 py-12">
       <div className="w-full max-w-sm">
         <div className="mb-6 text-center">
-          <span className="mx-auto flex h-11 w-11 items-center justify-center rounded-xl bg-brand-700 text-base font-bold text-white">
-            AC
-          </span>
+          <Image
+            src="/acshomestay_logo.jpg"
+            alt="ACs Homestay"
+            width={56}
+            height={56}
+            className="mx-auto h-14 w-14 rounded-full"
+            priority
+          />
           <h1 className="mt-3 text-lg font-semibold text-slate-900">
             ACs Homestay Tracker
           </h1>

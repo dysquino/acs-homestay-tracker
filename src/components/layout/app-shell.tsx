@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ComponentType, ReactNode, SVGProps } from "react";
@@ -103,9 +104,13 @@ export function AppShell({ children }: { children: ReactNode }) {
 function Brand() {
   return (
     <Link href="/" className="flex items-center gap-2">
-      <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-700 text-sm font-bold text-white">
-        AC
-      </span>
+      <Image
+        src="/acshomestay_logo.jpg"
+        alt="ACs Homestay"
+        width={36}
+        height={36}
+        className="h-9 w-9 shrink-0 rounded-full"
+      />
       <span className="text-sm leading-tight font-semibold text-slate-900">
         ACs Homestay
         <span className="block text-xs font-normal text-slate-500">
