@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 
 import { cn } from "@/lib/cn";
+import { EditIcon, TrashIcon } from "@/components/ui/icons";
 
 /**
  * Wraps a <Table>, hidden below `sm` in favor of a <CardList> — dense
@@ -47,6 +48,64 @@ export function Table({ children }: { children: ReactNode }) {
     <table className="min-w-full divide-y divide-slate-200 text-sm">
       {children}
     </table>
+  );
+}
+
+/** Header row, pinned to the top of the viewport while a long table scrolls. */
+export function Thead({ children }: { children: ReactNode }) {
+  return (
+    <thead className="sticky top-0 z-10">
+      <tr className="bg-slate-50">{children}</tr>
+    </thead>
+  );
+}
+
+/** A data row with alternating shading — easier to track across many columns. */
+export function Tr({ children }: { children: ReactNode }) {
+  return (
+    <tr className="odd:bg-white even:bg-slate-50/60 hover:bg-brand-50/40">
+      {children}
+    </tr>
+  );
+}
+
+/**
+ * Compact icon-button row actions (Edit/Delete), used by every table and
+ * card list instead of wordy text buttons — takes less space, reads faster
+ * at a glance, and gives cleaner touch targets on mobile cards. `extra` can
+ * hold a row-specific action (e.g. cleaning's "Mark paid") placed before it.
+ */
+export function RowActions({
+  onEdit,
+  onDelete,
+  extra,
+}: {
+  onEdit: () => void;
+  onDelete: () => void;
+  extra?: ReactNode;
+}) {
+  return (
+    <div className="flex items-center justify-end gap-1">
+      {extra}
+      <button
+        type="button"
+        onClick={onEdit}
+        aria-label="Edit"
+        title="Edit"
+        className="rounded-md p-1.5 text-slate-500 transition-colors hover:bg-slate-200/70 hover:text-slate-900"
+      >
+        <EditIcon className="h-4 w-4" />
+      </button>
+      <button
+        type="button"
+        onClick={onDelete}
+        aria-label="Delete"
+        title="Delete"
+        className="rounded-md p-1.5 text-slate-500 transition-colors hover:bg-red-100 hover:text-red-700"
+      >
+        <TrashIcon className="h-4 w-4" />
+      </button>
+    </div>
   );
 }
 

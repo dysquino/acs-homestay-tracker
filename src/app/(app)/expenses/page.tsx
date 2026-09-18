@@ -16,10 +16,13 @@ import {
   CardList,
   CardRow,
   EmptyState,
+  RowActions,
   Table,
   TableWrap,
   Td,
   Th,
+  Thead,
+  Tr,
 } from "@/components/ui/table";
 import { addMonths, startOfMonth, today } from "@/lib/dates";
 import { formatCurrency, formatDate, formatMonth } from "@/lib/format";
@@ -261,25 +264,14 @@ export default function ExpensesPage() {
                       ) : null}
                     </div>
 
-                    <div className="mt-2.5 flex justify-end gap-1">
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => {
+                    <div className="mt-2.5">
+                      <RowActions
+                        onEdit={() => {
                           setEditing(e);
                           setFormOpen(true);
                         }}
-                      >
-                        Edit
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="text-red-600 hover:bg-red-50 hover:text-red-700"
-                        onClick={() => setPendingDelete(e)}
-                      >
-                        Delete
-                      </Button>
+                        onDelete={() => setPendingDelete(e)}
+                      />
                     </div>
                   </CardRow>
                 ))}
@@ -295,34 +287,32 @@ export default function ExpensesPage() {
 
               <TableWrap>
               <Table>
-                <thead>
-                  <tr className="bg-slate-50">
-                    <Th onClick={() => toggleSort("date")} sort={dirFor("date")}>
-                      Date
-                    </Th>
-                    <Th
-                      onClick={() => toggleSort("category")}
-                      sort={dirFor("category")}
-                    >
-                      Category
-                    </Th>
-                    <Th>Description</Th>
-                    <Th className="hidden sm:table-cell">Paid by</Th>
-                    <Th
-                      align="right"
-                      onClick={() => toggleSort("amount")}
-                      sort={dirFor("amount")}
-                    >
-                      Amount
-                    </Th>
-                    <Th align="right">
-                      <span className="sr-only">Actions</span>
-                    </Th>
-                  </tr>
-                </thead>
+                <Thead>
+                  <Th onClick={() => toggleSort("date")} sort={dirFor("date")}>
+                    Date
+                  </Th>
+                  <Th
+                    onClick={() => toggleSort("category")}
+                    sort={dirFor("category")}
+                  >
+                    Category
+                  </Th>
+                  <Th>Description</Th>
+                  <Th className="hidden sm:table-cell">Paid by</Th>
+                  <Th
+                    align="right"
+                    onClick={() => toggleSort("amount")}
+                    sort={dirFor("amount")}
+                  >
+                    Amount
+                  </Th>
+                  <Th align="right">
+                    <span className="sr-only">Actions</span>
+                  </Th>
+                </Thead>
                 <tbody className="divide-y divide-slate-100">
                   {sorted.map((e) => (
-                    <tr key={e.id} className="hover:bg-slate-50/70">
+                    <Tr key={e.id}>
                       <Td className="whitespace-nowrap">{formatDate(e.date)}</Td>
                       <Td>
                         <Badge>
@@ -342,28 +332,15 @@ export default function ExpensesPage() {
                         {formatCurrency(e.amount)}
                       </Td>
                       <Td align="right">
-                        <div className="flex justify-end gap-1 whitespace-nowrap">
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => {
-                              setEditing(e);
-                              setFormOpen(true);
-                            }}
-                          >
-                            Edit
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="text-red-600 hover:bg-red-50 hover:text-red-700"
-                            onClick={() => setPendingDelete(e)}
-                          >
-                            Delete
-                          </Button>
-                        </div>
+                        <RowActions
+                          onEdit={() => {
+                            setEditing(e);
+                            setFormOpen(true);
+                          }}
+                          onDelete={() => setPendingDelete(e)}
+                        />
                       </Td>
-                    </tr>
+                    </Tr>
                   ))}
                 </tbody>
                 <tfoot className="border-t border-slate-200 bg-slate-50">

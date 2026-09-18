@@ -1,16 +1,18 @@
 "use client";
 
 import { PaymentBadge, SourceBadge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import {
   CardField,
   CardList,
   CardRow,
   EmptyState,
+  RowActions,
   Table,
   TableWrap,
   Td,
   Th,
+  Thead,
+  Tr,
 } from "@/components/ui/table";
 import { nightCount } from "@/lib/dates";
 import { formatCurrency, formatDate } from "@/lib/format";
@@ -112,18 +114,8 @@ export function BookingTable({
                 </p>
               ) : null}
 
-              <div className="mt-2.5 flex justify-end gap-1">
-                <Button size="sm" variant="ghost" onClick={() => onEdit(b)}>
-                  Edit
-                </Button>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="text-red-600 hover:bg-red-50 hover:text-red-700"
-                  onClick={() => onDelete(b)}
-                >
-                  Delete
-                </Button>
+              <div className="mt-2.5">
+                <RowActions onEdit={() => onEdit(b)} onDelete={() => onDelete(b)} />
               </div>
             </CardRow>
           );
@@ -131,9 +123,8 @@ export function BookingTable({
       </CardList>
 
       <TableWrap>
-      <Table>
-        <thead>
-          <tr className="bg-slate-50">
+        <Table>
+          <Thead>
             <Th onClick={() => onSort("guestName")} sort={dirFor("guestName")}>
               Guest
             </Th>
@@ -151,13 +142,7 @@ export function BookingTable({
               onClick={() => onSort("totalPayout")}
               sort={dirFor("totalPayout")}
             >
-              Payout
-            </Th>
-            <Th align="right" className="hidden md:table-cell">
-              Fee
-            </Th>
-            <Th align="right" className="hidden md:table-cell">
-              Net
+              Amount
             </Th>
             <Th
               onClick={() => onSort("paymentStatus")}
@@ -168,81 +153,65 @@ export function BookingTable({
             <Th align="right">
               <span className="sr-only">Actions</span>
             </Th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-slate-100">
-          {bookings.map((b) => {
-            const nights = nightCount(b.checkIn, b.checkOut);
-            return (
-              <tr key={b.id} className="hover:bg-slate-50/70">
-                <Td>
-                  <div className="font-medium text-slate-900">
-                    {b.guestName}
-                  </div>
-                  {b.contactInfo ? (
-                    <div className="text-xs text-slate-500">
-                      {b.contactInfo}
+          </Thead>
+          <tbody className="divide-y divide-slate-100">
+            {bookings.map((b) => {
+              const nights = nightCount(b.checkIn, b.checkOut);
+              return (
+                <Tr key={b.id}>
+                  <Td>
+                    <div className="font-medium text-slate-900">
+                      {b.guestName}
                     </div>
-                  ) : null}
-                  {b.notes ? (
-                    <div className="mt-0.5 max-w-xs truncate text-xs text-slate-400">
-                      {b.notes}
+                    {b.contactInfo ? (
+                      <div className="text-xs text-slate-500">
+                        {b.contactInfo}
+                      </div>
+                    ) : null}
+                    {b.notes ? (
+                      <div className="mt-0.5 max-w-xs truncate text-xs text-slate-400">
+                        {b.notes}
+                      </div>
+                    ) : null}
+                  </Td>
+                  <Td>
+                    <SourceBadge source={b.source} />
+                  </Td>
+                  <Td>
+                    <div className="whitespace-nowrap text-slate-900">
+                      {formatDate(b.checkIn)}
                     </div>
-                  ) : null}
-                </Td>
-                <Td>
-                  <SourceBadge source={b.source} />
-                </Td>
-                <Td>
-                  <div className="whitespace-nowrap text-slate-900">
-                    {formatDate(b.checkIn)}
-                  </div>
-                  <div className="whitespace-nowrap text-xs text-slate-500">
-                    → {formatDate(b.checkOut)} · {nights}n
-                  </div>
-                </Td>
-                <Td align="right" className="hidden sm:table-cell">
-                  {b.guestsCount}
-                </Td>
-                <Td align="right" className="whitespace-nowrap">
-                  {formatCurrency(b.totalPayout)}
-                </Td>
-                <Td
-                  align="right"
-                  className="hidden whitespace-nowrap text-slate-500 md:table-cell"
-                >
-                  {b.platformFee ? formatCurrency(b.platformFee) : "—"}
-                </Td>
-                <Td
-                  align="right"
-                  className="hidden whitespace-nowrap font-medium text-slate-900 md:table-cell"
-                >
-                  {formatCurrency(bookingNetIncome(b))}
-                </Td>
-                <Td>
-                  <PaymentBadge status={b.paymentStatus} />
-                </Td>
-                <Td align="right">
-                  <div className="flex justify-end gap-1 whitespace-nowrap">
-                    <Button size="sm" variant="ghost" onClick={() => onEdit(b)}>
-                      Edit
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="text-red-600 hover:bg-red-50 hover:text-red-700"
-                      onClick={() => onDelete(b)}
-                    >
-                      Delete
-                    </Button>
-                  </div>
-                </Td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </Table>
-    </TableWrap>
+                    <div className="whitespace-nowrap text-xs text-slate-500">
+                      → {formatDate(b.checkOut)} · {nights}n
+                    </div>
+                  </Td>
+                  <Td align="right" className="hidden sm:table-cell">
+                    {b.guestsCount}
+                  </Td>
+                  <Td align="right" className="whitespace-nowrap">
+                    <div className="font-medium text-slate-900">
+                      {formatCurrency(bookingNetIncome(b))}
+                    </div>
+                    <div className="text-xs text-slate-400">
+                      {formatCurrency(b.totalPayout)} payout
+                      {b.platformFee ? ` · ${formatCurrency(b.platformFee)} fee` : ""}
+                    </div>
+                  </Td>
+                  <Td>
+                    <PaymentBadge status={b.paymentStatus} />
+                  </Td>
+                  <Td align="right">
+                    <RowActions
+                      onEdit={() => onEdit(b)}
+                      onDelete={() => onDelete(b)}
+                    />
+                  </Td>
+                </Tr>
+              );
+            })}
+          </tbody>
+        </Table>
+      </TableWrap>
     </>
   );
 }

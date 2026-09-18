@@ -19,10 +19,13 @@ import {
   CardList,
   CardRow,
   EmptyState,
+  RowActions,
   Table,
   TableWrap,
   Td,
   Th,
+  Thead,
+  Tr,
 } from "@/components/ui/table";
 import { formatCurrency, formatDate } from "@/lib/format";
 import {
@@ -277,35 +280,26 @@ export default function CleaningPage() {
                         </p>
                       ) : null}
 
-                      <div className="mt-2.5 flex justify-end gap-1">
-                        {c.paymentStatus === "unpaid" ? (
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="text-emerald-700 hover:bg-emerald-50"
-                            onClick={() => markPaid(c)}
-                          >
-                            Mark paid
-                          </Button>
-                        ) : null}
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => {
+                      <div className="mt-2.5">
+                        <RowActions
+                          onEdit={() => {
                             setEditing(c);
                             setFormOpen(true);
                           }}
-                        >
-                          Edit
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="text-red-600 hover:bg-red-50 hover:text-red-700"
-                          onClick={() => setPendingDelete(c)}
-                        >
-                          Delete
-                        </Button>
+                          onDelete={() => setPendingDelete(c)}
+                          extra={
+                            c.paymentStatus === "unpaid" ? (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="mr-1 text-emerald-700 hover:bg-emerald-50"
+                                onClick={() => markPaid(c)}
+                              >
+                                Mark paid
+                              </Button>
+                            ) : undefined
+                          }
+                        />
                       </div>
                     </CardRow>
                   );
@@ -314,26 +308,24 @@ export default function CleaningPage() {
 
               <TableWrap>
               <Table>
-                <thead>
-                  <tr className="bg-slate-50">
-                    <Th>Date</Th>
-                    <Th>Cleaner</Th>
-                    <Th className="hidden md:table-cell">Booking</Th>
-                    <Th>Status</Th>
-                    <Th align="right">Amount</Th>
-                    <Th>Payment</Th>
-                    <Th align="right">
-                      <span className="sr-only">Actions</span>
-                    </Th>
-                  </tr>
-                </thead>
+                <Thead>
+                  <Th>Date</Th>
+                  <Th>Cleaner</Th>
+                  <Th className="hidden md:table-cell">Booking</Th>
+                  <Th>Status</Th>
+                  <Th align="right">Amount</Th>
+                  <Th>Payment</Th>
+                  <Th align="right">
+                    <span className="sr-only">Actions</span>
+                  </Th>
+                </Thead>
                 <tbody className="divide-y divide-slate-100">
                   {filtered.map((c) => {
                     const booking = c.bookingId
                       ? bookingById.get(c.bookingId)
                       : undefined;
                     return (
-                      <tr key={c.id} className="hover:bg-slate-50/70">
+                      <Tr key={c.id}>
                         <Td className="whitespace-nowrap">
                           {formatDate(c.date)}
                         </Td>
@@ -364,38 +356,27 @@ export default function CleaningPage() {
                           <CleaningPaymentBadge status={c.paymentStatus} />
                         </Td>
                         <Td align="right">
-                          <div className="flex justify-end gap-1 whitespace-nowrap">
-                            {c.paymentStatus === "unpaid" ? (
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                className="text-emerald-700 hover:bg-emerald-50"
-                                onClick={() => markPaid(c)}
-                              >
-                                Mark paid
-                              </Button>
-                            ) : null}
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => {
-                                setEditing(c);
-                                setFormOpen(true);
-                              }}
-                            >
-                              Edit
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="text-red-600 hover:bg-red-50 hover:text-red-700"
-                              onClick={() => setPendingDelete(c)}
-                            >
-                              Delete
-                            </Button>
-                          </div>
+                          <RowActions
+                            onEdit={() => {
+                              setEditing(c);
+                              setFormOpen(true);
+                            }}
+                            onDelete={() => setPendingDelete(c)}
+                            extra={
+                              c.paymentStatus === "unpaid" ? (
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="mr-1 text-emerald-700 hover:bg-emerald-50"
+                                  onClick={() => markPaid(c)}
+                                >
+                                  Mark paid
+                                </Button>
+                              ) : undefined
+                            }
+                          />
                         </Td>
-                      </tr>
+                      </Tr>
                     );
                   })}
                 </tbody>

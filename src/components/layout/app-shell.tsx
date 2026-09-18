@@ -35,8 +35,10 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <div className="flex min-h-full flex-col lg:flex-row">
-      {/* Desktop sidebar */}
-      <aside className="no-print hidden w-56 shrink-0 border-r border-slate-200 bg-white lg:flex lg:flex-col">
+      {/* Desktop sidebar — sticky so navigation stays reachable while a
+          long list (e.g. bookings) scrolls, instead of scrolling away
+          with the page. */}
+      <aside className="no-print hidden w-56 shrink-0 self-start border-r border-slate-200 bg-white lg:sticky lg:top-0 lg:flex lg:h-screen lg:flex-col">
         <div className="px-5 py-5">
           <Brand />
         </div>
