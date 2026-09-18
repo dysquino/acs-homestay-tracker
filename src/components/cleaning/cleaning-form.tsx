@@ -11,7 +11,7 @@ import {
   Textarea,
 } from "@/components/ui/field";
 import { Modal } from "@/components/ui/modal";
-import { useAuth } from "@/lib/auth";
+import { useIdentity } from "@/lib/identity";
 import { today } from "@/lib/dates";
 import { formatDateRange } from "@/lib/format";
 import { knownCleaners } from "@/lib/selectors";
@@ -99,7 +99,7 @@ function CleaningFields({
   onClose: () => void;
 }) {
   const { bookings, cleaning, addCleaning, updateCleaning } = useStore();
-  const { user } = useAuth();
+  const { user } = useIdentity();
   const [form, setForm] = useState<FormState>(() => initialState(record));
   const [errors, setErrors] = useState<Partial<Record<keyof FormState, string>>>(
     {},

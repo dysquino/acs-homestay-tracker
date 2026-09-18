@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/field";
 import { WarningIcon } from "@/components/ui/icons";
 import { Modal } from "@/components/ui/modal";
-import { useAuth } from "@/lib/auth";
+import { useIdentity } from "@/lib/identity";
 import { addDays, nightCount, today } from "@/lib/dates";
 import { formatDateRange } from "@/lib/format";
 import { findConflicts } from "@/lib/selectors";
@@ -118,7 +118,7 @@ function BookingFields({
   onClose: () => void;
 }) {
   const { bookings, addBooking, updateBooking } = useStore();
-  const { user } = useAuth();
+  const { user } = useIdentity();
   const [form, setForm] = useState<FormState>(() => initialState(booking));
   const [errors, setErrors] = useState<Partial<Record<keyof FormState, string>>>(
     {},

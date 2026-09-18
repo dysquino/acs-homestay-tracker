@@ -11,7 +11,7 @@ import {
   Textarea,
 } from "@/components/ui/field";
 import { Modal } from "@/components/ui/modal";
-import { useAuth } from "@/lib/auth";
+import { useIdentity } from "@/lib/identity";
 import { today } from "@/lib/dates";
 import { knownPayers } from "@/lib/selectors";
 import { useStore } from "@/lib/store";
@@ -71,7 +71,7 @@ function ExpenseFields({
   onClose: () => void;
 }) {
   const { expenses, addExpense, updateExpense } = useStore();
-  const { user } = useAuth();
+  const { user } = useIdentity();
   const [form, setForm] = useState<FormState>(() =>
     expense
       ? {

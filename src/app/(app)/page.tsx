@@ -15,7 +15,7 @@ import { ChevronLeftIcon, ChevronRightIcon } from "@/components/ui/icons";
 import { ConfirmDialog } from "@/components/ui/modal";
 import { EmptyState } from "@/components/ui/table";
 import { StatTile } from "@/components/ui/stat";
-import { useAuth } from "@/lib/auth";
+import { useIdentity } from "@/lib/identity";
 import { addMonths, daysBetween, startOfMonth, today } from "@/lib/dates";
 import {
   formatCurrency,
@@ -35,7 +35,7 @@ import { useStore } from "@/lib/store";
 
 export default function DashboardPage() {
   const { bookings, expenses, cleaning, resetToSampleData } = useStore();
-  const { user } = useAuth();
+  const { user } = useIdentity();
   const t = today();
   const [confirmingReset, setConfirmingReset] = useState(false);
   const [monthCursor, setMonthCursor] = useState(() => startOfMonth(t));

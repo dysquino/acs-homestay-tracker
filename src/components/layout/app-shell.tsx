@@ -4,12 +4,12 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ComponentType, ReactNode, SVGProps } from "react";
 
-import { useAuth } from "@/lib/auth";
+import { Select } from "@/components/ui/field";
 import { cn } from "@/lib/cn";
+import { ACCOUNTS, useIdentity } from "@/lib/identity";
 import {
   CalendarIcon,
   HomeIcon,
-  LogoutIcon,
   ReceiptIcon,
   SparklesIcon,
 } from "@/components/ui/icons";
@@ -34,7 +34,12 @@ function isActive(pathname: string, href: string): boolean {
 
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const { user, signOut } = useAuth();
+  const { user, setUser } = useIdentity();
+
+  function onPickUser(id: string) {
+    const next = ACCOUNTS.find((a) => a.id === id);
+    if (next) setUser(next);
+  }
 
   return (
     <div className="flex min-h-full flex-col lg:flex-row">
@@ -65,32 +70,40 @@ export function AppShell({ children }: { children: ReactNode }) {
           })}
         </nav>
         <div className="border-t border-slate-200 p-3">
-          <p className="px-2 text-xs font-medium text-slate-900">
-            {user?.name}
-          </p>
-          <p className="truncate px-2 text-xs text-slate-500">{user?.email}</p>
-          <button
-            type="button"
-            onClick={signOut}
-            className="mt-2 flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+          <label className="block px-2 text-xs font-medium text-slate-500">
+            Acting as
+          </label>
+          <Select
+            value={user.id}
+            onChange={(e) => onPickUser(e.target.value)}
+            className="mt-1"
+            aria-label="Switch who you're acting as"
           >
-            <LogoutIcon className="h-4 w-4" />
-            Sign out
-          </button>
+            {ACCOUNTS.map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.name}
+              </option>
+            ))}
+          </Select>
         </div>
       </aside>
 
       {/* Mobile top bar */}
-      <header className="no-print flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3 lg:hidden">
+      <header className="no-print flex items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-3 lg:hidden">
         <Brand />
-        <button
-          type="button"
-          onClick={signOut}
-          className="flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50"
-        >
-          <LogoutIcon className="h-4 w-4" />
-          Sign out
-        </button>
+        <div className="w-32 shrink-0">
+          <Select
+            value={user.id}
+            onChange={(e) => onPickUser(e.target.value)}
+            aria-label="Switch who you're acting as"
+          >
+            {ACCOUNTS.map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.name}
+              </option>
+            ))}
+          </Select>
+        </div>
       </header>
 
       <main className="min-w-0 flex-1 pb-20 lg:pb-0">
