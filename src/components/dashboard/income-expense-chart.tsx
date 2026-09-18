@@ -30,14 +30,18 @@ export type MonthPoint = {
 };
 
 const WIDTH = 640;
-const HEIGHT = 220;
-const PAD = { top: 16, right: 16, bottom: 28, left: 44 };
+const HEIGHT = 130;
+const PAD = { top: 10, right: 12, bottom: 22, left: 44 };
 
 function niceMax(value: number): number {
   if (value <= 0) return 100;
   const magnitude = 10 ** Math.floor(Math.log10(value));
   const normalized = value / magnitude;
-  const step = normalized <= 1 ? 1 : normalized <= 2 ? 2 : normalized <= 5 ? 5 : 10;
+  // Tighter step table (adds 2.5) so the axis max sits closer to the
+  // actual data max instead of leaving half the chart empty — e.g. a
+  // max of ~24,000 now rounds to 25,000, not 50,000.
+  const step =
+    normalized <= 1 ? 1 : normalized <= 2 ? 2 : normalized <= 2.5 ? 2.5 : normalized <= 5 ? 5 : 10;
   return step * magnitude;
 }
 
@@ -59,7 +63,7 @@ export function IncomeExpenseChart({ data }: { data: MonthPoint[] }) {
   const linePath = (key: "income" | "expenses") =>
     data.map((d, i) => `${i === 0 ? "M" : "L"} ${x(i)} ${y(d[key])}`).join(" ");
 
-  const gridSteps = [0, 0.25, 0.5, 0.75, 1];
+  const gridSteps = [0, 0.5, 1];
   const hovered = hover !== null ? data[hover] : null;
 
   function handlePointer(e: React.PointerEvent<SVGRectElement>) {
@@ -87,7 +91,7 @@ export function IncomeExpenseChart({ data }: { data: MonthPoint[] }) {
     <div>
       {/* Legend — line-key swatches, not boxes; text stays in ink, never
           the series color, per marks-and-anatomy.md. */}
-      <div className="mb-2 flex items-center gap-4 text-xs text-slate-600">
+      <div className="mb-1 flex items-center gap-4 text-xs text-slate-600">
         <span className="flex items-center gap-1.5">
           <svg width="14" height="8" aria-hidden="true">
             <line x1="0" y1="4" x2="14" y2="4" stroke={INCOME_COLOR} strokeWidth={2} />
