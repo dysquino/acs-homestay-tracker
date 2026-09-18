@@ -12,6 +12,9 @@ import {
   ReceiptIcon,
   SparklesIcon,
 } from "@/components/ui/icons";
+import packageJson from "../../../package.json";
+
+const APP_VERSION = packageJson.version;
 
 type NavItem = {
   href: string;
@@ -64,11 +67,13 @@ export function AppShell({ children }: { children: ReactNode }) {
             );
           })}
         </nav>
+        <p className="px-5 py-3 text-xs text-slate-400">v{APP_VERSION}</p>
       </aside>
 
       {/* Mobile top bar */}
       <header className="no-print flex items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-3 lg:hidden">
         <Brand />
+        <p className="text-xs text-slate-400">v{APP_VERSION}</p>
       </header>
 
       <main className="min-w-0 flex-1 pb-20 lg:pb-0">
