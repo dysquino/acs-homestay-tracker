@@ -77,7 +77,7 @@ export function ExpenseCategoryDonut({ data }: { data: CategorySlice[] }) {
   const hovered = wedges.find((w) => w.category === hover);
 
   return (
-    <div className="flex flex-col items-center gap-4 px-4 py-4 sm:flex-row sm:px-5">
+    <div className="flex w-full flex-1 flex-col items-center gap-4 px-4 py-4 sm:flex-row sm:px-5">
       <div className="relative shrink-0" style={{ width: SIZE, height: SIZE }}>
         <svg width={SIZE} height={SIZE} viewBox={`0 0 ${SIZE} ${SIZE}`} role="img" aria-label="Expenses by category">
           <circle

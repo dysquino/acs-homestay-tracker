@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState } from "react";
 
 import { PageHeader } from "@/components/layout/app-shell";
@@ -7,7 +8,8 @@ import { ExpenseForm } from "@/components/expenses/expense-form";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader } from "@/components/ui/card";
-import { Input, Select } from "@/components/ui/field";
+import { Field, Select } from "@/components/ui/field";
+import { DateRangeFilter, FilterBar } from "@/components/ui/filter-bar";
 import {
   ChevronLeftIcon,
   ChevronRightIcon,
@@ -30,7 +32,7 @@ import {
   Tr,
 } from "@/components/ui/table";
 import { addMonths, startOfMonth, today } from "@/lib/dates";
-import { formatCurrency, formatDate, formatMonth } from "@/lib/format";
+import { formatCurrency, formatDate, formatMonth, formatWhole } from "@/lib/format";
 import { expensesByMonth, monthSummary } from "@/lib/selectors";
 import { useStore } from "@/lib/store";
 import {
@@ -104,6 +106,26 @@ export default function ExpensesPage() {
 
   const dirFor = (key: SortKey) => (sort.key === key ? sort.dir : null);
 
+  /** Expenses created for a paid cleaning are managed from the Cleaning page. */
+  const rowActions = (e: Expense) =>
+    e.cleaningId ? (
+      <Link
+        href="/cleaning"
+        title="Created automatically when the cleaning was marked paid. Change it on the Cleaning page."
+        className="inline-flex justify-end text-xs font-medium whitespace-nowrap text-brand-700 hover:underline"
+      >
+        From cleaning
+      </Link>
+    ) : (
+      <RowActions
+        onEdit={() => {
+          setEditing(e);
+          setFormOpen(true);
+        }}
+        onDelete={() => setPendingDelete(e)}
+      />
+    );
+
   return (
     <>
       <PageHeader
@@ -145,80 +167,46 @@ export default function ExpensesPage() {
       <div className="mb-5 grid gap-3 sm:grid-cols-3">
         <StatTile
           label={`Income — ${formatMonth(summary.month)}`}
-          value={formatCurrency(summary.income)}
-          hint="Net of platform fees, split by nights per month"
+          value={formatWhole(summary.income)}
+          hint="Booking payouts, split by nights per month"
           tone="brand"
         />
         <StatTile
           label={`Expenses — ${formatMonth(summary.month)}`}
-          value={formatCurrency(summary.expenses)}
+          value={formatWhole(summary.expenses)}
         />
         <StatTile
           label={`Profit — ${formatMonth(summary.month)}`}
-          value={formatCurrency(summary.net)}
+          value={formatWhole(summary.net)}
           tone={summary.net >= 0 ? "positive" : "negative"}
           hint={summary.net >= 0 ? "In the black" : "Spending exceeds income"}
         />
       </div>
 
-      <div className="grid gap-5 lg:grid-cols-3">
-        <Card className="overflow-hidden lg:col-span-2">
-          <div className="space-y-2 border-b border-slate-200 bg-slate-50/60 p-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="w-52">
-                <Select
-                  value={category}
-                  onChange={(e) =>
-                    setCategory(e.target.value as ExpenseCategory | "all")
-                  }
-                  aria-label="Filter by category"
-                >
-                  <option value="all">All categories</option>
-                  {EXPENSE_CATEGORIES.map((o) => (
-                    <option key={o.value} value={o.value}>
-                      {o.label}
-                    </option>
-                  ))}
-                </Select>
-              </div>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-3">
-              <div className="flex items-center gap-2">
-                <div className="w-40">
-                  <Input
-                    type="date"
-                    value={from}
-                    onChange={(e) => setFrom(e.target.value)}
-                    aria-label="From date"
-                  />
-                </div>
-                <span className="text-xs text-slate-400">to</span>
-                <div className="w-40">
-                  <Input
-                    type="date"
-                    value={to}
-                    onChange={(e) => setTo(e.target.value)}
-                    aria-label="To date"
-                  />
-                </div>
-              </div>
-              {filtersActive ? (
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="ml-auto"
-                  onClick={() => {
-                    setCategory("all");
-                    setFrom("");
-                    setTo("");
-                  }}
-                >
-                  Clear filters
-                </Button>
-              ) : null}
-            </div>
-          </div>
+      <div className="grid gap-5 2xl:grid-cols-[minmax(0,1fr)_22rem] 2xl:items-start">
+        <Card className="overflow-hidden">
+          <FilterBar
+            filtersActive={filtersActive}
+            onClear={() => {
+              setCategory("all");
+              setFrom("");
+              setTo("");
+            }}
+          >
+              <Field label="Category" className="min-w-40 flex-1">
+                {(id) => (
+                  <Select id={id} value={category} onChange={(e) => setCategory(e.target.value as ExpenseCategory | "all")}>
+                    <option value="all">All categories</option>
+                    {EXPENSE_CATEGORIES.map((o) => (
+                      <option key={o.value} value={o.value}>
+                        {o.label}
+                      </option>
+                    ))}
+                  </Select>
+                )}
+              </Field>
+              <DateRangeFilter from={from} to={to} onFromChange={setFrom} onToChange={setTo} />
+            </FilterBar>
 
           {sorted.length === 0 ? (
             <EmptyState
@@ -260,13 +248,7 @@ export default function ExpensesPage() {
                     </div>
 
                     <div className="mt-2.5">
-                      <RowActions
-                        onEdit={() => {
-                          setEditing(e);
-                          setFormOpen(true);
-                        }}
-                        onDelete={() => setPendingDelete(e)}
-                      />
+                      {rowActions(e)}
                     </div>
                   </CardRow>
                 ))}
@@ -315,7 +297,9 @@ export default function ExpensesPage() {
                         </Badge>
                       </Td>
                       <Td>
-                        <span className="text-slate-900">{e.description}</span>
+                        <span className="block max-w-md truncate text-slate-900" title={e.description}>
+                          {e.description}
+                        </span>
                       </Td>
                       <Td className="hidden text-slate-500 sm:table-cell">
                         {e.paidBy || "—"}
@@ -326,15 +310,7 @@ export default function ExpensesPage() {
                       >
                         {formatCurrency(e.amount)}
                       </Td>
-                      <Td align="right">
-                        <RowActions
-                          onEdit={() => {
-                            setEditing(e);
-                            setFormOpen(true);
-                          }}
-                          onDelete={() => setPendingDelete(e)}
-                        />
-                      </Td>
+                      <Td align="right">{rowActions(e)}</Td>
                     </Tr>
                   ))}
                 </tbody>

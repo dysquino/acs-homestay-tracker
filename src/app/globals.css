@@ -38,13 +38,14 @@ html {
 }
 
 body {
-  background: #f8fafc;
+  background: #f1f2f4; /* canvas — white cards float on it */
   color: #0f172a;
   -webkit-font-smoothing: antialiased;
 }
 
 /* Keep the native date/number controls from looking alien next to the rest. */
-input[type="date"] {
+input[type="date"],
+select {
   min-height: 2.5rem;
 }
 

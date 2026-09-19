@@ -170,7 +170,7 @@ export function Td({
   return (
     <td
       className={cn(
-        "px-3 py-2.5 text-slate-700 align-top",
+        "px-3 py-2.5 text-slate-700 align-top whitespace-nowrap",
         align === "right" && "text-right",
         align === "center" && "text-center",
         className,

@@ -15,6 +15,7 @@ import { useIdentity } from "@/lib/identity";
 import { today } from "@/lib/dates";
 import { knownPayers } from "@/lib/selectors";
 import { useStore } from "@/lib/store";
+import { useSubmit, type Submit } from "@/lib/use-submit";
 import {
   EXPENSE_CATEGORIES,
   type Expense,
@@ -40,6 +41,7 @@ export function ExpenseForm({
   expense: Expense | null;
   onClose: () => void;
 }) {
+  const submit = useSubmit();
   return (
     <Modal
       open={open}
@@ -48,8 +50,8 @@ export function ExpenseForm({
       footer={
         <>
           <Button onClick={onClose}>Cancel</Button>
-          <Button type="submit" form={FORM_ID} variant="primary">
-            {expense ? "Save changes" : "Add expense"}
+          <Button type="submit" form={FORM_ID} variant="primary" disabled={submit.saving}>
+            {submit.saving ? "Saving…" : expense ? "Save changes" : "Add expense"}
           </Button>
         </>
       }
@@ -58,6 +60,7 @@ export function ExpenseForm({
         key={expense?.id ?? "new"}
         expense={expense}
         onClose={onClose}
+        submit={submit}
       />
     </Modal>
   );
@@ -66,9 +69,11 @@ export function ExpenseForm({
 function ExpenseFields({
   expense,
   onClose,
+  submit,
 }: {
   expense: Expense | null;
   onClose: () => void;
+  submit: Submit;
 }) {
   const { expenses, addExpense, updateExpense } = useStore();
   const { user } = useIdentity();
@@ -118,13 +123,15 @@ function ExpenseFields({
     };
 
     setSubmitError(null);
-    try {
-      if (expense) await updateExpense(expense.id, payload);
-      else await addExpense(payload);
-      onClose();
-    } catch {
-      setSubmitError("Couldn't save this expense. Please try again.");
-    }
+    await submit.run(async () => {
+      try {
+        if (expense) await updateExpense(expense.id, payload);
+        else await addExpense(payload);
+        onClose();
+      } catch {
+        setSubmitError("Couldn't save this expense. Please try again.");
+      }
+    });
   }
 
   return (
@@ -141,7 +148,15 @@ function ExpenseFields({
           )}
         </Field>
 
-        <Field label="Category" required>
+        <Field
+          label="Category"
+          required
+          hint={
+            form.category === "cleaning"
+              ? "Paid cleanings are added automatically — mark the cleaning as paid on the Cleaning page instead of entering it twice."
+              : undefined
+          }
+        >
           {(id) => (
             <Select
               id={id}

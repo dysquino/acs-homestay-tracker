@@ -3,23 +3,23 @@
 import { useMemo, useState } from "react";
 
 import { PageHeader } from "@/components/layout/app-shell";
+import { AirbnbImportModal } from "@/components/bookings/airbnb-import";
 import { BookingCalendar } from "@/components/bookings/booking-calendar";
 import {
-  BookingCards,
+  BookingTable,
   sortBookings,
-  type BookingSortKey,
   type Sort,
-} from "@/components/bookings/booking-cards";
+} from "@/components/bookings/booking-table";
 import { BookingForm } from "@/components/bookings/booking-form";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Input, Select } from "@/components/ui/field";
+import { Field, Select } from "@/components/ui/field";
+import { DateRangeFilter, FilterBar } from "@/components/ui/filter-bar";
 import { CalendarIcon, ListIcon, PlusIcon } from "@/components/ui/icons";
 import { ConfirmDialog } from "@/components/ui/modal";
 import { cn } from "@/lib/cn";
 import { today } from "@/lib/dates";
-import { formatCurrency, formatDateRange } from "@/lib/format";
-import { bookingNetIncome } from "@/lib/selectors";
+import { formatDateRange } from "@/lib/format";
 import { useStore } from "@/lib/store";
 import {
   BOOKING_SOURCES,
@@ -36,6 +36,7 @@ export default function BookingsPage() {
 
   const [view, setView] = useState<View>("calendar");
   const [formOpen, setFormOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [editing, setEditing] = useState<Booking | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Booking | null>(null);
 
@@ -60,15 +61,6 @@ export default function BookingsPage() {
   }, [bookings, source, payment, from, to, includePast, t]);
 
   const sorted = useMemo(() => sortBookings(filtered, sort), [filtered, sort]);
-
-  const totals = useMemo(
-    () => ({
-      count: filtered.length,
-      payout: filtered.reduce((s, b) => s + b.totalPayout, 0),
-      net: filtered.reduce((s, b) => s + bookingNetIncome(b), 0),
-    }),
-    [filtered],
-  );
 
   const filtersActive =
     source !== "all" ||
@@ -101,10 +93,13 @@ export default function BookingsPage() {
         title="Bookings"
         description="Airbnb and direct reservations in one place."
         action={
-          <Button variant="primary" onClick={openAdd}>
-            <PlusIcon className="h-4 w-4" />
-            Add booking
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button onClick={() => setImportOpen(true)}>Import Airbnb CSV</Button>
+            <Button variant="primary" onClick={openAdd}>
+              <PlusIcon className="h-4 w-4" />
+              Add booking
+            </Button>
+          </div>
         }
       />
 
@@ -124,110 +119,37 @@ export default function BookingsPage() {
           />
         </div>
 
-        {view === "list" ? (
-          <div className="ml-auto flex items-center gap-2">
-            <p className="text-xs text-slate-500">
-              {totals.count} booking{totals.count === 1 ? "" : "s"} ·{" "}
-              <span className="font-medium text-slate-700">
-                {formatCurrency(totals.net)}
-              </span>{" "}
-              net
-            </p>
-            <div className="w-36">
-              <Select
-                value={sort.key}
-                onChange={(e) =>
-                  setSort((s) => ({
-                    ...s,
-                    key: e.target.value as BookingSortKey,
-                  }))
-                }
-                aria-label="Sort by"
-              >
-                <option value="checkIn">Sort: Check-in</option>
-                <option value="guestName">Sort: Guest name</option>
-                <option value="totalPayout">Sort: Amount</option>
-                <option value="paymentStatus">Sort: Payment</option>
-              </Select>
-            </div>
-            <button
-              type="button"
-              onClick={() =>
-                setSort((s) => ({
-                  ...s,
-                  dir: s.dir === "asc" ? "desc" : "asc",
-                }))
-              }
-              aria-label={sort.dir === "asc" ? "Ascending" : "Descending"}
-              title={sort.dir === "asc" ? "Ascending" : "Descending"}
-              className="rounded-md border border-slate-300 bg-white px-2 py-2 text-xs text-slate-600 hover:bg-slate-50"
-            >
-              {sort.dir === "asc" ? "▲" : "▼"}
-            </button>
-          </div>
-        ) : null}
       </div>
 
       {view === "list" ? (
         <Card className="overflow-hidden">
-          <div className="space-y-2 border-b border-slate-200 bg-slate-50/60 p-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="w-36">
-                <Select
-                  value={source}
-                  onChange={(e) =>
-                    setSource(e.target.value as BookingSource | "all")
-                  }
-                  aria-label="Filter by source"
-                >
-                  <option value="all">All sources</option>
-                  {BOOKING_SOURCES.map((o) => (
-                    <option key={o.value} value={o.value}>
-                      {o.label}
-                    </option>
-                  ))}
-                </Select>
-              </div>
-              <div className="w-52">
-                <Select
-                  value={payment}
-                  onChange={(e) =>
-                    setPayment(e.target.value as PaymentStatus | "all")
-                  }
-                  aria-label="Filter by payment status"
-                >
-                  <option value="all">Any payment status</option>
-                  {PAYMENT_STATUSES.map((o) => (
-                    <option key={o.value} value={o.value}>
-                      {o.label}
-                    </option>
-                  ))}
-                </Select>
-              </div>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-3">
-              <div className="flex items-center gap-2">
-                <div className="w-40">
-                  <Input
-                    type="date"
-                    value={from}
-                    onChange={(e) => setFrom(e.target.value)}
-                    aria-label="From date"
-                  />
-                </div>
-                <span className="text-xs text-slate-400">to</span>
-                <div className="w-40">
-                  <Input
-                    type="date"
-                    value={to}
-                    onChange={(e) => setTo(e.target.value)}
-                    aria-label="To date"
-                  />
-                </div>
-              </div>
-
-              <label className="flex items-center gap-2 text-xs text-slate-600">
+          <FilterBar filtersActive={filtersActive} onClear={clearFilters}>
+              <Field label="Source" className="min-w-36 flex-1">
+                {(id) => (
+                  <Select id={id} value={source} onChange={(e) => setSource(e.target.value as BookingSource | "all")}>
+                    <option value="all">All sources</option>
+                    {BOOKING_SOURCES.map((o) => (
+                      <option key={o.value} value={o.value}>
+                        {o.label}
+                      </option>
+                    ))}
+                  </Select>
+                )}
+              </Field>
+              <Field label="Payment status" className="min-w-40 flex-1">
+                {(id) => (
+                  <Select id={id} value={payment} onChange={(e) => setPayment(e.target.value as PaymentStatus | "all")}>
+                    <option value="all">Any payment status</option>
+                    {PAYMENT_STATUSES.map((o) => (
+                      <option key={o.value} value={o.value}>
+                        {o.label}
+                      </option>
+                    ))}
+                  </Select>
+                )}
+              </Field>
+              <DateRangeFilter from={from} to={to} onFromChange={setFrom} onToChange={setTo} />
+              <label className="mb-2.5 flex shrink-0 items-center gap-2 text-xs text-slate-600">
                 <input
                   type="checkbox"
                   checked={includePast}
@@ -236,33 +158,21 @@ export default function BookingsPage() {
                 />
                 Include past bookings
               </label>
+            </FilterBar>
 
-              {filtersActive ? (
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="ml-auto"
-                  onClick={clearFilters}
-                >
-                  Clear filters
-                </Button>
-              ) : null}
-            </div>
-          </div>
-
-          <div className="p-3">
-            <BookingCards
-              bookings={sorted}
-              onEdit={openEdit}
-              onDelete={setPendingDelete}
-              emptyAction={
-                <Button variant="primary" onClick={openAdd}>
-                  <PlusIcon className="h-4 w-4" />
-                  Add booking
-                </Button>
-              }
-            />
-          </div>
+          <BookingTable
+            bookings={sorted}
+            sort={sort}
+            onSortChange={setSort}
+            onEdit={openEdit}
+            onDelete={setPendingDelete}
+            emptyAction={
+              <Button variant="primary" onClick={openAdd}>
+                <PlusIcon className="h-4 w-4" />
+                Add booking
+              </Button>
+            }
+          />
         </Card>
       ) : (
         <Card>
@@ -271,6 +181,8 @@ export default function BookingsPage() {
           </div>
         </Card>
       )}
+
+      <AirbnbImportModal open={importOpen} onClose={() => setImportOpen(false)} />
 
       <BookingForm
         open={formOpen}

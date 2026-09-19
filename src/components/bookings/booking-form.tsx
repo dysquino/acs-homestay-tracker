@@ -17,6 +17,7 @@ import { addDays, nightCount, today } from "@/lib/dates";
 import { formatDateRange } from "@/lib/format";
 import { findConflicts } from "@/lib/selectors";
 import { useStore } from "@/lib/store";
+import { useSubmit, type Submit } from "@/lib/use-submit";
 import {
   BOOKING_SOURCES,
   PAYMENT_STATUSES,
@@ -79,6 +80,7 @@ export function BookingForm({
   booking: Booking | null;
   onClose: () => void;
 }) {
+  const submit = useSubmit();
   return (
     <Modal
       open={open}
@@ -93,8 +95,8 @@ export function BookingForm({
       footer={
         <>
           <Button onClick={onClose}>Cancel</Button>
-          <Button type="submit" form={FORM_ID} variant="primary">
-            {booking ? "Save changes" : "Add booking"}
+          <Button type="submit" form={FORM_ID} variant="primary" disabled={submit.saving}>
+            {submit.saving ? "Saving…" : booking ? "Save changes" : "Add booking"}
           </Button>
         </>
       }
@@ -105,6 +107,7 @@ export function BookingForm({
         key={booking?.id ?? "new"}
         booking={booking}
         onClose={onClose}
+        submit={submit}
       />
     </Modal>
   );
@@ -113,9 +116,11 @@ export function BookingForm({
 function BookingFields({
   booking,
   onClose,
+  submit,
 }: {
   booking: Booking | null;
   onClose: () => void;
+  submit: Submit;
 }) {
   const { bookings, addBooking, updateBooking } = useStore();
   const { user } = useIdentity();
@@ -142,9 +147,12 @@ function BookingFields({
     if (!form.checkOut) next.checkOut = "Check-out date is required.";
     if (form.checkIn && form.checkOut && form.checkOut <= form.checkIn)
       next.checkOut = "Check-out must be after check-in.";
-    if (Number(form.guestsCount) < 1) next.guestsCount = "At least one guest.";
+    if (!Number.isInteger(Number(form.guestsCount)) || Number(form.guestsCount) < 1)
+      next.guestsCount = "Enter a whole number of at least 1.";
     if (form.totalPayout !== "" && Number(form.totalPayout) < 0)
       next.totalPayout = "Cannot be negative.";
+    if (form.platformFee !== "" && Number(form.platformFee) < 0)
+      next.platformFee = "Cannot be negative.";
     setErrors(next);
     return Object.keys(next).length === 0;
   }
@@ -168,13 +176,15 @@ function BookingFields({
     };
 
     setSubmitError(null);
-    try {
-      if (booking) await updateBooking(booking.id, payload);
-      else await addBooking(payload);
-      onClose();
-    } catch {
-      setSubmitError("Couldn't save this booking. Please try again.");
-    }
+    await submit.run(async () => {
+      try {
+        if (booking) await updateBooking(booking.id, payload);
+        else await addBooking(payload);
+        onClose();
+      } catch {
+        setSubmitError("Couldn't save this booking. Please try again.");
+      }
+    });
   }
 
   return (
@@ -253,7 +263,11 @@ function BookingFields({
 
         <Field
           label="Total payout"
-          hint="What you actually receive"
+          hint={
+            form.source === "airbnb"
+              ? "What Airbnb pays out to you (its \"Paid out\" amount)"
+              : "What you actually receive"
+          }
           error={errors.totalPayout}
         >
           {(id) => (
@@ -267,7 +281,7 @@ function BookingFields({
         </Field>
 
         {form.source === "airbnb" ? (
-          <Field label="Platform fee" hint="Optional — for profit tracking">
+          <Field label="Platform fee" hint="Optional, for reference — already taken out of the payout" error={errors.platformFee}>
             {(id) => (
               <CurrencyInput
                 id={id}

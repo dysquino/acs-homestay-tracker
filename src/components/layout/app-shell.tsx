@@ -42,7 +42,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       {/* Desktop sidebar — sticky so navigation stays reachable while a
           long list (e.g. bookings) scrolls, instead of scrolling away
           with the page. */}
-      <aside className="no-print hidden w-56 shrink-0 self-start border-r border-slate-200 bg-white lg:sticky lg:top-0 lg:flex lg:h-screen lg:flex-col">
+      <aside className="no-print hidden w-56 shrink-0 self-start rounded-3xl bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04),0_8px_24px_rgba(15,23,42,0.06)] lg:sticky lg:top-4 lg:m-4 lg:mr-0 lg:flex lg:h-[calc(100vh-2rem)] lg:flex-col">
         <div className="px-5 py-5">
           <Brand />
         </div>
@@ -55,10 +55,10 @@ export function AppShell({ children }: { children: ReactNode }) {
                 href={item.href}
                 aria-current={active ? "page" : undefined}
                 className={cn(
-                  "flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                  "flex items-center gap-2.5 rounded-full px-3.5 py-2.5 text-sm font-medium transition-colors",
                   active
-                    ? "bg-brand-50 text-brand-800"
-                    : "text-slate-600 hover:bg-slate-50 hover:text-slate-900",
+                    ? "bg-brand-700 text-white shadow-sm"
+                    : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
                 )}
               >
                 <item.icon className="h-4.5 w-4.5" />
@@ -71,19 +71,19 @@ export function AppShell({ children }: { children: ReactNode }) {
       </aside>
 
       {/* Mobile top bar */}
-      <header className="no-print flex items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-3 lg:hidden">
+      <header className="no-print flex items-center justify-between gap-3 bg-white px-4 py-3 shadow-[0_1px_2px_rgba(15,23,42,0.06)] lg:hidden">
         <Brand />
         <p className="text-xs text-slate-400">v{APP_VERSION}</p>
       </header>
 
       <main className="min-w-0 flex-1 pb-20 lg:pb-0">
-        <div className="mx-auto w-full max-w-6xl px-4 py-5 sm:px-6 sm:py-7">
+        <div className="mx-auto w-full max-w-[88rem] px-4 py-5 sm:px-6 sm:py-7">
           {children}
         </div>
       </main>
 
       {/* Mobile bottom tabs */}
-      <nav className="no-print fixed inset-x-0 bottom-0 z-40 grid grid-cols-4 border-t border-slate-200 bg-white pb-[env(safe-area-inset-bottom)] lg:hidden">
+      <nav className="no-print fixed inset-x-0 bottom-0 z-40 grid grid-cols-4 rounded-t-3xl bg-white pb-[env(safe-area-inset-bottom)] shadow-[0_-4px_20px_rgba(15,23,42,0.08)] lg:hidden">
         {NAV.map((item) => {
           const active = isActive(pathname, item.href);
           return (

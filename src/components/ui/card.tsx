@@ -5,7 +5,8 @@ import { cn } from "@/lib/cn";
 /** Soft, diffuse elevation — shared by Card and StatTile for a consistent
  * "lifted" feel (borrowed from the reference dashboard's card styling,
  * recolored/kept neutral rather than copying its green). */
-export const SOFT_SHADOW = "shadow-[0_2px_8px_rgba(15,23,42,0.06)]";
+export const SOFT_SHADOW =
+  "shadow-[0_1px_2px_rgba(15,23,42,0.04),0_8px_24px_rgba(15,23,42,0.06)]";
 
 export function Card({
   children,
@@ -17,7 +18,7 @@ export function Card({
   return (
     <section
       className={cn(
-        "rounded-2xl border border-slate-200 bg-white",
+        "rounded-3xl bg-white",
         SOFT_SHADOW,
         className,
       )}
@@ -41,7 +42,7 @@ export function CardHeader({
   icon?: ComponentType<SVGProps<SVGSVGElement>>;
 }) {
   return (
-    <header className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-200 px-4 py-3 sm:px-5">
+    <header className="flex flex-wrap items-start justify-between gap-3 px-4 pt-4 pb-3 sm:px-5 sm:pt-5">
       <div className="flex min-w-0 items-start gap-2.5">
         {Icon ? (
           <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-brand-700">

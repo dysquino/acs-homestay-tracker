@@ -16,6 +16,7 @@ import { today } from "@/lib/dates";
 import { formatDateRange } from "@/lib/format";
 import { knownCleaners } from "@/lib/selectors";
 import { DEFAULT_CLEANING_FEE, useStore } from "@/lib/store";
+import { useSubmit, type Submit } from "@/lib/use-submit";
 import {
   CLEANING_PAYMENT_STATUSES,
   CLEANING_STATUSES,
@@ -68,6 +69,7 @@ export function CleaningForm({
   record: CleaningRecord | null;
   onClose: () => void;
 }) {
+  const submit = useSubmit();
   return (
     <Modal
       open={open}
@@ -76,8 +78,8 @@ export function CleaningForm({
       footer={
         <>
           <Button onClick={onClose}>Cancel</Button>
-          <Button type="submit" form={FORM_ID} variant="primary">
-            {record ? "Save changes" : "Add cleaning"}
+          <Button type="submit" form={FORM_ID} variant="primary" disabled={submit.saving}>
+            {submit.saving ? "Saving…" : record ? "Save changes" : "Add cleaning"}
           </Button>
         </>
       }
@@ -86,6 +88,7 @@ export function CleaningForm({
         key={record?.id ?? "new"}
         record={record}
         onClose={onClose}
+        submit={submit}
       />
     </Modal>
   );
@@ -94,9 +97,11 @@ export function CleaningForm({
 function CleaningFields({
   record,
   onClose,
+  submit,
 }: {
   record: CleaningRecord | null;
   onClose: () => void;
+  submit: Submit;
 }) {
   const { bookings, cleaning, addCleaning, updateCleaning } = useStore();
   const { user } = useIdentity();
@@ -140,13 +145,15 @@ function CleaningFields({
     };
 
     setSubmitError(null);
-    try {
-      if (record) await updateCleaning(record.id, payload);
-      else await addCleaning(payload);
-      onClose();
-    } catch {
-      setSubmitError("Couldn't save this cleaning record. Please try again.");
-    }
+    await submit.run(async () => {
+      try {
+        if (record) await updateCleaning(record.id, payload);
+        else await addCleaning(payload);
+        onClose();
+      } catch {
+        setSubmitError("Couldn't save this cleaning record. Please try again.");
+      }
+    });
   }
 
   const sortedBookings = [...bookings].sort((a, b) =>
@@ -235,7 +242,14 @@ function CleaningFields({
           )}
         </Field>
 
-        <Field label="Payment status">
+        <Field
+          label="Payment status"
+          hint={
+            form.paymentStatus === "paid"
+              ? "Saved as an expense (Cleaning payment). Set back to Unpaid to remove it."
+              : undefined
+          }
+        >
           {(id) => (
             <Select
               id={id}

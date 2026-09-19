@@ -10,7 +10,8 @@ import {
 } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader } from "@/components/ui/card";
-import { Input, Select } from "@/components/ui/field";
+import { Field, Select } from "@/components/ui/field";
+import { DateRangeFilter, FilterBar } from "@/components/ui/filter-bar";
 import { PlusIcon, SparklesIcon } from "@/components/ui/icons";
 import { ConfirmDialog } from "@/components/ui/modal";
 import { StatTile } from "@/components/ui/stat";
@@ -70,7 +71,7 @@ export default function CleaningPage() {
     return cleaning
       .filter((c) => {
         const name = c.cleanerName.trim() || "Unassigned";
-        if (cleaner !== "all" && name !== cleaner) return false;
+        if (cleaner !== "all" && name.toLowerCase() !== cleaner.toLowerCase()) return false;
         if (status !== "all" && c.status !== status) return false;
         if (payment !== "all" && c.paymentStatus !== payment) return false;
         if (from && c.date < from) return false;
@@ -126,7 +127,7 @@ export default function CleaningPage() {
         <StatTile
           label="Owed to cleaners"
           value={formatCurrency(totalOwed)}
-          hint={`${unpaidCount} unpaid record${unpaidCount === 1 ? "" : "s"}`}
+          hint={`${unpaidCount} completed, unpaid`}
           tone={totalOwed > 0 ? "negative" : "positive"}
         />
         <StatTile
@@ -136,102 +137,64 @@ export default function CleaningPage() {
         />
         <StatTile
           label="Unassigned"
-          value={cleaning.filter((c) => !c.cleanerName.trim()).length}
-          hint="Still need a cleaner"
+          value={
+            cleaning.filter((c) => c.status === "scheduled" && !c.cleanerName.trim()).length
+          }
+          hint="Scheduled, still need a cleaner"
           tone="brand"
         />
       </div>
 
-      <div className="grid gap-5 lg:grid-cols-3">
-        <Card className="overflow-hidden lg:col-span-2">
-          <div className="space-y-2 border-b border-slate-200 bg-slate-50/60 p-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="w-40">
-                <Select
-                  value={cleaner}
-                  onChange={(e) => setCleaner(e.target.value)}
-                  aria-label="Filter by cleaner"
-                >
-                  <option value="all">All cleaners</option>
-                  {cleanerOptions.map((c) => (
-                    <option key={c} value={c}>
-                      {c}
-                    </option>
-                  ))}
-                </Select>
-              </div>
-              <div className="w-36">
-                <Select
-                  value={status}
-                  onChange={(e) =>
-                    setStatus(e.target.value as CleaningStatus | "all")
-                  }
-                  aria-label="Filter by status"
-                >
-                  <option value="all">Any status</option>
-                  {CLEANING_STATUSES.map((o) => (
-                    <option key={o.value} value={o.value}>
-                      {o.label}
-                    </option>
-                  ))}
-                </Select>
-              </div>
-              <div className="w-40">
-                <Select
-                  value={payment}
-                  onChange={(e) =>
-                    setPayment(e.target.value as CleaningPaymentStatus | "all")
-                  }
-                  aria-label="Filter by payment status"
-                >
-                  <option value="all">Any payment</option>
-                  {CLEANING_PAYMENT_STATUSES.map((o) => (
-                    <option key={o.value} value={o.value}>
-                      {o.label}
-                    </option>
-                  ))}
-                </Select>
-              </div>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-3">
-              <div className="flex items-center gap-2">
-                <div className="w-40">
-                  <Input
-                    type="date"
-                    value={from}
-                    onChange={(e) => setFrom(e.target.value)}
-                    aria-label="From date"
-                  />
-                </div>
-                <span className="text-xs text-slate-400">to</span>
-                <div className="w-40">
-                  <Input
-                    type="date"
-                    value={to}
-                    onChange={(e) => setTo(e.target.value)}
-                    aria-label="To date"
-                  />
-                </div>
-              </div>
-              {filtersActive ? (
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="ml-auto"
-                  onClick={() => {
-                    setCleaner("all");
-                    setStatus("all");
-                    setPayment("all");
-                    setFrom("");
-                    setTo("");
-                  }}
-                >
-                  Clear filters
-                </Button>
-              ) : null}
-            </div>
-          </div>
+      <div className="grid gap-5 2xl:grid-cols-[minmax(0,1fr)_22rem] 2xl:items-start">
+        <Card className="overflow-hidden">
+          <FilterBar
+            filtersActive={filtersActive}
+            onClear={() => {
+              setCleaner("all");
+              setStatus("all");
+              setPayment("all");
+              setFrom("");
+              setTo("");
+            }}
+          >
+              <Field label="Cleaner" className="min-w-36 flex-1">
+                {(id) => (
+                  <Select id={id} value={cleaner} onChange={(e) => setCleaner(e.target.value)}>
+                    <option value="all">All cleaners</option>
+                    {cleanerOptions.map((c) => (
+                      <option key={c} value={c}>
+                        {c}
+                      </option>
+                    ))}
+                  </Select>
+                )}
+              </Field>
+              <Field label="Status" className="min-w-32 flex-1">
+                {(id) => (
+                  <Select id={id} value={status} onChange={(e) => setStatus(e.target.value as CleaningStatus | "all")}>
+                    <option value="all">Any status</option>
+                    {CLEANING_STATUSES.map((o) => (
+                      <option key={o.value} value={o.value}>
+                        {o.label}
+                      </option>
+                    ))}
+                  </Select>
+                )}
+              </Field>
+              <Field label="Payment" className="min-w-32 flex-1">
+                {(id) => (
+                  <Select id={id} value={payment} onChange={(e) => setPayment(e.target.value as CleaningPaymentStatus | "all")}>
+                    <option value="all">Any payment</option>
+                    {CLEANING_PAYMENT_STATUSES.map((o) => (
+                      <option key={o.value} value={o.value}>
+                        {o.label}
+                      </option>
+                    ))}
+                  </Select>
+                )}
+              </Field>
+              <DateRangeFilter from={from} to={to} onFromChange={setFrom} onToChange={setTo} />
+            </FilterBar>
 
           {filtered.length === 0 ? (
             <EmptyState
@@ -335,18 +298,20 @@ export default function CleaningPage() {
                           {formatDate(c.date)}
                         </Td>
                         <Td>
-                          {c.cleanerName ? (
-                            <span className="font-medium text-slate-900">
-                              {c.cleanerName}
-                            </span>
-                          ) : (
-                            <span className="text-slate-400">Unassigned</span>
-                          )}
-                          {c.notes ? (
-                            <div className="max-w-xs truncate text-xs text-slate-400">
-                              {c.notes}
-                            </div>
-                          ) : null}
+                          <div className="flex max-w-sm items-baseline gap-2">
+                            {c.cleanerName ? (
+                              <span className="font-medium text-slate-900">
+                                {c.cleanerName}
+                              </span>
+                            ) : (
+                              <span className="text-slate-400">Unassigned</span>
+                            )}
+                            {c.notes ? (
+                              <span className="hidden truncate text-xs text-slate-400 xl:inline" title={c.notes}>
+                                {c.notes}
+                              </span>
+                            ) : null}
+                          </div>
                         </Td>
                         <Td className="hidden text-slate-500 md:table-cell">
                           {booking ? booking.guestName : "—"}
