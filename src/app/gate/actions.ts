@@ -23,7 +23,11 @@ export async function unlockSite(
   const expected = process.env.SITE_PASSWORD;
 
   if (!expected) {
-    // Gate isn't configured on this deployment — nothing to unlock.
+    // Not configured: nothing to unlock in development; in production the
+    // proxy is already refusing every request, so never wave anyone through.
+    if (process.env.NODE_ENV === "production") {
+      return { error: "Access is not configured on this site." };
+    }
     redirect(target);
   }
 

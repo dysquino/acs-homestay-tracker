@@ -74,36 +74,44 @@ model User {
 }
 
 model Booking {
-  id            String             @id @default(cuid())
-  guestName     String
-  source        BookingSource
-  checkIn       DateTime
-  checkOut      DateTime
-  guestsCount   Int
-  totalPayout   Decimal            @db.Decimal(10, 2)
-  platformFee   Decimal            @default(0) @db.Decimal(10, 2)
-  paymentStatus PaymentStatus
-  contactInfo   String             @default("")
-  notes         String             @default("")
-  createdBy     String
-  cleanings     CleaningSchedule[]
-  createdAt     DateTime           @default(now())
-  updatedAt     DateTime           @updatedAt
+  id               String             @id @default(cuid())
+  guestName        String
+  source           BookingSource
+  checkIn          DateTime
+  checkOut         DateTime
+  guestsCount      Int
+  totalPayout      Decimal            @db.Decimal(10, 2)
+  platformFee      Decimal            @default(0) @db.Decimal(10, 2)
+  paymentStatus    PaymentStatus
+  contactInfo      String             @default("")
+  notes            String             @default("")
+  createdBy        String
+  /// Airbnb's reservation code (e.g. HM5M3MR8KQ), set only by the CSV import.
+  /// Unique, so importing the same file twice can never create a duplicate.
+  confirmationCode String?            @unique
+  cleanings        CleaningSchedule[]
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
 
   @@index([checkIn, checkOut])
 }
 
 model Expense {
-  id          String          @id @default(cuid())
+  id          String            @id @default(cuid())
   date        DateTime
   category    ExpenseCategory
   description String
-  amount      Decimal         @db.Decimal(10, 2)
+  amount      Decimal           @db.Decimal(10, 2)
   paidBy      String
-  receiptUrl  String          @default("")
+  receiptUrl  String            @default("")
   createdBy   String
-  createdAt   DateTime        @default(now())
-  updatedAt   DateTime        @updatedAt
+  /// Set only on expenses the app creates for a paid cleaning — that link is
+  /// how marking the cleaning unpaid (or deleting it) removes the expense.
+  /// Cascade: deleting the cleaning record deletes its expense too.
+  cleaningId  String?           @unique
+  cleaning    CleaningSchedule? @relation(fields: [cleaningId], references: [id], onDelete: Cascade)
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
 
   @@index([date, category])
 }
@@ -119,6 +127,7 @@ model CleaningSchedule {
   paymentStatus CleaningPaymentStatus @default(UNPAID)
   notes         String                @default("")
   createdBy     String
+  expense       Expense?
   createdAt     DateTime              @default(now())
   updatedAt     DateTime              @updatedAt
 

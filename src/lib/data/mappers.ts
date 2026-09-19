@@ -14,11 +14,13 @@ import type { Decimal } from "@prisma/client/runtime/library";
 
 import type {
   Booking,
+  BookingInput,
   CleaningPaymentStatus,
   CleaningRecord,
   CleaningStatus,
   Expense,
   ExpenseCategory,
+  ExpenseInput,
   ISODate,
   PaymentStatus,
   BookingSource,
@@ -120,10 +122,12 @@ export function bookingFromDb(row: DbBooking): Booking {
     contactInfo: row.contactInfo,
     notes: row.notes,
     createdBy: row.createdBy,
+    confirmationCode: row.confirmationCode,
   };
 }
 
-export function bookingToDb(input: Omit<Booking, "id">) {
+/** Never writes `confirmationCode` — only the CSV import sets it. */
+export function bookingToDb(input: BookingInput) {
   return {
     guestName: input.guestName,
     source: BOOKING_SOURCE_TO_DB[input.source],
@@ -139,7 +143,7 @@ export function bookingToDb(input: Omit<Booking, "id">) {
   };
 }
 
-export function bookingPatchToDb(patch: Partial<Omit<Booking, "id">>) {
+export function bookingPatchToDb(patch: Partial<BookingInput>) {
   const out: Record<string, unknown> = {};
   if (patch.guestName !== undefined) out.guestName = patch.guestName;
   if (patch.source !== undefined) out.source = BOOKING_SOURCE_TO_DB[patch.source];
@@ -166,10 +170,12 @@ export function expenseFromDb(row: DbExpense): Expense {
     paidBy: row.paidBy,
     receiptUrl: row.receiptUrl,
     createdBy: row.createdBy,
+    cleaningId: row.cleaningId,
   };
 }
 
-export function expenseToDb(input: Omit<Expense, "id">) {
+/** Never writes `cleaningId` — only the cleaning sync links an expense. */
+export function expenseToDb(input: ExpenseInput) {
   return {
     date: isoToDate(input.date),
     category: EXPENSE_CATEGORY_TO_DB[input.category],
@@ -181,7 +187,7 @@ export function expenseToDb(input: Omit<Expense, "id">) {
   };
 }
 
-export function expensePatchToDb(patch: Partial<Omit<Expense, "id">>) {
+export function expensePatchToDb(patch: Partial<ExpenseInput>) {
   const out: Record<string, unknown> = {};
   if (patch.date !== undefined) out.date = isoToDate(patch.date);
   if (patch.category !== undefined)

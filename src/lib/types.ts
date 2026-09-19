@@ -22,7 +22,12 @@ export type Booking = {
   contactInfo: string;
   notes: string;
   createdBy: string;
+  /** Airbnb's reservation code — set only by the CSV import. */
+  confirmationCode: string | null;
 };
+
+/** What a client may submit — `confirmationCode` is only set by the import. */
+export type BookingInput = Omit<Booking, "id" | "confirmationCode">;
 
 export type ExpenseCategory =
   | "utility"
@@ -41,7 +46,13 @@ export type Expense = {
   paidBy: string;
   receiptUrl: string;
   createdBy: string;
+  /** Set when the app created this expense for a paid cleaning. Such
+   * expenses are managed from the Cleaning page, not edited by hand. */
+  cleaningId: string | null;
 };
+
+/** What a client may submit — `cleaningId` is only ever set by the server. */
+export type ExpenseInput = Omit<Expense, "id" | "cleaningId">;
 
 export type CleaningStatus = "scheduled" | "completed";
 export type CleaningPaymentStatus = "paid" | "unpaid";

@@ -11,8 +11,9 @@ import { NextResponse, type NextRequest } from "next/server";
  * still whatever the stub login says. Replace this entirely once real
  * Supabase Auth is wired up.
  *
- * If SITE_PASSWORD isn't set (e.g. local dev), the gate is a no-op — it's
- * meant for the public deployment, not local development.
+ * If SITE_PASSWORD isn't set the gate is a no-op in local development, but
+ * in production it fails CLOSED: a missing variable must never quietly turn
+ * into a public site with all the data and the write endpoints exposed.
  */
 
 const COOKIE_NAME = "site_gate";
@@ -34,7 +35,15 @@ function isValidToken(token: string | undefined, expected: string): boolean {
 
 export function proxy(request: NextRequest) {
   const expected = expectedToken();
-  if (!expected) return NextResponse.next();
+  if (!expected) {
+    if (process.env.NODE_ENV === "production") {
+      return new NextResponse(
+        "Access is not configured. Set SITE_PASSWORD in the deployment's environment variables.",
+        { status: 503 },
+      );
+    }
+    return NextResponse.next();
+  }
 
   const cookie = request.cookies.get(COOKIE_NAME)?.value;
   if (isValidToken(cookie, expected)) return NextResponse.next();

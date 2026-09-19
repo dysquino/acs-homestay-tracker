@@ -6,6 +6,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -28,8 +29,9 @@ import {
   listExpenses,
   updateExpense as updateExpenseAction,
 } from "./data/expenses";
-import { resetSampleData } from "./data/reset";
-import type { Booking, CleaningRecord, Expense } from "./types";
+import { importAirbnbBookings, type ImportInstruction, type ImportResult } from "./data/import";
+import { useIdentity } from "./identity";
+import type { Booking, BookingInput, CleaningRecord, Expense, ExpenseInput } from "./types";
 
 export { DEFAULT_CLEANING_FEE } from "./constants";
 
@@ -45,8 +47,13 @@ export { DEFAULT_CLEANING_FEE } from "./constants";
  * resolves, all three lists are refetched from the server rather than
  * patched optimistically in local state. Simpler and less error-prone than
  * mirroring the server's cross-table logic (e.g. a booking's auto-created
- * turnover cleaning) in the client, at the cost of an extra round trip per
- * mutation — an acceptable trade for a small internal tool.
+ * turnover cleaning, or a paid cleaning's expense) in the client, at the
+ * cost of an extra round trip per mutation — an acceptable trade for a
+ * small internal tool.
+ *
+ * A failed refetch never makes a *successful* write look failed (that would
+ * invite a retry, and a duplicate record): it sets `syncError` instead, and
+ * the shell offers a Retry. A failed first load sets `loadError`.
  */
 
 type Data = {
@@ -57,16 +64,25 @@ type Data = {
 
 type StoreValue = Data & {
   ready: boolean;
-  addBooking: (input: Omit<Booking, "id">) => Promise<Booking>;
+  /** The first load failed — there is no data to show yet. */
+  loadError: boolean;
+  /** A refetch after a write failed — what's on screen may be out of date. */
+  syncError: boolean;
+  /** Retry the first load. */
+  reload: () => void;
+  /** Retry a failed refetch. */
+  resync: () => Promise<void>;
+  addBooking: (input: BookingInput) => Promise<Booking>;
   updateBooking: (
     id: string,
-    patch: Partial<Omit<Booking, "id">>,
+    patch: Partial<BookingInput>,
   ) => Promise<void>;
   deleteBooking: (id: string) => Promise<void>;
-  addExpense: (input: Omit<Expense, "id">) => Promise<Expense>;
+  importBookings: (items: ImportInstruction[]) => Promise<ImportResult>;
+  addExpense: (input: ExpenseInput) => Promise<Expense>;
   updateExpense: (
     id: string,
-    patch: Partial<Omit<Expense, "id">>,
+    patch: Partial<ExpenseInput>,
   ) => Promise<void>;
   deleteExpense: (id: string) => Promise<void>;
   addCleaning: (input: Omit<CleaningRecord, "id">) => Promise<CleaningRecord>;
@@ -75,7 +91,6 @@ type StoreValue = Data & {
     patch: Partial<Omit<CleaningRecord, "id">>,
   ) => Promise<void>;
   deleteCleaning: (id: string) => Promise<void>;
-  resetToSampleData: () => Promise<void>;
 };
 
 const StoreContext = createContext<StoreValue | null>(null);
@@ -83,34 +98,57 @@ const StoreContext = createContext<StoreValue | null>(null);
 const EMPTY: Data = { bookings: [], expenses: [], cleaning: [] };
 
 export function StoreProvider({ children }: { children: ReactNode }) {
+  const { user } = useIdentity();
+  const actor = user.name;
+
   const [data, setData] = useState<Data>(EMPTY);
   const [ready, setReady] = useState(false);
+  const [loadError, setLoadError] = useState(false);
+  const [syncError, setSyncError] = useState(false);
 
-  const refresh = useCallback(async () => {
+  // Only the newest request may write state, so a slow older response can't
+  // overwrite fresher data.
+  const latest = useRef(0);
+  const fetchAll = useCallback(async () => {
+    const request = ++latest.current;
     const [bookings, expenses, cleaning] = await Promise.all([
       listBookings(),
       listExpenses(),
       listCleaning(),
     ]);
-    setData({ bookings, expenses, cleaning });
+    if (request === latest.current) setData({ bookings, expenses, cleaning });
   }, []);
 
-  useEffect(() => {
-    let cancelled = false;
-    Promise.all([listBookings(), listExpenses(), listCleaning()]).then(
-      ([bookings, expenses, cleaning]) => {
-        if (cancelled) return;
-        setData({ bookings, expenses, cleaning });
+  const refresh = useCallback(async () => {
+    try {
+      await fetchAll();
+      setSyncError(false);
+    } catch {
+      setSyncError(true);
+    }
+  }, [fetchAll]);
+
+  const load = useCallback(() => {
+    fetchAll().then(
+      () => {
+        setLoadError(false);
         setReady(true);
       },
+      () => setLoadError(true),
     );
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  }, [fetchAll]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const reload = useCallback(() => {
+    setLoadError(false);
+    load();
+  }, [load]);
 
   const addBooking = useCallback(
-    async (input: Omit<Booking, "id">) => {
+    async (input: BookingInput) => {
       const booking = await createBooking(input);
       await refresh();
       return booking;
@@ -119,7 +157,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   );
 
   const updateBooking = useCallback(
-    async (id: string, patch: Partial<Omit<Booking, "id">>) => {
+    async (id: string, patch: Partial<BookingInput>) => {
       await updateBookingAction(id, patch);
       await refresh();
     },
@@ -134,8 +172,17 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [refresh],
   );
 
+  const importBookings = useCallback(
+    async (items: ImportInstruction[]) => {
+      const result = await importAirbnbBookings(items, actor);
+      await refresh();
+      return result;
+    },
+    [refresh, actor],
+  );
+
   const addExpense = useCallback(
-    async (input: Omit<Expense, "id">) => {
+    async (input: ExpenseInput) => {
       const expense = await createExpense(input);
       await refresh();
       return expense;
@@ -144,7 +191,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   );
 
   const updateExpense = useCallback(
-    async (id: string, patch: Partial<Omit<Expense, "id">>) => {
+    async (id: string, patch: Partial<ExpenseInput>) => {
       await updateExpenseAction(id, patch);
       await refresh();
     },
@@ -170,10 +217,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const updateCleaning = useCallback(
     async (id: string, patch: Partial<Omit<CleaningRecord, "id">>) => {
-      await updateCleaningAction(id, patch);
+      await updateCleaningAction(id, patch, actor);
       await refresh();
     },
-    [refresh],
+    [refresh, actor],
   );
 
   const deleteCleaning = useCallback(
@@ -184,39 +231,42 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [refresh],
   );
 
-  const resetToSampleData = useCallback(async () => {
-    await resetSampleData();
-    await refresh();
-  }, [refresh]);
-
   const value = useMemo<StoreValue>(
     () => ({
       ...data,
       ready,
+      loadError,
+      syncError,
+      reload,
+      resync: refresh,
       addBooking,
       updateBooking,
       deleteBooking,
+      importBookings,
       addExpense,
       updateExpense,
       deleteExpense,
       addCleaning,
       updateCleaning,
       deleteCleaning,
-      resetToSampleData,
     }),
     [
       data,
       ready,
+      loadError,
+      syncError,
+      reload,
+      refresh,
       addBooking,
       updateBooking,
       deleteBooking,
+      importBookings,
       addExpense,
       updateExpense,
       deleteExpense,
       addCleaning,
       updateCleaning,
       deleteCleaning,
-      resetToSampleData,
     ],
   );
 

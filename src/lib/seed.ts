@@ -28,6 +28,7 @@ export function buildSeedData(): {
       contactInfo: "",
       notes: "Late check-in, arrived 11pm.",
       createdBy: "Owner",
+      confirmationCode: null,
     },
     {
       id: "bk_2",
@@ -42,6 +43,7 @@ export function buildSeedData(): {
       contactInfo: "0917 555 0143",
       notes: "Repeat guest — asked for extra towels.",
       createdBy: "Owner",
+      confirmationCode: null,
     },
     {
       id: "bk_3",
@@ -56,6 +58,7 @@ export function buildSeedData(): {
       contactInfo: "",
       notes: "",
       createdBy: "Owner",
+      confirmationCode: null,
     },
     {
       id: "bk_4",
@@ -70,6 +73,7 @@ export function buildSeedData(): {
       contactInfo: "grace.v@example.com",
       notes: "Paid ₱4,000 deposit via GCash.",
       createdBy: "Manager",
+      confirmationCode: null,
     },
     {
       id: "bk_5",
@@ -84,6 +88,7 @@ export function buildSeedData(): {
       contactInfo: "",
       notes: "",
       createdBy: "Owner",
+      confirmationCode: null,
     },
   ];
 
@@ -155,6 +160,7 @@ export function buildSeedData(): {
       paidBy: "Owner",
       receiptUrl: "",
       createdBy: "Owner",
+      cleaningId: null,
     },
     {
       id: "ex_2",
@@ -165,6 +171,7 @@ export function buildSeedData(): {
       paidBy: "Owner",
       receiptUrl: "",
       createdBy: "Owner",
+      cleaningId: null,
     },
     {
       id: "ex_3",
@@ -175,6 +182,7 @@ export function buildSeedData(): {
       paidBy: "Manager",
       receiptUrl: "",
       createdBy: "Manager",
+      cleaningId: null,
     },
     {
       id: "ex_4",
@@ -185,6 +193,7 @@ export function buildSeedData(): {
       paidBy: "Manager",
       receiptUrl: "",
       createdBy: "Manager",
+      cleaningId: null,
     },
     {
       id: "ex_5",
@@ -195,6 +204,7 @@ export function buildSeedData(): {
       paidBy: "Owner",
       receiptUrl: "",
       createdBy: "Owner",
+      cleaningId: null,
     },
     {
       id: "ex_6",
@@ -205,6 +215,7 @@ export function buildSeedData(): {
       paidBy: "Owner",
       receiptUrl: "",
       createdBy: "Owner",
+      cleaningId: null,
     },
   ];
 

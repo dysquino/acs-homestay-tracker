@@ -1,5 +1,6 @@
 import {
   addDays,
+  addMonths,
   endOfMonth,
   isWithin,
   occupiedNights,
@@ -24,8 +25,16 @@ export function findConflicts(
   );
 }
 
+/**
+ * What the booking earns you: the total payout, which is the amount you
+ * actually receive. Airbnb's service fee is already taken out of that figure
+ * (its "Paid out" column), so `platformFee` is kept for reference only and
+ * must NOT be subtracted again. The guest's cleaning fee is not part of the
+ * calculation either: cleaners are paid a fixed amount, which is recorded
+ * separately as a cleaning expense.
+ */
 export function bookingNetIncome(b: Booking): number {
-  return b.totalPayout - b.platformFee;
+  return b.totalPayout;
 }
 
 export function incomeInRange(
@@ -74,6 +83,40 @@ export function monthSummary(
   return { month: from, income, expenses: spent, net: income - spent };
 }
 
+/** `count` consecutive month summaries ending at (and including) `endMonth`. */
+export function monthSeries(
+  bookings: Booking[],
+  expenses: Expense[],
+  endMonth: ISODate,
+  count: number,
+): MonthSummary[] {
+  return Array.from({ length: count }, (_, i) =>
+    monthSummary(bookings, expenses, addMonths(startOfMonth(endMonth), i - (count - 1))),
+  );
+}
+
+export type OccupancyDay = { date: ISODate; booked: boolean };
+
+/** Which nights of a month are occupied — the check-out day is not a night. */
+export function occupancyInMonth(
+  bookings: Booking[],
+  anyDayInMonth: ISODate,
+): { days: OccupancyDay[]; bookedNights: number } {
+  const from = startOfMonth(anyDayInMonth);
+  const to = endOfMonth(anyDayInMonth);
+  const booked = new Set<ISODate>();
+  for (const b of bookings) {
+    for (const night of occupiedNights(b.checkIn, b.checkOut)) {
+      if (isWithin(night, from, to)) booked.add(night);
+    }
+  }
+  const days: OccupancyDay[] = [];
+  for (let d = from; d <= to; d = addDays(d, 1)) {
+    days.push({ date: d, booked: booked.has(d) });
+  }
+  return { days, bookedNights: booked.size };
+}
+
 /** Per-month expense totals, newest first. */
 export function expensesByMonth(
   expenses: Expense[],
@@ -111,14 +154,20 @@ export function upcomingEvents(
     if (isWithin(b.checkOut, from, to))
       events.push({ kind: "check-out", date: b.checkOut, booking: b });
   }
+  // On a same-day turnover the departing guest comes first.
+  const rank = (e: UpcomingEvent) => (e.kind === "check-out" ? 0 : 1);
   return events.sort(
-    (a, b) => a.date.localeCompare(b.date) || a.kind.localeCompare(b.kind),
+    (a, b) => a.date.localeCompare(b.date) || rank(a) - rank(b),
   );
 }
 
+/**
+ * Cleanings that are actually owed: done, but not yet paid. A scheduled
+ * cleaning that hasn't happened yet isn't a debt.
+ */
 export function unpaidCleanings(cleaning: CleaningRecord[]): CleaningRecord[] {
   return cleaning
-    .filter((c) => c.paymentStatus === "unpaid")
+    .filter((c) => c.paymentStatus === "unpaid" && c.status === "completed")
     .sort((a, b) => a.date.localeCompare(b.date));
 }
 
@@ -126,17 +175,18 @@ export function unpaidCleanings(cleaning: CleaningRecord[]): CleaningRecord[] {
 export function amountOwedByCleaner(
   cleaning: CleaningRecord[],
 ): { cleaner: string; total: number; count: number }[] {
-  const buckets = new Map<string, { total: number; count: number }>();
+  // "Ate Nene" and "ate nene" are the same person: group case-insensitively,
+  // and show the first spelling seen.
+  const buckets = new Map<string, { cleaner: string; total: number; count: number }>();
   for (const c of unpaidCleanings(cleaning)) {
-    const key = c.cleanerName.trim() || "Unassigned";
-    const bucket = buckets.get(key) ?? { total: 0, count: 0 };
+    const name = c.cleanerName.trim() || "Unassigned";
+    const key = name.toLowerCase();
+    const bucket = buckets.get(key) ?? { cleaner: name, total: 0, count: 0 };
     bucket.total += c.paymentAmount;
     bucket.count += 1;
     buckets.set(key, bucket);
   }
-  return [...buckets.entries()]
-    .map(([cleaner, v]) => ({ cleaner, ...v }))
-    .sort((a, b) => b.total - a.total);
+  return [...buckets.values()].sort((a, b) => b.total - a.total);
 }
 
 export function pendingGuestPayments(bookings: Booking[]): Booking[] {
@@ -147,9 +197,12 @@ export function pendingGuestPayments(bookings: Booking[]): Booking[] {
 
 /** Distinct cleaner names already used, for the datalist on the form. */
 export function knownCleaners(cleaning: CleaningRecord[]): string[] {
-  return [
-    ...new Set(cleaning.map((c) => c.cleanerName.trim()).filter(Boolean)),
-  ].sort();
+  const byLowerCase = new Map<string, string>();
+  for (const c of cleaning) {
+    const name = c.cleanerName.trim();
+    if (name && !byLowerCase.has(name.toLowerCase())) byLowerCase.set(name.toLowerCase(), name);
+  }
+  return [...byLowerCase.values()].sort((a, b) => a.localeCompare(b));
 }
 
 /** Distinct payer names already used, for the datalist on the expense form. */
