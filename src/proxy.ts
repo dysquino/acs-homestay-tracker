@@ -56,5 +56,11 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!gate|_next/static|_next/image|favicon.ico).*)"],
+  // Left open on purpose: the gate page itself, Next's static files, and the
+  // two public brand images. The logo is fetched by the image optimizer (which
+  // is exempt), but the optimizer then requests the file itself — gating it
+  // would hand the optimizer the login page and break the logo on the gate.
+  matcher: [
+    "/((?!gate|_next/static|_next/image|favicon.ico|icon.jpg|acshomestay_logo.jpg).*)",
+  ],
 };
