@@ -13,11 +13,11 @@ import {
 import { Modal } from "@/components/ui/modal";
 import { useIdentity } from "@/lib/identity";
 import { today } from "@/lib/dates";
-import { knownPayers } from "@/lib/selectors";
 import { useStore } from "@/lib/store";
 import { useSubmit, type Submit } from "@/lib/use-submit";
 import {
   EXPENSE_CATEGORIES,
+  PAID_BY,
   type Expense,
   type ExpenseCategory,
 } from "@/lib/types";
@@ -75,7 +75,7 @@ function ExpenseFields({
   onClose: () => void;
   submit: Submit;
 }) {
-  const { expenses, addExpense, updateExpense } = useStore();
+  const { addExpense, updateExpense } = useStore();
   const { user } = useIdentity();
   const [form, setForm] = useState<FormState>(() =>
     expense
@@ -91,7 +91,9 @@ function ExpenseFields({
           category: "utility",
           description: "",
           amount: "",
-          paidBy: user?.name ?? "",
+          // The 5-person roster, not the browser's identity picker — the two
+          // lists are different people, so this is never pre-filled from it.
+          paidBy: "",
         },
   );
   const [errors, setErrors] = useState<Partial<Record<keyof FormState, string>>>(
@@ -203,22 +205,25 @@ function ExpenseFields({
           )}
         </Field>
 
-        <Field label="Paid by" hint="Which owner or manager paid">
+        <Field label="Paid by">
           {(id) => (
-            <>
-              <Input
-                id={id}
-                list="expense-payers"
-                value={form.paidBy}
-                onChange={(e) => set("paidBy", e.target.value)}
-                placeholder="e.g. Owner"
-              />
-              <datalist id="expense-payers">
-                {knownPayers(expenses).map((p) => (
-                  <option key={p} value={p} />
-                ))}
-              </datalist>
-            </>
+            <Select
+              id={id}
+              value={form.paidBy}
+              onChange={(e) => set("paidBy", e.target.value)}
+            >
+              <option value="">Select who paid</option>
+              {/* A record from before this fixed roster keeps showing its
+                  original name, instead of silently losing it. */}
+              {form.paidBy && !PAID_BY.some((p) => p.value === form.paidBy) ? (
+                <option value={form.paidBy}>{form.paidBy}</option>
+              ) : null}
+              {PAID_BY.map((p) => (
+                <option key={p.value} value={p.value}>
+                  {p.label}
+                </option>
+              ))}
+            </Select>
           )}
         </Field>
       </div>

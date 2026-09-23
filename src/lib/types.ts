@@ -54,6 +54,15 @@ export type Expense = {
 /** What a client may submit — `cleaningId` is only ever set by the server. */
 export type ExpenseInput = Omit<Expense, "id" | "cleaningId">;
 
+/** The fixed roster who can be recorded as having paid an expense. */
+export const PAID_BY: { value: string; label: string }[] = [
+  { value: "Dys", label: "Dys" },
+  { value: "Kalur", label: "Kalur" },
+  { value: "Rayhla", label: "Rayhla" },
+  { value: "Gervin", label: "Gervin" },
+  { value: "DK", label: "DK" },
+];
+
 export type CleaningStatus = "scheduled" | "completed";
 export type CleaningPaymentStatus = "paid" | "unpaid";
 

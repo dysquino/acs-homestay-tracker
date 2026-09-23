@@ -205,9 +205,3 @@ export function knownCleaners(cleaning: CleaningRecord[]): string[] {
   return [...byLowerCase.values()].sort((a, b) => a.localeCompare(b));
 }
 
-/** Distinct payer names already used, for the datalist on the expense form. */
-export function knownPayers(expenses: Expense[]): string[] {
-  return [
-    ...new Set(expenses.map((e) => e.paidBy.trim()).filter(Boolean)),
-  ].sort();
-}
