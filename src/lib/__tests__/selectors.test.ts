@@ -10,9 +10,10 @@ import {
   occupancyInMonth,
   pendingGuestPayments,
   unpaidCleanings,
+  unrefundedExpenses,
   upcomingEvents,
 } from "../selectors";
-import type { Booking, CleaningRecord } from "../types";
+import type { Booking, CleaningRecord, Expense } from "../types";
 
 const booking = (o: Partial<Booking>): Booking => ({
   id: "b",
@@ -41,6 +42,20 @@ const cleaning = (o: Partial<CleaningRecord>): CleaningRecord => ({
   paymentStatus: "unpaid",
   notes: "",
   createdBy: "t",
+  ...o,
+});
+
+const expense = (o: Partial<Expense>): Expense => ({
+  id: "e",
+  date: "2026-03-04",
+  category: "supplies",
+  description: "x",
+  amount: 100,
+  paidBy: "",
+  receiptUrl: "",
+  createdBy: "t",
+  cleaningId: null,
+  refundStatus: "refunded",
   ...o,
 });
 
@@ -128,6 +143,17 @@ describe("guest payments", () => {
       booking({ id: "c", paymentStatus: "partial" }),
     ]);
     expect(list.map((b) => b.id).sort()).toEqual(["b", "c"]);
+  });
+});
+
+describe("unrefunded expenses", () => {
+  it("lists only expenses someone is still owed for, oldest first", () => {
+    const list = unrefundedExpenses([
+      expense({ id: "later", date: "2026-05-01", refundStatus: "owed" }),
+      expense({ id: "settled", refundStatus: "refunded" }),
+      expense({ id: "earlier", date: "2026-01-01", refundStatus: "owed" }),
+    ]);
+    expect(list.map((e) => e.id)).toEqual(["earlier", "later"]);
   });
 });
 

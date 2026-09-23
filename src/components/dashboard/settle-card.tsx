@@ -6,9 +6,10 @@ import { cn } from "@/lib/cn";
 import { formatCurrency, formatSigned } from "@/lib/format";
 
 /**
- * Money still to move: what guests owe you vs what you owe cleaners, on one
- * shared scale so the two bars compare honestly. Same hue-per-meaning as the
- * cash-flow chart — money in is amber, money out is blue.
+ * Money still to move: what guests owe you, what you owe cleaners, and what
+ * you owe whoever fronted cash for an expense — on one shared scale so the
+ * bars compare honestly. Same hue-per-meaning as the cash-flow chart — money
+ * in is amber, money out (to a cleaner or a payer) is blue.
  */
 
 const IN = "#d97706";
@@ -19,11 +20,20 @@ type Props = {
   collectCount: number;
   toPay: number;
   payCount: number;
+  toRefund: number;
+  refundCount: number;
 };
 
-export function SettleCard({ toCollect, collectCount, toPay, payCount }: Props) {
-  const scale = Math.max(toCollect, toPay);
-  const net = toCollect - toPay;
+export function SettleCard({
+  toCollect,
+  collectCount,
+  toPay,
+  payCount,
+  toRefund,
+  refundCount,
+}: Props) {
+  const scale = Math.max(toCollect, toPay, toRefund);
+  const net = toCollect - toPay - toRefund;
 
   return (
     <Card className="h-full">
@@ -31,7 +41,7 @@ export function SettleCard({ toCollect, collectCount, toPay, payCount }: Props) 
       <div className="px-4 pt-2 pb-5 sm:px-5">
         {scale === 0 ? (
           <p className="py-10 text-center text-sm text-slate-400">
-            Everything is settled. Nothing to collect or pay.
+            Everything is settled. Nothing to collect, pay, or refund.
           </p>
         ) : (
           <>
@@ -48,6 +58,14 @@ export function SettleCard({ toCollect, collectCount, toPay, payCount }: Props) 
               label="You owe cleaners"
               detail={`${payCount} cleaning${payCount === 1 ? "" : "s"}`}
               amount={toPay}
+              scale={scale}
+              color={OUT}
+            />
+            <Row
+              href="/expenses"
+              label="Owed for expenses"
+              detail={`${refundCount} expense${refundCount === 1 ? "" : "s"} not yet refunded`}
+              amount={toRefund}
               scale={scale}
               color={OUT}
             />

@@ -195,6 +195,16 @@ export function pendingGuestPayments(bookings: Booking[]): Booking[] {
     .sort((a, b) => a.checkIn.localeCompare(b.checkIn));
 }
 
+/**
+ * Expenses someone paid for personally and hasn't been paid back for yet —
+ * oldest first, so the longest-outstanding one leads.
+ */
+export function unrefundedExpenses(expenses: Expense[]): Expense[] {
+  return expenses
+    .filter((e) => e.refundStatus === "owed")
+    .sort((a, b) => a.date.localeCompare(b.date));
+}
+
 /** Distinct cleaner names already used, for the datalist on the form. */
 export function knownCleaners(cleaning: CleaningRecord[]): string[] {
   const byLowerCase = new Map<string, string>();

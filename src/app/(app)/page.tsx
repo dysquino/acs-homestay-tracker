@@ -32,6 +32,7 @@ import {
   occupancyInMonth,
   pendingGuestPayments,
   unpaidCleanings,
+  unrefundedExpenses,
   upcomingEvents,
 } from "@/lib/selectors";
 import { useStore } from "@/lib/store";
@@ -82,6 +83,8 @@ export default function DashboardPage() {
   );
   const pending = useMemo(() => pendingGuestPayments(bookings), [bookings]);
   const pendingTotal = pending.reduce((s, b) => s + bookingNetIncome(b), 0);
+  const owedExpenses = useMemo(() => unrefundedExpenses(expenses), [expenses]);
+  const owedExpensesTotal = owedExpenses.reduce((s, e) => s + e.amount, 0);
 
   const expensesByCategory = useMemo<CategorySlice[]>(() => {
     const monthExpenses = expenses.filter((e) => isSameMonth(e.date, monthCursor));
@@ -165,6 +168,8 @@ export default function DashboardPage() {
             collectCount={pending.length}
             toPay={owedTotal}
             payCount={unpaid.length}
+            toRefund={owedExpensesTotal}
+            refundCount={owedExpenses.length}
           />
         </div>
 
