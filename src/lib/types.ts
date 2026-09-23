@@ -49,7 +49,24 @@ export type Expense = {
   /** Set when the app created this expense for a paid cleaning. Such
    * expenses are managed from the Cleaning page, not edited by hand. */
   cleaningId: string | null;
+  /**
+   * Whether whoever is in `paidBy` has been paid back for fronting this,
+   * e.g. an owner buying supplies out of pocket. NOT whether the expense
+   * itself is settled (it inherently is — that's what "expense" means).
+   * Most expenses need no reimbursement, so "refunded" is the default.
+   */
+  refundStatus: ExpenseRefundStatus;
 };
+
+export type ExpenseRefundStatus = "refunded" | "owed";
+
+export const EXPENSE_REFUND_STATUSES: {
+  value: ExpenseRefundStatus;
+  label: string;
+}[] = [
+  { value: "refunded", label: "Refunded" },
+  { value: "owed", label: "Not yet refunded" },
+];
 
 /** What a client may submit — `cleaningId` is only ever set by the server. */
 export type ExpenseInput = Omit<Expense, "id" | "cleaningId">;

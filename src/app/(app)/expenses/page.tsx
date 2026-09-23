@@ -5,7 +5,7 @@ import { useMemo, useState } from "react";
 
 import { PageHeader } from "@/components/layout/app-shell";
 import { ExpenseForm } from "@/components/expenses/expense-form";
-import { Badge } from "@/components/ui/badge";
+import { Badge, RefundBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader } from "@/components/ui/card";
 import { Field, Select } from "@/components/ui/field";
@@ -45,7 +45,7 @@ import {
 type SortKey = "date" | "amount" | "category";
 
 export default function ExpensesPage() {
-  const { expenses, bookings, deleteExpense } = useStore();
+  const { expenses, bookings, deleteExpense, updateExpense } = useStore();
 
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Expense | null>(null);
@@ -96,6 +96,14 @@ export default function ExpensesPage() {
     setFormOpen(true);
   }
 
+  async function markRefunded(expense: Expense) {
+    try {
+      await updateExpense(expense.id, { refundStatus: "refunded" });
+    } catch {
+      alert("Couldn't update this expense. Please try again.");
+    }
+  }
+
   function toggleSort(key: SortKey) {
     setSort((s) =>
       s.key === key
@@ -123,6 +131,18 @@ export default function ExpensesPage() {
           setFormOpen(true);
         }}
         onDelete={() => setPendingDelete(e)}
+        extra={
+          e.refundStatus === "owed" ? (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="mr-1 text-emerald-700 hover:bg-emerald-50"
+              onClick={() => markRefunded(e)}
+            >
+              Mark refunded
+            </Button>
+          ) : undefined
+        }
       />
     );
 
@@ -243,7 +263,12 @@ export default function ExpensesPage() {
                         </span>
                       </CardField>
                       {e.paidBy ? (
-                        <CardField label="Paid by">{e.paidBy}</CardField>
+                        <CardField label="Paid by">
+                          <span className="inline-flex items-center gap-1.5">
+                            {e.paidBy}
+                            <RefundBadge status={e.refundStatus} />
+                          </span>
+                        </CardField>
                       ) : null}
                     </div>
 
@@ -297,12 +322,19 @@ export default function ExpensesPage() {
                         </Badge>
                       </Td>
                       <Td>
-                        <span className="block max-w-md truncate text-slate-900" title={e.description}>
+                        <span className="block max-w-[13rem] truncate text-slate-900" title={e.description}>
                           {e.description}
                         </span>
                       </Td>
                       <Td className="hidden text-slate-500 sm:table-cell">
-                        {e.paidBy || "—"}
+                        {e.paidBy ? (
+                          <span className="inline-flex items-center gap-1.5">
+                            {e.paidBy}
+                            <RefundBadge status={e.refundStatus} />
+                          </span>
+                        ) : (
+                          "—"
+                        )}
                       </Td>
                       <Td
                         align="right"

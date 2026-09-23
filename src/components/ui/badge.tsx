@@ -5,6 +5,7 @@ import type {
   BookingSource,
   CleaningPaymentStatus,
   CleaningStatus,
+  ExpenseRefundStatus,
   PaymentStatus,
 } from "@/lib/types";
 
@@ -82,4 +83,14 @@ export function CleaningPaymentBadge({
       {status === "paid" ? "Paid" : "Unpaid"}
     </Badge>
   );
+}
+
+/**
+ * Only rendered when something is actually owed. "Refunded" is the normal
+ * state for nearly every expense — nobody fronted personal cash for it — so
+ * it stays silent instead of adding a green "all fine" badge to every row.
+ */
+export function RefundBadge({ status }: { status: ExpenseRefundStatus }) {
+  if (status === "refunded") return null;
+  return <Badge tone="amber">Not yet refunded</Badge>;
 }

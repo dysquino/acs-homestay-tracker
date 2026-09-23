@@ -2,16 +2,7 @@ import "server-only";
 
 import type { CleaningSchedule, Prisma } from "@prisma/client";
 
-/** The expense a paid cleaning produces. Shared by the sync and the CSV import. */
-export function cleaningExpenseFields(cleaning: CleaningSchedule, guestName?: string) {
-  const cleaner = cleaning.cleanerName.trim() || "Unassigned";
-  return {
-    date: cleaning.date,
-    category: "CLEANING_PAYMENT" as const,
-    description: `Cleaning payment — ${cleaner}${guestName ? ` (after ${guestName})` : ""}`,
-    amount: cleaning.paymentAmount,
-  };
-}
+import { cleaningExpenseFields } from "./cleaning-expense-fields";
 
 /**
  * Keeps a paid cleaning and its expense in step: a cleaning that is Paid (with

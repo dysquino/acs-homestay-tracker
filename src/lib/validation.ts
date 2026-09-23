@@ -3,6 +3,7 @@ import {
   CLEANING_PAYMENT_STATUSES,
   CLEANING_STATUSES,
   EXPENSE_CATEGORIES,
+  EXPENSE_REFUND_STATUSES,
   PAYMENT_STATUSES,
   type BookingInput,
   type CleaningRecord,
@@ -83,6 +84,7 @@ export function validateExpense(e: ExpenseInput): void {
   text(e.paidBy, "Paid by", { max: MAX_NAME });
   text(e.receiptUrl, "Receipt", { max: MAX_TEXT });
   text(e.createdBy, "Created by", { max: MAX_NAME });
+  oneOf(e.refundStatus, EXPENSE_REFUND_STATUSES, "Refund status");
 }
 
 export function validateCleaning(c: Omit<CleaningRecord, "id">): void {

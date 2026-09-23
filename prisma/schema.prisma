@@ -60,6 +60,16 @@ enum CleaningPaymentStatus {
   UNPAID
 }
 
+/// Whether whoever is in an expense's `paidBy` has been paid back yet, for
+/// expenses someone fronted out of pocket. Not "is this expense paid" — an
+/// expense is inherently money already spent; this tracks reimbursing the
+/// PERSON who spent it. Most expenses need no reimbursement at all, so
+/// REFUNDED (nothing owed) is the default.
+enum ExpenseRefundStatus {
+  REFUNDED
+  OWED
+}
+
 /// Not yet wired to anything — a placeholder for when Supabase Auth lands
 /// (a common pattern is mirroring `auth.users` into a profile table like
 /// this one). `createdBy` on the models below does NOT reference this.
@@ -97,21 +107,22 @@ model Booking {
 }
 
 model Expense {
-  id          String            @id @default(cuid())
-  date        DateTime
-  category    ExpenseCategory
-  description String
-  amount      Decimal           @db.Decimal(10, 2)
-  paidBy      String
-  receiptUrl  String            @default("")
-  createdBy   String
+  id           String              @id @default(cuid())
+  date         DateTime
+  category     ExpenseCategory
+  description  String
+  amount       Decimal             @db.Decimal(10, 2)
+  paidBy       String
+  receiptUrl   String              @default("")
+  createdBy    String
+  refundStatus ExpenseRefundStatus @default(REFUNDED)
   /// Set only on expenses the app creates for a paid cleaning — that link is
   /// how marking the cleaning unpaid (or deleting it) removes the expense.
   /// Cascade: deleting the cleaning record deletes its expense too.
-  cleaningId  String?           @unique
-  cleaning    CleaningSchedule? @relation(fields: [cleaningId], references: [id], onDelete: Cascade)
-  createdAt   DateTime          @default(now())
-  updatedAt   DateTime          @updatedAt
+  cleaningId   String?             @unique
+  cleaning     CleaningSchedule?   @relation(fields: [cleaningId], references: [id], onDelete: Cascade)
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
 
   @@index([date, category])
 }

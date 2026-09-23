@@ -9,6 +9,7 @@ import type {
   ExpenseCategory as DbExpenseCategory,
   CleaningStatus as DbCleaningStatus,
   CleaningPaymentStatus as DbCleaningPaymentStatus,
+  ExpenseRefundStatus as DbExpenseRefundStatus,
 } from "@prisma/client";
 import type { Decimal } from "@prisma/client/runtime/library";
 
@@ -21,6 +22,7 @@ import type {
   Expense,
   ExpenseCategory,
   ExpenseInput,
+  ExpenseRefundStatus,
   ISODate,
   PaymentStatus,
   BookingSource,
@@ -108,6 +110,15 @@ const CLEANING_PAYMENT_STATUS_FROM_DB: Record<
   UNPAID: "unpaid",
 };
 
+const EXPENSE_REFUND_STATUS_TO_DB: Record<ExpenseRefundStatus, DbExpenseRefundStatus> = {
+  refunded: "REFUNDED",
+  owed: "OWED",
+};
+const EXPENSE_REFUND_STATUS_FROM_DB: Record<DbExpenseRefundStatus, ExpenseRefundStatus> = {
+  REFUNDED: "refunded",
+  OWED: "owed",
+};
+
 export function bookingFromDb(row: DbBooking): Booking {
   return {
     id: row.id,
@@ -171,6 +182,7 @@ export function expenseFromDb(row: DbExpense): Expense {
     receiptUrl: row.receiptUrl,
     createdBy: row.createdBy,
     cleaningId: row.cleaningId,
+    refundStatus: EXPENSE_REFUND_STATUS_FROM_DB[row.refundStatus],
   };
 }
 
@@ -184,6 +196,7 @@ export function expenseToDb(input: ExpenseInput) {
     paidBy: input.paidBy,
     receiptUrl: input.receiptUrl,
     createdBy: input.createdBy,
+    refundStatus: EXPENSE_REFUND_STATUS_TO_DB[input.refundStatus],
   };
 }
 
@@ -197,6 +210,8 @@ export function expensePatchToDb(patch: Partial<ExpenseInput>) {
   if (patch.paidBy !== undefined) out.paidBy = patch.paidBy;
   if (patch.receiptUrl !== undefined) out.receiptUrl = patch.receiptUrl;
   if (patch.createdBy !== undefined) out.createdBy = patch.createdBy;
+  if (patch.refundStatus !== undefined)
+    out.refundStatus = EXPENSE_REFUND_STATUS_TO_DB[patch.refundStatus];
   return out;
 }
 

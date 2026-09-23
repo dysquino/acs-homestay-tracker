@@ -90,6 +90,7 @@ describe("income by month", () => {
           receiptUrl: "",
           createdBy: "t",
           cleaningId: null,
+          refundStatus: "refunded",
         },
       ],
       "2026-03-15",

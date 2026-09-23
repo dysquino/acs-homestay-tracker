@@ -29,6 +29,7 @@ const expense: ExpenseInput = {
   paidBy: "Owner",
   receiptUrl: "",
   createdBy: "Owner",
+  refundStatus: "refunded",
 };
 const clean: Omit<CleaningRecord, "id"> = {
   date: "2026-03-04",
@@ -84,6 +85,7 @@ describe("expenses", () => {
     ["blank description", { description: " " }],
     ["bad category", { category: "gambling" as never }],
     ["bad date", { date: "2026-02-31" }],
+    ["bad refund status", { refundStatus: "half" as never }],
   ])("rejects %s", (_name, override) => {
     expect(() => validateExpense({ ...expense, ...override })).toThrow();
   });

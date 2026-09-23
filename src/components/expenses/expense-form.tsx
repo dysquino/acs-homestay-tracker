@@ -17,9 +17,11 @@ import { useStore } from "@/lib/store";
 import { useSubmit, type Submit } from "@/lib/use-submit";
 import {
   EXPENSE_CATEGORIES,
+  EXPENSE_REFUND_STATUSES,
   PAID_BY,
   type Expense,
   type ExpenseCategory,
+  type ExpenseRefundStatus,
 } from "@/lib/types";
 
 type FormState = {
@@ -28,6 +30,7 @@ type FormState = {
   description: string;
   amount: string;
   paidBy: string;
+  refundStatus: ExpenseRefundStatus;
 };
 
 const FORM_ID = "expense-form";
@@ -85,6 +88,7 @@ function ExpenseFields({
           description: expense.description,
           amount: String(expense.amount),
           paidBy: expense.paidBy,
+          refundStatus: expense.refundStatus,
         }
       : {
           date: today(),
@@ -94,6 +98,8 @@ function ExpenseFields({
           // The 5-person roster, not the browser's identity picker — the two
           // lists are different people, so this is never pre-filled from it.
           paidBy: "",
+          // The normal case: paid directly, nobody is owed anything back.
+          refundStatus: "refunded",
         },
   );
   const [errors, setErrors] = useState<Partial<Record<keyof FormState, string>>>(
@@ -122,6 +128,7 @@ function ExpenseFields({
       paidBy: form.paidBy.trim(),
       receiptUrl: expense?.receiptUrl ?? "",
       createdBy: expense?.createdBy ?? user?.name ?? "Unknown",
+      refundStatus: form.refundStatus,
     };
 
     setSubmitError(null);
@@ -221,6 +228,25 @@ function ExpenseFields({
               {PAID_BY.map((p) => (
                 <option key={p.value} value={p.value}>
                   {p.label}
+                </option>
+              ))}
+            </Select>
+          )}
+        </Field>
+
+        <Field
+          label="Refund status"
+          hint="Has the person above been paid back for fronting this?"
+        >
+          {(id) => (
+            <Select
+              id={id}
+              value={form.refundStatus}
+              onChange={(e) => set("refundStatus", e.target.value as ExpenseRefundStatus)}
+            >
+              {EXPENSE_REFUND_STATUSES.map((s) => (
+                <option key={s.value} value={s.value}>
+                  {s.label}
                 </option>
               ))}
             </Select>
