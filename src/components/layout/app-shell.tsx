@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import type { ComponentType, ReactNode, SVGProps } from "react";
 
 import { cn } from "@/lib/cn";
+import { ACCOUNTS, useIdentity } from "@/lib/identity";
 import {
   CalendarIcon,
   HomeIcon,
@@ -67,13 +68,16 @@ export function AppShell({ children }: { children: ReactNode }) {
             );
           })}
         </nav>
-        <p className="px-5 py-3 text-xs text-slate-400">v{APP_VERSION}</p>
+        <div className="flex items-center justify-between gap-2 px-5 py-3">
+          <IdentityPicker />
+          <p className="text-xs text-slate-400">v{APP_VERSION}</p>
+        </div>
       </aside>
 
       {/* Mobile top bar */}
       <header className="no-print flex items-center justify-between gap-3 bg-white px-4 py-3 shadow-[0_1px_2px_rgba(15,23,42,0.06)] lg:hidden">
         <Brand />
-        <p className="text-xs text-slate-400">v{APP_VERSION}</p>
+        <IdentityPicker />
       </header>
 
       <main className="min-w-0 flex-1 pb-20 lg:pb-0">
@@ -103,6 +107,43 @@ export function AppShell({ children }: { children: ReactNode }) {
         })}
       </nav>
     </div>
+  );
+}
+
+/**
+ * Who's using this browser — attribution only (see identity.tsx), not
+ * access control. A plain <select> so it's keyboard- and screen-reader-
+ * accessible without menu/click-outside logic, styled to sit quietly next
+ * to the version tag rather than look like a form field.
+ */
+function IdentityPicker() {
+  const { user, ready, setUser } = useIdentity();
+  if (!ready) return null;
+
+  return (
+    <label className="flex min-w-0 items-center gap-1.5">
+      <span className="sr-only">Recording changes as</span>
+      <span
+        aria-hidden="true"
+        className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-100 text-[11px] font-semibold text-brand-800"
+      >
+        {user.name.charAt(0).toUpperCase()}
+      </span>
+      <select
+        value={user.id}
+        onChange={(e) => {
+          const next = ACCOUNTS.find((a) => a.id === e.target.value);
+          if (next) setUser(next);
+        }}
+        className="min-w-0 max-w-24 truncate rounded-md border-0 bg-transparent py-0.5 text-xs font-medium text-slate-600 focus-visible:outline-2 focus-visible:outline-slate-400"
+      >
+        {ACCOUNTS.map((a) => (
+          <option key={a.id} value={a.id}>
+            {a.name}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }
 

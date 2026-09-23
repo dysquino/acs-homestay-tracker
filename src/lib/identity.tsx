@@ -9,7 +9,7 @@ import {
   type ReactNode,
 } from "react";
 
-import type { User } from "./types";
+import { PAID_BY, type User } from "./types";
 import { useClientState } from "./use-client-state";
 
 /**
@@ -25,14 +25,16 @@ import { useClientState } from "./use-client-state";
 
 const STORAGE_KEY = "acs-homestay-tracker:identity";
 
-/** The five people who use this tracker. */
-export const ACCOUNTS: User[] = [
-  { id: "u_1", name: "Owner", email: "owner@acshomestay.ph" },
-  { id: "u_2", name: "Manager", email: "manager@acshomestay.ph" },
-  { id: "u_3", name: "Ana", email: "ana@acshomestay.ph" },
-  { id: "u_4", name: "Carlo", email: "carlo@acshomestay.ph" },
-  { id: "u_5", name: "Jen", email: "jen@acshomestay.ph" },
-];
+/**
+ * The five people who use this tracker — the owners of the unit, and the
+ * same roster as PAID_BY (types.ts). Built from it, not listed twice, so
+ * the two can never drift apart.
+ */
+export const ACCOUNTS: User[] = PAID_BY.map((p, i) => ({
+  id: `u_${i + 1}`,
+  name: p.value,
+  email: `${p.value.toLowerCase()}@acshomestay.ph`,
+}));
 
 type IdentityValue = {
   user: User;
