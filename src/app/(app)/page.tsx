@@ -18,6 +18,7 @@ import {
   CalendarIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
+  DownloadIcon,
   ReceiptIcon,
   SparklesIcon,
 } from "@/components/ui/icons";
@@ -254,8 +255,47 @@ export default function DashboardPage() {
             )}
           </Card>
         </div>
+
+        <div className="lg:col-span-12">
+          <ExportCard />
+        </div>
       </div>
     </>
+  );
+}
+
+/**
+ * A standalone backup, independent of this app still running — the lesson
+ * from the database going unreachable for 11 days. Each link downloads the
+ * live table as a CSV; no confirmation needed since nothing is changed.
+ */
+function ExportCard() {
+  const links: { table: string; label: string }[] = [
+    { table: "bookings", label: "Bookings" },
+    { table: "expenses", label: "Expenses" },
+    { table: "cleaning", label: "Cleaning" },
+  ];
+  return (
+    <Card>
+      <CardHeader
+        icon={DownloadIcon}
+        title="Export data"
+        description="Download a CSV backup of each table — keep a copy somewhere safe, just in case."
+      />
+      <div className="flex flex-wrap gap-2 px-4 pb-4 sm:px-5 sm:pb-5">
+        {links.map((l) => (
+          <a
+            key={l.table}
+            href={`/api/export/${l.table}`}
+            download
+            className="inline-flex items-center gap-1.5 rounded-md bg-white px-3.5 py-2 text-sm font-medium text-slate-700 ring-1 ring-inset ring-slate-300 transition-colors hover:bg-slate-50"
+          >
+            <DownloadIcon className="h-4 w-4" />
+            {l.label} (.csv)
+          </a>
+        ))}
+      </div>
+    </Card>
   );
 }
 
