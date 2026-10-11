@@ -266,7 +266,10 @@ export function PageHeader({
           <p className="mt-1 text-sm text-slate-500">{description}</p>
         ) : null}
       </div>
-      {action ? <div className="no-print shrink-0">{action}</div> : null}
+      {/* Allowed to shrink so its buttons wrap onto a new line on a phone —
+          `shrink-0` kept a row of three buttons wider than the screen, which
+          made the whole page scroll sideways. */}
+      {action ? <div className="no-print min-w-0 max-w-full">{action}</div> : null}
     </div>
   );
 }
