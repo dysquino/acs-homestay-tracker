@@ -1,5 +1,6 @@
-import { createHmac, timingSafeEqual } from "crypto";
 import { NextResponse, type NextRequest } from "next/server";
+
+import { COOKIE_NAME, expectedToken, isValidToken } from "./lib/site-gate";
 
 /**
  * Site-wide access gate — NOT per-user authentication.
@@ -16,22 +17,7 @@ import { NextResponse, type NextRequest } from "next/server";
  * into a public site with all the data and the write endpoints exposed.
  */
 
-const COOKIE_NAME = "site_gate";
 const GATE_PATH = "/gate";
-const TOKEN_INPUT = "granted";
-
-function expectedToken(): string | null {
-  const secret = process.env.SITE_PASSWORD;
-  if (!secret) return null;
-  return createHmac("sha256", secret).update(TOKEN_INPUT).digest("hex");
-}
-
-function isValidToken(token: string | undefined, expected: string): boolean {
-  if (!token) return false;
-  const a = Buffer.from(token);
-  const b = Buffer.from(expected);
-  return a.length === b.length && timingSafeEqual(a, b);
-}
 
 export function proxy(request: NextRequest) {
   const expected = expectedToken();

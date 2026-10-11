@@ -5,9 +5,22 @@ import type { ReactNode } from "react";
 import { AppShell } from "@/components/layout/app-shell";
 import { Button } from "@/components/ui/button";
 import { WarningIcon } from "@/components/ui/icons";
-import { useStore } from "@/lib/store";
+import { StoreProvider, useStore } from "@/lib/store";
 
+/**
+ * The data store lives here, not in the root layout, so it only loads for
+ * the signed-in app — not on the access gate or the guests' booking page,
+ * where its (access-checked) server actions would just fail.
+ */
 export default function AppLayout({ children }: { children: ReactNode }) {
+  return (
+    <StoreProvider>
+      <AppFrame>{children}</AppFrame>
+    </StoreProvider>
+  );
+}
+
+function AppFrame({ children }: { children: ReactNode }) {
   const { ready, loadError, reload, syncError, resync } = useStore();
 
   if (loadError) {

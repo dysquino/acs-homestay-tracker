@@ -4,10 +4,12 @@ import { prisma } from "@/lib/prisma";
 import type { CleaningRecord } from "@/lib/types";
 import { validateCleaning } from "@/lib/validation";
 
+import { requireSiteAccess } from "./access";
 import { syncCleaningExpense } from "./cleaning-expense";
 import { cleaningFromDb, cleaningPatchToDb, cleaningToDb } from "./mappers";
 
 export async function listCleaning(): Promise<CleaningRecord[]> {
+  await requireSiteAccess();
   const rows = await prisma.cleaningSchedule.findMany({
     orderBy: { date: "desc" },
   });
@@ -21,6 +23,7 @@ export async function listCleaning(): Promise<CleaningRecord[]> {
 export async function createCleaning(
   input: Omit<CleaningRecord, "id">,
 ): Promise<CleaningRecord> {
+  await requireSiteAccess();
   validateCleaning(input);
   const row = await prisma.$transaction(async (tx) => {
     const created = await tx.cleaningSchedule.create({
@@ -41,6 +44,7 @@ export async function updateCleaning(
   patch: Partial<Omit<CleaningRecord, "id">>,
   actor: string,
 ): Promise<void> {
+  await requireSiteAccess();
   await prisma.$transaction(async (tx) => {
     const existing = await tx.cleaningSchedule.findUniqueOrThrow({
       where: { id },
@@ -57,5 +61,6 @@ export async function updateCleaning(
 
 /** Its linked expense (if any) goes with it — cascade in the schema. */
 export async function deleteCleaning(id: string): Promise<void> {
+  await requireSiteAccess();
   await prisma.cleaningSchedule.delete({ where: { id } });
 }

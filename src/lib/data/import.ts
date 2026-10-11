@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import type { BookingInput } from "@/lib/types";
 import { ValidationError, validateBooking } from "@/lib/validation";
 
+import { requireSiteAccess } from "./access";
 import { cleaningExpenseFields } from "./cleaning-expense-fields";
 import { bookingToDb, isoToDate } from "./mappers";
 import { assertNoOverlap } from "./overlap";
@@ -44,6 +45,7 @@ export async function importAirbnbBookings(
   items: ImportInstruction[],
   actor: string,
 ): Promise<ImportResult> {
+  await requireSiteAccess();
   if (!Array.isArray(items) || items.length === 0) throw new ValidationError("Nothing to import.");
   if (items.length > MAX_ROWS) throw new ValidationError(`Import at most ${MAX_ROWS} bookings at a time.`);
   if (typeof actor !== "string" || !actor.trim()) throw new ValidationError("Missing user.");
