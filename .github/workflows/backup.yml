@@ -28,9 +28,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
 
@@ -50,7 +50,7 @@ jobs:
           echo "name=$name" >> "$GITHUB_OUTPUT"
 
       - name: Save the encrypted backup
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: ${{ steps.encrypt.outputs.name }}
           path: ${{ runner.temp }}/${{ steps.encrypt.outputs.name }}.acsbackup
