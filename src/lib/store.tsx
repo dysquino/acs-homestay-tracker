@@ -77,7 +77,8 @@ type StoreValue = Data & {
     id: string,
     patch: Partial<BookingInput>,
   ) => Promise<void>;
-  deleteBooking: (id: string) => Promise<void>;
+  /** `withCleanings` also deletes cleanings a plain delete would keep. */
+  deleteBooking: (id: string, options?: { withCleanings?: boolean }) => Promise<void>;
   importBookings: (items: ImportInstruction[]) => Promise<ImportResult>;
   addExpense: (input: ExpenseInput) => Promise<Expense>;
   updateExpense: (
@@ -107,22 +108,29 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [syncError, setSyncError] = useState(false);
 
   // Only the newest request may write state, so a slow older response can't
-  // overwrite fresher data.
+  // overwrite fresher data. A superseded request — succeeded or failed —
+  // resolves `false` and changes nothing: the newer one settles the state.
+  // (Dev mode's double-run effect always supersedes the first load; marking
+  // the app ready on that one showed the dashboard with no data for a moment.)
   const latest = useRef(0);
-  const fetchAll = useCallback(async () => {
+  const fetchAll = useCallback(async (): Promise<boolean> => {
     const request = ++latest.current;
-    const [bookings, expenses, cleaning] = await Promise.all([
-      listBookings(),
-      listExpenses(),
-      listCleaning(),
-    ]);
-    if (request === latest.current) setData({ bookings, expenses, cleaning });
+    let lists;
+    try {
+      lists = await Promise.all([listBookings(), listExpenses(), listCleaning()]);
+    } catch (error) {
+      if (request !== latest.current) return false;
+      throw error;
+    }
+    if (request !== latest.current) return false;
+    const [bookings, expenses, cleaning] = lists;
+    setData({ bookings, expenses, cleaning });
+    return true;
   }, []);
 
   const refresh = useCallback(async () => {
     try {
-      await fetchAll();
-      setSyncError(false);
+      if (await fetchAll()) setSyncError(false);
     } catch {
       setSyncError(true);
     }
@@ -130,7 +138,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const load = useCallback(() => {
     fetchAll().then(
-      () => {
+      (applied) => {
+        if (!applied) return;
         setLoadError(false);
         setReady(true);
       },
@@ -165,8 +174,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   );
 
   const deleteBooking = useCallback(
-    async (id: string) => {
-      await deleteBookingAction(id);
+    async (id: string, options?: { withCleanings?: boolean }) => {
+      await deleteBookingAction(id, options);
       await refresh();
     },
     [refresh],

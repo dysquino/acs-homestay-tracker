@@ -17,9 +17,11 @@ const VARIANTS: Record<Variant, string> = {
     "bg-white text-red-700 ring-1 ring-inset ring-red-300 hover:bg-red-50 focus-visible:outline-red-500",
 };
 
+// On touch screens every button is at least 36px tall (and an icon-only one
+// 36px wide), a comfortable size for a finger.
 const SIZES: Record<Size, string> = {
-  sm: "px-2.5 py-1.5 text-xs gap-1",
-  md: "px-3.5 py-2 text-sm gap-1.5",
+  sm: "px-2.5 py-1.5 text-xs gap-1 pointer-coarse:min-h-9 pointer-coarse:min-w-9",
+  md: "px-3.5 py-2 text-sm gap-1.5 pointer-coarse:min-h-10",
 };
 
 const BASE =

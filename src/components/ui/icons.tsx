@@ -46,6 +46,15 @@ export function ReceiptIcon(props: SVGProps<SVGSVGElement>) {
   );
 }
 
+export function BankIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Icon {...props}>
+      <path d="M3 9.5 12 4l9 5.5" />
+      <path d="M5 10v8M9.5 10v8M14.5 10v8M19 10v8M3 21h18" />
+    </Icon>
+  );
+}
+
 export function SparklesIcon(props: SVGProps<SVGSVGElement>) {
   return (
     <Icon {...props}>

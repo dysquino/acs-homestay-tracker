@@ -105,12 +105,26 @@ describe("planImport", () => {
     expect(planImport(rows, [stored({ confirmationCode: "HMAAAAAAA1" })])[0].action).toBe("skip");
   });
 
-  it("does not link a booking that already carries a different code", () => {
-    expect(planImport(rows, [stored({ confirmationCode: "HMOTHER123" })])[0].action).toBe("create");
+  it("does not link a booking that already carries a different code (and won't double-book it)", () => {
+    expect(planImport(rows, [stored({ confirmationCode: "HMOTHER123" })])[0].action).toBe("blocked");
   });
 
-  it("warns about an overlap with another booking", () => {
+  it("blocks a new booking that overlaps another — no double bookings", () => {
     const plan = planImport(rows, [stored({ id: "other", guestName: "Someone Else", checkIn: "2026-09-10", checkOut: "2026-09-12" })]);
+    expect(plan[0].action).toBe("blocked");
     expect(plan[0].conflicts.map((c) => c.id)).toEqual(["other"]);
+  });
+
+  it("allows a same-day turnover (check-out and check-in on the same date)", () => {
+    const [row] = rows;
+    const plan = planImport(rows, [stored({ id: "before", guestName: "Before", checkIn: "2026-09-01", checkOut: row.checkIn, confirmationCode: "HMBEFORE01" })]);
+    expect(plan[0].action).toBe("create");
+  });
+
+  it("blocks the second of two rows in the same file that overlap each other", () => {
+    const [row] = rows;
+    const twin = { ...row, confirmationCode: "HMTWIN0001", guestName: "Twin" };
+    const plan = planImport([row, twin], []);
+    expect(plan.map((p) => p.action)).toEqual(["create", "blocked"]);
   });
 });

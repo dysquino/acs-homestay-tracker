@@ -13,14 +13,16 @@ import { Card, CardHeader } from "@/components/ui/card";
 import { Field, Select } from "@/components/ui/field";
 import { DateRangeFilter, FilterBar } from "@/components/ui/filter-bar";
 import { PlusIcon, SparklesIcon } from "@/components/ui/icons";
+import { DetailSheet } from "@/components/ui/detail-sheet";
 import { ConfirmDialog } from "@/components/ui/modal";
+import { Pagination } from "@/components/ui/pagination";
 import { StatTile } from "@/components/ui/stat";
 import {
-  CardField,
   CardList,
-  CardRow,
+  CompactRow,
   EmptyState,
   RowActions,
+  RowTitle,
   Table,
   TableWrap,
   Td,
@@ -35,6 +37,7 @@ import {
   unpaidCleanings,
 } from "@/lib/selectors";
 import { useStore } from "@/lib/store";
+import { usePagination } from "@/lib/use-pagination";
 import {
   CLEANING_PAYMENT_STATUSES,
   CLEANING_STATUSES,
@@ -51,6 +54,10 @@ export default function CleaningPage() {
   const [pendingDelete, setPendingDelete] = useState<CleaningRecord | null>(
     null,
   );
+  // The record whose details are open; looked up fresh so an edit shows.
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const selected = cleaning.find((c) => c.id === selectedId) ?? null;
+  const setSelected = (c: CleaningRecord | null) => setSelectedId(c?.id ?? null);
 
   const [cleaner, setCleaner] = useState("all");
   const [status, setStatus] = useState<CleaningStatus | "all">("all");
@@ -80,6 +87,7 @@ export default function CleaningPage() {
       })
       .sort((a, b) => b.date.localeCompare(a.date));
   }, [cleaning, cleaner, status, payment, from, to]);
+  const paging = usePagination(filtered, JSON.stringify([cleaner, status, payment, from, to]));
 
   const cleanerOptions = useMemo(() => {
     const names = knownCleaners(cleaning);
@@ -98,6 +106,17 @@ export default function CleaningPage() {
     setEditing(null);
     setFormOpen(true);
   }
+
+  const markPaidButton = (c: CleaningRecord) => (
+    <Button
+      size="sm"
+      variant="ghost"
+      className="text-emerald-700 hover:bg-emerald-50"
+      onClick={() => markPaid(c)}
+    >
+      Mark paid
+    </Button>
+  );
 
   async function markPaid(record: CleaningRecord) {
     try {
@@ -210,66 +229,25 @@ export default function CleaningPage() {
           ) : (
             <>
               <CardList>
-                {filtered.map((c) => {
-                  const booking = c.bookingId
-                    ? bookingById.get(c.bookingId)
-                    : undefined;
+                {paging.pageItems.map((c) => {
+                  const booking = c.bookingId ? bookingById.get(c.bookingId) : undefined;
                   return (
-                    <CardRow key={c.id}>
-                      <div className="mb-2 flex items-start justify-between gap-2">
-                        <div className="min-w-0">
-                          <p className="font-medium text-slate-900">
-                            {c.cleanerName || (
-                              <span className="font-normal text-slate-400">
-                                Unassigned
-                              </span>
-                            )}
-                          </p>
-                          <p className="mt-0.5 text-xs text-slate-500">
-                            {formatDate(c.date)}
-                            {booking ? ` · ${booking.guestName}` : ""}
-                          </p>
-                        </div>
-                        <CleaningStatusBadge status={c.status} />
-                      </div>
-
-                      <div className="space-y-1 rounded-md bg-slate-50 p-2.5">
-                        <CardField label="Amount">
-                          {formatCurrency(c.paymentAmount)}
-                        </CardField>
-                        <CardField label="Payment">
+                    <CompactRow
+                      key={c.id}
+                      onOpen={() => setSelected(c)}
+                      title={
+                        c.cleanerName || <span className="font-normal text-slate-400">Unassigned</span>
+                      }
+                      subtitle={`${formatDate(c.date)}${booking ? ` · ${booking.guestName}` : ""}`}
+                      amount={formatCurrency(c.paymentAmount)}
+                      tags={
+                        <>
+                          <CleaningStatusBadge status={c.status} />
                           <CleaningPaymentBadge status={c.paymentStatus} />
-                        </CardField>
-                      </div>
-
-                      {c.notes ? (
-                        <p className="mt-2 truncate text-xs text-slate-400">
-                          {c.notes}
-                        </p>
-                      ) : null}
-
-                      <div className="mt-2.5">
-                        <RowActions
-                          onEdit={() => {
-                            setEditing(c);
-                            setFormOpen(true);
-                          }}
-                          onDelete={() => setPendingDelete(c)}
-                          extra={
-                            c.paymentStatus === "unpaid" ? (
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                className="mr-1 text-emerald-700 hover:bg-emerald-50"
-                                onClick={() => markPaid(c)}
-                              >
-                                Mark paid
-                              </Button>
-                            ) : undefined
-                          }
-                        />
-                      </div>
-                    </CardRow>
+                        </>
+                      }
+                      action={c.paymentStatus === "unpaid" ? markPaidButton(c) : null}
+                    />
                   );
                 })}
               </CardList>
@@ -288,7 +266,7 @@ export default function CleaningPage() {
                   </Th>
                 </Thead>
                 <tbody className="divide-y divide-slate-100">
-                  {filtered.map((c) => {
+                  {paging.pageItems.map((c) => {
                     const booking = c.bookingId
                       ? bookingById.get(c.bookingId)
                       : undefined;
@@ -299,13 +277,11 @@ export default function CleaningPage() {
                         </Td>
                         <Td>
                           <div className="flex max-w-sm items-baseline gap-2">
-                            {c.cleanerName ? (
-                              <span className="font-medium text-slate-900">
-                                {c.cleanerName}
-                              </span>
-                            ) : (
-                              <span className="text-slate-400">Unassigned</span>
-                            )}
+                            <RowTitle onOpen={() => setSelected(c)}>
+                              {c.cleanerName || (
+                                <span className="font-normal text-slate-400">Unassigned</span>
+                              )}
+                            </RowTitle>
                             {c.notes ? (
                               <span className="hidden truncate text-xs text-slate-400 xl:inline" title={c.notes}>
                                 {c.notes}
@@ -352,6 +328,7 @@ export default function CleaningPage() {
                 </tbody>
               </Table>
               </TableWrap>
+              <Pagination paging={paging} noun="records" />
             </>
           )}
         </Card>
@@ -397,6 +374,48 @@ export default function CleaningPage() {
         open={formOpen}
         record={editing}
         onClose={() => setFormOpen(false)}
+      />
+
+      <DetailSheet
+        open={selected !== null}
+        onClose={() => setSelected(null)}
+        title={selected ? selected.cleanerName || "Unassigned cleaning" : ""}
+        tags={
+          selected ? (
+            <>
+              <CleaningStatusBadge status={selected.status} />
+              <CleaningPaymentBadge status={selected.paymentStatus} />
+            </>
+          ) : null
+        }
+        fields={
+          selected
+            ? [
+                { label: "Date", value: formatDate(selected.date) },
+                { label: "Cleaner", value: selected.cleanerName || <span className="text-slate-400">Unassigned</span> },
+                {
+                  label: "Booking",
+                  value: (selected.bookingId && bookingById.get(selected.bookingId)?.guestName) || (
+                    <span className="text-slate-400">Not linked</span>
+                  ),
+                },
+                { label: "Amount", value: <span className="font-semibold">{formatCurrency(selected.paymentAmount)}</span> },
+                { label: "Notes", value: selected.notes || <span className="text-slate-400">—</span> },
+              ]
+            : []
+        }
+        actions={selected && selected.paymentStatus === "unpaid" ? markPaidButton(selected) : undefined}
+        onEdit={() => {
+          if (!selected) return;
+          setEditing(selected);
+          setSelected(null);
+          setFormOpen(true);
+        }}
+        onDelete={() => {
+          if (!selected) return;
+          setPendingDelete(selected);
+          setSelected(null);
+        }}
       />
 
       <ConfirmDialog

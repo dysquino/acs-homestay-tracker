@@ -3,32 +3,19 @@
 import { useMemo, useState, type ReactNode } from "react";
 
 import { CashFlowChart, type ChartRange } from "@/components/dashboard/cash-flow-chart";
-import {
-  ExpenseCategoryDonut,
-  type CategorySlice,
-} from "@/components/dashboard/expense-category-donut";
+import { MoneyInBankCard } from "@/components/dashboard/money-in-bank-card";
 import { OccupancyCard } from "@/components/dashboard/occupancy-card";
 import { ProfitHero } from "@/components/dashboard/profit-hero";
 import { SettleCard } from "@/components/dashboard/settle-card";
 import { WeekStrip } from "@/components/dashboard/week-strip";
-import { CleaningPaymentBadge, PaymentBadge } from "@/components/ui/badge";
-import { LinkButton } from "@/components/ui/button";
-import { Card, CardHeader } from "@/components/ui/card";
-import {
-  CalendarIcon,
-  ChevronLeftIcon,
-  ChevronRightIcon,
-  DownloadIcon,
-  ReceiptIcon,
-  SparklesIcon,
-} from "@/components/ui/icons";
-import { EmptyState } from "@/components/ui/table";
+import { ChevronLeftIcon, ChevronRightIcon } from "@/components/ui/icons";
 import { useIdentity } from "@/lib/identity";
-import { addMonths, isSameMonth, startOfMonth, today } from "@/lib/dates";
-import { formatCurrency, formatDate, formatDateRange, formatMonth } from "@/lib/format";
+import { addMonths, startOfMonth, today } from "@/lib/dates";
+import { formatMonth } from "@/lib/format";
 import {
   amountOwedByCleaner,
   bookingNetIncome,
+  moneyInBank,
   monthSeries,
   occupancyInMonth,
   pendingGuestPayments,
@@ -37,7 +24,6 @@ import {
   upcomingEvents,
 } from "@/lib/selectors";
 import { useStore } from "@/lib/store";
-import { EXPENSE_CATEGORIES } from "@/lib/types";
 
 const WEEK_DAYS = 7;
 
@@ -86,16 +72,7 @@ export default function DashboardPage() {
   const pendingTotal = pending.reduce((s, b) => s + bookingNetIncome(b), 0);
   const owedExpenses = useMemo(() => unrefundedExpenses(expenses), [expenses]);
   const owedExpensesTotal = owedExpenses.reduce((s, e) => s + e.amount, 0);
-
-  const expensesByCategory = useMemo<CategorySlice[]>(() => {
-    const monthExpenses = expenses.filter((e) => isSameMonth(e.date, monthCursor));
-    return EXPENSE_CATEGORIES.map(({ value }) => ({
-      category: value,
-      amount: monthExpenses
-        .filter((e) => e.category === value)
-        .reduce((s, e) => s + e.amount, 0),
-    }));
-  }, [expenses, monthCursor]);
+  const bank = useMemo(() => moneyInBank(bookings, expenses), [bookings, expenses]);
 
   return (
     <>
@@ -154,16 +131,6 @@ export default function DashboardPage() {
           />
         </div>
         <div className="lg:col-span-4">
-          <Card className="flex h-full flex-col">
-            <CardHeader
-              icon={ReceiptIcon}
-              title="Expenses by category"
-              description={formatMonth(monthCursor)}
-            />
-            <ExpenseCategoryDonut data={expensesByCategory} />
-          </Card>
-        </div>
-        <div className="lg:col-span-4">
           <SettleCard
             toCollect={pendingTotal}
             collectCount={pending.length}
@@ -173,129 +140,15 @@ export default function DashboardPage() {
             refundCount={owedExpenses.length}
           />
         </div>
+        <div className="lg:col-span-4">
+          <MoneyInBankCard result={bank} />
+        </div>
 
         <div className="lg:col-span-12">
           <WeekStrip events={events} today={t} />
         </div>
-
-        <div className="lg:col-span-6">
-          <Card className="h-full">
-            <CardHeader
-              icon={CalendarIcon}
-              title="Pending guest payments"
-              description={
-                pending.length > 0
-                  ? `${formatCurrency(pendingTotal)} across ${pending.length} booking${pending.length === 1 ? "" : "s"}`
-                  : undefined
-              }
-              action={
-                <LinkButton size="sm" href="/bookings">
-                  Bookings
-                </LinkButton>
-              }
-            />
-            {pending.length === 0 ? (
-              <EmptyState title="All guest payments settled" />
-            ) : (
-              <ul className="px-2 pb-3 sm:px-3">
-                {pending.slice(0, 6).map((b) => (
-                  <li
-                    key={b.id}
-                    className="flex items-center gap-3 rounded-2xl px-3 py-2.5 transition-colors hover:bg-slate-50"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium text-slate-900">{b.guestName}</p>
-                      <p className="text-xs text-slate-500">{formatDateRange(b.checkIn, b.checkOut)}</p>
-                    </div>
-                    <span className="text-sm font-semibold tabular-nums whitespace-nowrap text-slate-900">
-                      {formatCurrency(bookingNetIncome(b))}
-                    </span>
-                    <PaymentBadge status={b.paymentStatus} />
-                  </li>
-                ))}
-              </ul>
-            )}
-          </Card>
-        </div>
-
-        <div className="lg:col-span-6">
-          <Card className="h-full">
-            <CardHeader
-              icon={SparklesIcon}
-              title="Unpaid cleanings"
-              description={unpaid.length > 0 ? `${formatCurrency(owedTotal)} owed` : undefined}
-              action={
-                <LinkButton size="sm" href="/cleaning">
-                  Cleaning
-                </LinkButton>
-              }
-            />
-            {unpaid.length === 0 ? (
-              <EmptyState title="Everyone's paid up" />
-            ) : (
-              <ul className="px-2 pb-3 sm:px-3">
-                {unpaid.slice(0, 6).map((c) => (
-                  <li
-                    key={c.id}
-                    className="flex items-center gap-3 rounded-2xl px-3 py-2.5 transition-colors hover:bg-slate-50"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium text-slate-900">
-                        {c.cleanerName || <span className="text-slate-400">Unassigned</span>}
-                      </p>
-                      <p className="text-xs text-slate-500">{formatDate(c.date)}</p>
-                    </div>
-                    <span className="text-sm font-semibold tabular-nums whitespace-nowrap text-slate-900">
-                      {formatCurrency(c.paymentAmount)}
-                    </span>
-                    <CleaningPaymentBadge status={c.paymentStatus} />
-                  </li>
-                ))}
-              </ul>
-            )}
-          </Card>
-        </div>
-
-        <div className="lg:col-span-12">
-          <ExportCard />
-        </div>
       </div>
     </>
-  );
-}
-
-/**
- * A standalone backup, independent of this app still running — the lesson
- * from the database going unreachable for 11 days. Each link downloads the
- * live table as a CSV; no confirmation needed since nothing is changed.
- */
-function ExportCard() {
-  const links: { table: string; label: string }[] = [
-    { table: "bookings", label: "Bookings" },
-    { table: "expenses", label: "Expenses" },
-    { table: "cleaning", label: "Cleaning" },
-  ];
-  return (
-    <Card>
-      <CardHeader
-        icon={DownloadIcon}
-        title="Export data"
-        description="Download a CSV backup of each table — keep a copy somewhere safe, just in case."
-      />
-      <div className="flex flex-wrap gap-2 px-4 pb-4 sm:px-5 sm:pb-5">
-        {links.map((l) => (
-          <a
-            key={l.table}
-            href={`/api/export/${l.table}`}
-            download
-            className="inline-flex items-center gap-1.5 rounded-md bg-white px-3.5 py-2 text-sm font-medium text-slate-700 ring-1 ring-inset ring-slate-300 transition-colors hover:bg-slate-50"
-          >
-            <DownloadIcon className="h-4 w-4" />
-            {l.label} (.csv)
-          </a>
-        ))}
-      </div>
-    </Card>
   );
 }
 
@@ -313,7 +166,7 @@ function MonthStep({
       type="button"
       aria-label={label}
       onClick={onClick}
-      className="flex h-8 w-8 items-center justify-center rounded-full text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-2 focus-visible:outline-slate-400"
+      className="flex h-8 w-8 items-center justify-center rounded-full pointer-coarse:h-10 pointer-coarse:w-10 text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-2 focus-visible:outline-slate-400"
     >
       {children}
     </button>

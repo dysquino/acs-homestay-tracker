@@ -6,4 +6,4 @@
  */
 
 /** Default cleaner fee pre-filled on auto-created turnover records. */
-export const DEFAULT_CLEANING_FEE = 800;
+export const DEFAULT_CLEANING_FEE = 500;
