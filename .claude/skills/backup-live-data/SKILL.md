@@ -21,6 +21,16 @@ Options, only when the user asks for something different:
 
 Each run creates `<out>/YYYY-MM-DD_HHMMSS/` with `bookings.csv`, `expenses.csv`, `cleaning.csv` and `manifest.json` (source, time, and per table: rows, bytes, SHA-256). It's all-or-nothing: if any table fails, the partial folder is removed, so a folder that exists is always a complete backup.
 
+## Automatic daily backups
+
+`.github/workflows/backup.yml` runs the same script every night at 02:00 Manila time (and on demand from GitHub → Actions → **Daily backup** → **Run workflow**). The repository is public, so it encrypts the backup with `scripts/backup-crypto.mjs` before saving it as a run artifact, kept 90 days. To open one, download the artifact (a zip containing a `.acsbackup` file), then:
+
+```bash
+node .claude/skills/backup-live-data/scripts/backup-crypto.mjs decrypt <file.acsbackup> <folder>
+```
+
+It needs `BACKUP_ENCRYPTION_KEY` — the same value as the GitHub secret — in the environment or `.env.local`. A wrong key or a damaged file fails with a clear message rather than producing garbage. If someone asks for a backup "from last week", it's probably one of these artifacts rather than a new run.
+
 ## The access code
 
 The site is behind a shared-password gate. The script reads the code from `BACKUP_SITE_PASSWORD` — in the environment, or in the repo's `.env.local` (gitignored). It's a different name from `SITE_PASSWORD` because that one would also switch the gate on for local development.
