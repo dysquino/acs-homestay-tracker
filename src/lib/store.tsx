@@ -12,6 +12,12 @@ import {
 } from "react";
 
 import {
+  approveBookingRequest,
+  declineBookingRequest,
+  listBookingRequests,
+  type DecideResult,
+} from "./data/booking-requests";
+import {
   createBooking,
   deleteBooking as deleteBookingAction,
   listBookings,
@@ -31,7 +37,14 @@ import {
 } from "./data/expenses";
 import { importAirbnbBookings, type ImportInstruction, type ImportResult } from "./data/import";
 import { useIdentity } from "./identity";
-import type { Booking, BookingInput, CleaningRecord, Expense, ExpenseInput } from "./types";
+import type {
+  Booking,
+  BookingInput,
+  BookingRequest,
+  CleaningRecord,
+  Expense,
+  ExpenseInput,
+} from "./types";
 
 export { DEFAULT_CLEANING_FEE } from "./constants";
 
@@ -44,7 +57,7 @@ export { DEFAULT_CLEANING_FEE } from "./constants";
  * one place that knows how data gets in and out.
  *
  * Mutations use a refresh-after-write pattern: after a create/update/delete
- * resolves, all three lists are refetched from the server rather than
+ * resolves, all the lists are refetched from the server rather than
  * patched optimistically in local state. Simpler and less error-prone than
  * mirroring the server's cross-table logic (e.g. a booking's auto-created
  * turnover cleaning, or a paid cleaning's expense) in the client, at the
@@ -60,6 +73,8 @@ type Data = {
   bookings: Booking[];
   expenses: Expense[];
   cleaning: CleaningRecord[];
+  /** Guests' pending requests from the booking link. */
+  bookingRequests: BookingRequest[];
 };
 
 type StoreValue = Data & {
@@ -92,11 +107,14 @@ type StoreValue = Data & {
     patch: Partial<Omit<CleaningRecord, "id">>,
   ) => Promise<void>;
   deleteCleaning: (id: string) => Promise<void>;
+  /** Resolves with the created booking, or an error to show (e.g. dates taken). */
+  approveRequest: (id: string) => Promise<DecideResult>;
+  declineRequest: (id: string) => Promise<DecideResult>;
 };
 
 const StoreContext = createContext<StoreValue | null>(null);
 
-const EMPTY: Data = { bookings: [], expenses: [], cleaning: [] };
+const EMPTY: Data = { bookings: [], expenses: [], cleaning: [], bookingRequests: [] };
 
 export function StoreProvider({ children }: { children: ReactNode }) {
   const { user } = useIdentity();
@@ -117,14 +135,19 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const request = ++latest.current;
     let lists;
     try {
-      lists = await Promise.all([listBookings(), listExpenses(), listCleaning()]);
+      lists = await Promise.all([
+        listBookings(),
+        listExpenses(),
+        listCleaning(),
+        listBookingRequests(),
+      ]);
     } catch (error) {
       if (request !== latest.current) return false;
       throw error;
     }
     if (request !== latest.current) return false;
-    const [bookings, expenses, cleaning] = lists;
-    setData({ bookings, expenses, cleaning });
+    const [bookings, expenses, cleaning, bookingRequests] = lists;
+    setData({ bookings, expenses, cleaning, bookingRequests });
     return true;
   }, []);
 
@@ -240,6 +263,24 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [refresh],
   );
 
+  const approveRequest = useCallback(
+    async (id: string) => {
+      const result = await approveBookingRequest(id, actor);
+      await refresh();
+      return result;
+    },
+    [refresh, actor],
+  );
+
+  const declineRequest = useCallback(
+    async (id: string) => {
+      const result = await declineBookingRequest(id, actor);
+      await refresh();
+      return result;
+    },
+    [refresh, actor],
+  );
+
   const value = useMemo<StoreValue>(
     () => ({
       ...data,
@@ -258,6 +299,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       addCleaning,
       updateCleaning,
       deleteCleaning,
+      approveRequest,
+      declineRequest,
     }),
     [
       data,
@@ -276,6 +319,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       addCleaning,
       updateCleaning,
       deleteCleaning,
+      approveRequest,
+      declineRequest,
     ],
   );
 

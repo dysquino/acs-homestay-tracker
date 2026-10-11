@@ -1,0 +1,79 @@
+"use server";
+
+import { homestayToday, isValidBookingKey } from "@/lib/booking-link";
+import { prisma } from "@/lib/prisma";
+import type { BookingRequestInput } from "@/lib/types";
+import { ValidationError, validateBookingRequest } from "@/lib/validation";
+
+import { isoToDate } from "./mappers";
+
+/**
+ * The ONE server action guests can call — from the private booking page,
+ * without the site's access code. Instead of requireSiteAccess() it checks
+ * the booking link's key, and it can only ever add a pending request: it
+ * reads nothing back and touches no other table. Everything a guest sends is
+ * re-validated here; the form's own checks are just for a friendly UX.
+ *
+ * Returns a result instead of throwing, because production hides thrown
+ * error messages from the browser and the guest needs to know what's wrong.
+ */
+
+export type SubmitResult = { ok: true } | { ok: false; error: string };
+
+/** Open requests one guest may have at once, and in total — a spam brake. */
+const MAX_PENDING_PER_CONTACT = 2;
+const MAX_PENDING_TOTAL = 30;
+
+const normalizeContact = (s: string) => s.toLowerCase().replace(/[\s\-()+.]/g, "");
+
+export async function submitBookingRequest(
+  key: string,
+  input: BookingRequestInput & { website?: string },
+): Promise<SubmitResult> {
+  if (!isValidBookingKey(key)) {
+    return { ok: false, error: "This booking link isn't valid anymore. Please ask us for a new one." };
+  }
+  // Honeypot: a field people never see. Bots fill it in — pretend it worked.
+  if (input?.website) return { ok: true };
+
+  const request: BookingRequestInput = {
+    guestName: String(input?.guestName ?? "").trim(),
+    contactInfo: String(input?.contactInfo ?? "").trim(),
+    checkIn: String(input?.checkIn ?? ""),
+    checkOut: String(input?.checkOut ?? ""),
+    guestsCount: Number(input?.guestsCount),
+    message: String(input?.message ?? "").trim(),
+  };
+  try {
+    validateBookingRequest(request, homestayToday());
+  } catch (e) {
+    if (e instanceof ValidationError) return { ok: false, error: e.message };
+    throw e;
+  }
+
+  const checkIn = isoToDate(request.checkIn);
+  const checkOut = isoToDate(request.checkOut);
+  const taken = await prisma.booking.count({
+    where: { checkIn: { lt: checkOut }, checkOut: { gt: checkIn } },
+  });
+  if (taken > 0) {
+    return { ok: false, error: "Sorry, some of those nights were just booked. Please pick other dates." };
+  }
+
+  const pending = await prisma.bookingRequest.findMany({
+    where: { status: "PENDING" },
+    select: { contactInfo: true },
+  });
+  if (pending.length >= MAX_PENDING_TOTAL) {
+    return { ok: false, error: "We can't take new requests online right now. Please message us directly." };
+  }
+  const mine = normalizeContact(request.contactInfo);
+  if (pending.filter((p) => normalizeContact(p.contactInfo) === mine).length >= MAX_PENDING_PER_CONTACT) {
+    return { ok: false, error: "You already have requests waiting for our reply — we'll get back to you soon." };
+  }
+
+  await prisma.bookingRequest.create({
+    data: { ...request, checkIn, checkOut },
+  });
+  return { ok: true };
+}

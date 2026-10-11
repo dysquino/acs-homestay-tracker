@@ -11,6 +11,7 @@ import {
   type Sort,
 } from "@/components/bookings/booking-table";
 import { BookingForm } from "@/components/bookings/booking-form";
+import { BookingRequests, ShareBookingLink } from "@/components/bookings/booking-requests";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Field, Select } from "@/components/ui/field";
@@ -109,7 +110,8 @@ export default function BookingsPage() {
         title="Bookings"
         description="Airbnb and direct reservations in one place."
         action={
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <ShareBookingLink />
             <Button onClick={() => setImportOpen(true)}>Import Airbnb CSV</Button>
             <Button variant="primary" onClick={openAdd}>
               <PlusIcon className="h-4 w-4" />
@@ -118,6 +120,8 @@ export default function BookingsPage() {
           </div>
         }
       />
+
+      <BookingRequests onApproved={openEdit} />
 
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <div className="inline-flex rounded-md bg-slate-100 p-0.5">

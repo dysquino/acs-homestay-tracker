@@ -46,7 +46,11 @@ export const config = {
   // two public brand images. The logo is fetched by the image optimizer (which
   // is exempt), but the optimizer then requests the file itself — gating it
   // would hand the optimizer the login page and break the logo on the gate.
+  //
+  // `book$` is the guests' booking page — exactly /book, not /bookings. It
+  // checks its own link key, and every server action checks access itself
+  // (src/lib/data/access.ts), so opening the page exposes no data.
   matcher: [
-    "/((?!gate|_next/static|_next/image|favicon.ico|icon.jpg|acshomestay_logo.jpg).*)",
+    "/((?!gate|book$|_next/static|_next/image|favicon.ico|icon.jpg|acshomestay_logo.jpg).*)",
   ],
 };

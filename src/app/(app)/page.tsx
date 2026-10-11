@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState, type ReactNode } from "react";
 
 import { CashFlowChart, type ChartRange } from "@/components/dashboard/cash-flow-chart";
@@ -28,7 +29,7 @@ import { useStore } from "@/lib/store";
 const WEEK_DAYS = 7;
 
 export default function DashboardPage() {
-  const { bookings, expenses, cleaning } = useStore();
+  const { bookings, expenses, cleaning, bookingRequests } = useStore();
   const { user } = useIdentity();
   const t = today();
   const currentMonth = startOfMonth(t);
@@ -106,6 +107,21 @@ export default function DashboardPage() {
           ) : null}
         </div>
       </div>
+
+      {bookingRequests.length > 0 ? (
+        <Link
+          href="/bookings"
+          className="mb-5 flex items-center justify-between gap-3 rounded-2xl bg-brand-50 px-4 py-3 text-sm text-brand-900 ring-1 ring-brand-200 transition-colors hover:bg-brand-100"
+        >
+          <span>
+            <span className="font-semibold">
+              {bookingRequests.length} new booking request{bookingRequests.length === 1 ? "" : "s"}
+            </span>{" "}
+            from your booking link
+          </span>
+          <span className="shrink-0 font-medium">Review →</span>
+        </Link>
+      ) : null}
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-12 [&>*]:min-w-0">
         <div className="lg:col-span-4">

@@ -7,6 +7,7 @@ import { useRef, type ComponentType, type ReactNode, type SVGProps } from "react
 
 import { cn } from "@/lib/cn";
 import { ACCOUNTS, useIdentity } from "@/lib/identity";
+import { useStore } from "@/lib/store";
 import {
   CalendarIcon,
   DownloadIcon,
@@ -38,6 +39,17 @@ function isActive(pathname: string, href: string): boolean {
 
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
+  // Guests' booking requests waiting for a reply — shown on the Bookings tab.
+  const requests = useStore().bookingRequests.length;
+  const badge = (href: string) =>
+    href === "/bookings" && requests > 0 ? (
+      <span
+        aria-label={`${requests} new booking request${requests === 1 ? "" : "s"}`}
+        className="ml-auto min-w-5 rounded-full bg-red-600 px-1.5 text-center text-[11px] leading-5 font-semibold text-white"
+      >
+        {requests}
+      </span>
+    ) : null;
 
   return (
     <div className="flex min-h-full flex-col lg:flex-row">
@@ -65,6 +77,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               >
                 <item.icon className="h-4.5 w-4.5" />
                 {item.label}
+                {badge(item.href)}
               </Link>
             );
           })}
@@ -107,7 +120,12 @@ export function AppShell({ children }: { children: ReactNode }) {
                 active ? "text-brand-700" : "text-slate-500",
               )}
             >
-              <item.icon className="h-5 w-5" />
+              <span className="relative">
+                <item.icon className="h-5 w-5" />
+                {badge(item.href) ? (
+                  <span className="absolute -top-1.5 -right-2.5">{badge(item.href)}</span>
+                ) : null}
+              </span>
               {item.short}
             </Link>
           );

@@ -4,6 +4,7 @@ import type { BookingInput, CleaningRecord, ExpenseInput } from "../types";
 import {
   isValidISODate,
   validateBooking,
+  validateBookingRequest,
   validateCleaning,
   validateExpense,
 } from "../validation";
@@ -102,5 +103,42 @@ describe("cleanings", () => {
     ["bad payment status", { paymentStatus: "maybe" as never }],
   ])("rejects %s", (_name, override) => {
     expect(() => validateCleaning({ ...clean, ...override })).toThrow();
+  });
+});
+
+describe("validateBookingRequest (guests' booking page)", () => {
+  const today = "2026-10-11";
+  const ok = {
+    guestName: "Maria",
+    contactInfo: "0917 555 0143",
+    checkIn: "2026-11-02",
+    checkOut: "2026-11-05",
+    guestsCount: 2,
+    message: "",
+  };
+  const v = (o: Partial<typeof ok>) => () => validateBookingRequest({ ...ok, ...o }, today);
+
+  it("accepts a normal request, including check-in today", () => {
+    expect(v({})).not.toThrow();
+    expect(v({ checkIn: today, checkOut: "2026-10-12" })).not.toThrow();
+  });
+
+  it("requires a name and a way to reach the guest", () => {
+    expect(v({ guestName: "  " })).toThrow(/name/i);
+    expect(v({ contactInfo: "" })).toThrow(/contact/i);
+  });
+
+  it("rejects past dates, inverted dates, long stays and far-future dates", () => {
+    expect(v({ checkIn: "2026-10-10", checkOut: "2026-10-12" })).toThrow(/past/);
+    expect(v({ checkOut: "2026-11-02" })).toThrow(/after check-in/);
+    expect(v({ checkOut: "2026-12-03" })).toThrow(/at most 30 nights/);
+    expect(v({ checkIn: "2027-11-01", checkOut: "2027-11-03" })).toThrow(/within the next year/);
+  });
+
+  it("limits guests and text length", () => {
+    expect(v({ guestsCount: 0 })).toThrow(/guests/);
+    expect(v({ guestsCount: 2.5 })).toThrow(/guests/);
+    expect(v({ guestsCount: 21 })).toThrow(/guests/);
+    expect(v({ message: "x".repeat(1001) })).toThrow(/too long/);
   });
 });

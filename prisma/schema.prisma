@@ -100,6 +100,8 @@ model Booking {
   /// Unique, so importing the same file twice can never create a duplicate.
   confirmationCode String?            @unique
   cleanings        CleaningSchedule[]
+  /// The guest's request this booking was approved from, if any.
+  request          BookingRequest?
   createdAt        DateTime           @default(now())
   updatedAt        DateTime           @updatedAt
 
@@ -143,4 +145,33 @@ model CleaningSchedule {
   updatedAt     DateTime              @updatedAt
 
   @@index([date, cleanerName])
+}
+
+enum BookingRequestStatus {
+  PENDING
+  APPROVED
+  DECLINED
+}
+
+/// A stay a guest asked for through the private booking link (/book).
+/// Requests don't block the calendar — only approving one creates a real
+/// (Direct, payment pending) Booking, which is linked back here.
+model BookingRequest {
+  id          String               @id @default(cuid())
+  guestName   String
+  contactInfo String
+  checkIn     DateTime
+  checkOut    DateTime
+  guestsCount Int
+  message     String               @default("")
+  status      BookingRequestStatus @default(PENDING)
+  /// Set when approved. SetNull: deleting the booking later keeps the
+  /// request as a record of what was asked for.
+  bookingId   String?              @unique
+  booking     Booking?             @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+  decidedBy   String?
+  decidedAt   DateTime?
+  createdAt   DateTime             @default(now())
+
+  @@index([status, createdAt])
 }
