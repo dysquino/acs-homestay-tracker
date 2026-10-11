@@ -112,6 +112,11 @@ type StoreValue = Data & {
   declineRequest: (id: string) => Promise<DecideResult>;
 };
 
+/** Background re-read while the app is open and visible (see StoreProvider). */
+const AUTO_REFRESH_MS = 60_000;
+/** Switching tabs back and forth doesn't re-read more often than this. */
+const MIN_REFRESH_GAP_MS = 10_000;
+
 const StoreContext = createContext<StoreValue | null>(null);
 
 const EMPTY: Data = { bookings: [], expenses: [], cleaning: [], bookingRequests: [] };
@@ -173,6 +178,34 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     load();
   }, [load]);
+
+  // Keep the screen current with changes made elsewhere — a guest's new
+  // booking request, or a co-owner editing on another device: re-read the
+  // data when the tab comes back into view, and every minute while it's
+  // visible. Read-only by construction: it only calls the list actions in
+  // fetchAll, never a write. It doesn't disturb open forms (they keep their
+  // own copy of the fields) and the newest-request rule above means it can't
+  // overwrite the result of a save. A failed background read is ignored —
+  // the data on screen stays, and the next tick tries again.
+  const lastFetch = useRef(0);
+  useEffect(() => {
+    if (!ready) return;
+    const quietRefresh = () => {
+      if (document.visibilityState !== "visible") return;
+      if (Date.now() - lastFetch.current < MIN_REFRESH_GAP_MS) return;
+      lastFetch.current = Date.now();
+      fetchAll().catch(() => {});
+    };
+    lastFetch.current = Date.now();
+    const timer = window.setInterval(quietRefresh, AUTO_REFRESH_MS);
+    document.addEventListener("visibilitychange", quietRefresh);
+    window.addEventListener("focus", quietRefresh);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", quietRefresh);
+      window.removeEventListener("focus", quietRefresh);
+    };
+  }, [ready, fetchAll]);
 
   const reload = useCallback(() => {
     setLoadError(false);
