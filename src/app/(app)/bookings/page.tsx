@@ -11,6 +11,7 @@ import {
   type Sort,
 } from "@/components/bookings/booking-table";
 import { BookingForm } from "@/components/bookings/booking-form";
+import { AirbnbSyncStatus } from "@/components/bookings/airbnb-sync";
 import { BookingRequests, ShareBookingLink } from "@/components/bookings/booking-requests";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -34,7 +35,7 @@ import {
 type View = "list" | "calendar";
 
 export default function BookingsPage() {
-  const { bookings, cleaning, deleteBooking } = useStore();
+  const { bookings, cleaning, airbnbBlocks, deleteBooking } = useStore();
 
   const [view, setView] = useState<View>("calendar");
   const [formOpen, setFormOpen] = useState(false);
@@ -121,6 +122,8 @@ export default function BookingsPage() {
         }
       />
 
+      <AirbnbSyncStatus />
+
       <BookingRequests onApproved={openEdit} />
 
       <div className="mb-4 flex flex-wrap items-center gap-2">
@@ -198,7 +201,7 @@ export default function BookingsPage() {
       ) : (
         <Card>
           <div className="p-3 sm:p-4">
-            <BookingCalendar bookings={bookings} onSelect={openEdit} />
+            <BookingCalendar bookings={bookings} airbnbBlocks={airbnbBlocks} onSelect={openEdit} />
           </div>
         </Card>
       )}

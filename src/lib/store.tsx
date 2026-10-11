@@ -11,6 +11,9 @@ import {
   type ReactNode,
 } from "react";
 
+import type { AirbnbReservation } from "./airbnb-ical";
+import { listAirbnbBlocks } from "./data/airbnb";
+import type { AirbnbSyncStatus } from "./data/airbnb-calendar";
 import {
   approveBookingRequest,
   declineBookingRequest,
@@ -75,6 +78,9 @@ type Data = {
   cleaning: CleaningRecord[];
   /** Guests' pending requests from the booking link. */
   bookingRequests: BookingRequest[];
+  /** Airbnb reservations not in the app yet — they block direct bookings. */
+  airbnbBlocks: AirbnbReservation[];
+  airbnbStatus: AirbnbSyncStatus;
 };
 
 type StoreValue = Data & {
@@ -119,7 +125,14 @@ const MIN_REFRESH_GAP_MS = 10_000;
 
 const StoreContext = createContext<StoreValue | null>(null);
 
-const EMPTY: Data = { bookings: [], expenses: [], cleaning: [], bookingRequests: [] };
+const EMPTY: Data = {
+  bookings: [],
+  expenses: [],
+  cleaning: [],
+  bookingRequests: [],
+  airbnbBlocks: [],
+  airbnbStatus: { enabled: false, fetchedAt: null, error: null },
+};
 
 export function StoreProvider({ children }: { children: ReactNode }) {
   const { user } = useIdentity();
@@ -145,14 +158,22 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         listExpenses(),
         listCleaning(),
         listBookingRequests(),
+        listAirbnbBlocks(),
       ]);
     } catch (error) {
       if (request !== latest.current) return false;
       throw error;
     }
     if (request !== latest.current) return false;
-    const [bookings, expenses, cleaning, bookingRequests] = lists;
-    setData({ bookings, expenses, cleaning, bookingRequests });
+    const [bookings, expenses, cleaning, bookingRequests, airbnb] = lists;
+    setData({
+      bookings,
+      expenses,
+      cleaning,
+      bookingRequests,
+      airbnbBlocks: airbnb.blocks,
+      airbnbStatus: airbnb.status,
+    });
     return true;
   }, []);
 
@@ -182,10 +203,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   // Keep the screen current with changes made elsewhere — a guest's new
   // booking request, or a co-owner editing on another device: re-read the
   // data when the tab comes back into view, and every minute while it's
-  // visible. Read-only by construction: it only calls the list actions in
-  // fetchAll, never a write. It doesn't disturb open forms (they keep their
-  // own copy of the fields) and the newest-request rule above means it can't
-  // overwrite the result of a save. A failed background read is ignored —
+  // visible. Read-only for the app's data: it only calls the list actions in
+  // fetchAll, never a write (reading the Airbnb feed may refresh its own
+  // cache row — never bookings, expenses, cleaning or requests). It
+  // doesn't disturb open forms (they keep their own copy of the fields) and
+  // the newest-request rule above means it can't overwrite a save's result. A failed background read is ignored —
   // the data on screen stays, and the next tick tries again.
   const lastFetch = useRef(0);
   useEffect(() => {

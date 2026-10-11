@@ -50,7 +50,9 @@ export const config = {
   // `book$` is the guests' booking page — exactly /book, not /bookings. It
   // checks its own link key, and every server action checks access itself
   // (src/lib/data/access.ts), so opening the page exposes no data.
+  // `api/calendar/` is the direct-bookings feed Airbnb imports; Airbnb can't
+  // log in, so it checks the secret key in its own URL instead.
   matcher: [
-    "/((?!gate|book$|_next/static|_next/image|favicon.ico|icon.jpg|acshomestay_logo.jpg).*)",
+    "/((?!gate|book$|api/calendar/|_next/static|_next/image|favicon.ico|icon.jpg|acshomestay_logo.jpg).*)",
   ],
 };

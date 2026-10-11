@@ -14,6 +14,7 @@ import {
   today,
 } from "@/lib/dates";
 import { formatCurrency, formatMonth } from "@/lib/format";
+import { blockAsBooking, isAirbnbBlock, type AirbnbReservation } from "@/lib/airbnb-ical";
 import type { Booking, ISODate } from "@/lib/types";
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -78,9 +79,12 @@ function layoutWeek(weekStart: ISODate, bookings: Booking[]): Bar[] {
 
 export function BookingCalendar({
   bookings,
+  airbnbBlocks = [],
   onSelect,
 }: {
   bookings: Booking[];
+  /** Airbnb reservations not in the app yet — drawn striped, not clickable. */
+  airbnbBlocks?: AirbnbReservation[];
   onSelect: (booking: Booking) => void;
 }) {
   const [cursor, setCursor] = useState<ISODate>(() => startOfMonth(today()));
@@ -90,9 +94,9 @@ export function BookingCalendar({
     const days = monthGrid(cursor);
     return Array.from({ length: 6 }, (_, w) => {
       const weekDays = days.slice(w * 7, w * 7 + 7);
-      return { days: weekDays, bars: layoutWeek(weekDays[0], bookings) };
+      return { days: weekDays, bars: layoutWeek(weekDays[0], [...bookings, ...airbnbBlocks.map(blockAsBooking)]) };
     });
-  }, [cursor, bookings]);
+  }, [cursor, bookings, airbnbBlocks]);
 
   return (
     <div>
@@ -189,7 +193,25 @@ export function BookingCalendar({
                   className="pointer-events-none relative grid grid-cols-7 gap-y-0.5 px-0.5"
                   style={{ paddingTop: HEADER_SPACE }}
                 >
-                  {week.bars.map((bar) => (
+                  {week.bars.map((bar) =>
+                    isAirbnbBlock(bar.booking) ? (
+                      <div
+                        key={bar.booking.id}
+                        title={`${bar.booking.guestName} · ${bar.booking.checkIn} → ${bar.booking.checkOut} — appears as a booking once you import your Airbnb CSV`}
+                        style={{
+                          gridColumn: `${bar.start + 1} / span ${bar.span}`,
+                          gridRow: bar.lane + 1,
+                          height: BAR_HEIGHT - 4,
+                          backgroundImage:
+                            "repeating-linear-gradient(135deg, rgb(255 241 242) 0 6px, rgb(254 205 211) 6px 12px)",
+                        }}
+                        className={`pointer-events-auto mx-0.5 flex items-center overflow-hidden border border-dashed border-airbnb-600 px-1 text-[11px] font-medium text-airbnb-700 sm:px-1.5 ${
+                          bar.opensLeft ? "rounded-l-md" : "rounded-l-none"
+                        } ${bar.closesRight ? "rounded-r-md" : "rounded-r-none"}`}
+                      >
+                        <span className="truncate">Airbnb · not imported</span>
+                      </div>
+                    ) : (
                     <button
                       key={bar.booking.id}
                       type="button"
@@ -210,7 +232,8 @@ export function BookingCalendar({
                     >
                       <span className="truncate">{bar.booking.guestName}</span>
                     </button>
-                  ))}
+                    ),
+                  )}
                 </div>
               </div>
             );

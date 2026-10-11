@@ -15,6 +15,7 @@ import { Modal } from "@/components/ui/modal";
 import { useIdentity } from "@/lib/identity";
 import { addDays, nightCount, today } from "@/lib/dates";
 import { formatDateRange } from "@/lib/format";
+import { blockAsBooking, isAirbnbBlock } from "@/lib/airbnb-ical";
 import { findConflicts } from "@/lib/selectors";
 import { useStore } from "@/lib/store";
 import { useSubmit, type Submit } from "@/lib/use-submit";
@@ -122,7 +123,7 @@ function BookingFields({
   submit: Submit;
   onBlockedChange: (blocked: boolean) => void;
 }) {
-  const { bookings, addBooking, updateBooking } = useStore();
+  const { bookings, airbnbBlocks, addBooking, updateBooking } = useStore();
   const { user } = useIdentity();
   const [form, setForm] = useState<FormState>(() => initialState(booking));
   const [errors, setErrors] = useState<Partial<Record<keyof FormState, string>>>(
@@ -133,16 +134,29 @@ function BookingFields({
   const set = <K extends keyof FormState>(key: K, value: FormState[K]) =>
     setForm((f) => ({ ...f, [key]: value }));
 
+  // A direct booking must also stay clear of Airbnb reservations not imported
+  // yet (the server checks the same). Airbnb bookings aren't held to that:
+  // Airbnb already keeps its own reservations apart.
   const conflicts = useMemo(
-    () => findConflicts(bookings, form.checkIn, form.checkOut, booking?.id),
-    [bookings, form.checkIn, form.checkOut, booking?.id],
+    () =>
+      findConflicts(
+        form.source === "direct" ? [...bookings, ...airbnbBlocks.map(blockAsBooking)] : bookings,
+        form.checkIn,
+        form.checkOut,
+        booking?.id,
+      ),
+    [bookings, airbnbBlocks, form.source, form.checkIn, form.checkOut, booking?.id],
   );
 
-  // Double bookings aren't allowed. When editing, only new dates are held to
-  // that, so a booking that overlapped from before the rule can still be
-  // updated (the server applies the same rule).
+  // Double bookings aren't allowed. When editing, only new dates (or a switch
+  // to Direct, which brings in the Airbnb check) are held to that, so a
+  // booking that overlapped from before the rule can still be updated (the
+  // server applies the same rule).
   const datesChanged =
-    !booking || form.checkIn !== booking.checkIn || form.checkOut !== booking.checkOut;
+    !booking ||
+    form.checkIn !== booking.checkIn ||
+    form.checkOut !== booking.checkOut ||
+    (form.source === "direct" && booking.source !== "direct");
   const overlapBlocked = conflicts.length > 0 && datesChanged;
   // Checked live, not just on submit: an inverted range can't be saved, and
   // while it's inverted the overlap check above can't run either.
@@ -290,7 +304,9 @@ function BookingFields({
                 </ul>
                 <p className="mt-1.5">
                   {overlapBlocked
-                    ? "Double bookings aren't allowed. Change the dates to save — or delete the other booking first if it was cancelled."
+                    ? conflicts.some(isAirbnbBlock)
+                  ? "Double bookings aren't allowed. Change the dates to save. (If the Airbnb reservation was cancelled, it frees up within about 10 minutes.)"
+                  : "Double bookings aren't allowed. Change the dates to save — or delete the other booking first if it was cancelled."
                     : "This booking already overlapped before double bookings were blocked. You can still update it, but its dates can't be moved to another overlap."}
                 </p>
               </div>

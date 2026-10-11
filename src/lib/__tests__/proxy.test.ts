@@ -35,4 +35,11 @@ describe("access gate matcher", () => {
       expect(gated(path), path).toBe(true);
     }
   });
+
+  it("opens the Airbnb calendar feed path only — not the other API routes", () => {
+    expect(gated("/api/calendar/some-key.ics")).toBe(false);
+    for (const path of ["/api/export/bookings", "/api/calendar", "/api/calendars/x"]) {
+      expect(gated(path), path).toBe(true);
+    }
+  });
 });
