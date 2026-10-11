@@ -3,7 +3,6 @@ import { Geist, Geist_Mono } from "next/font/google";
 import type { ReactNode } from "react";
 
 import { IdentityProvider } from "@/lib/identity";
-import { StoreProvider } from "@/lib/store";
 
 import "./globals.css";
 
@@ -37,7 +36,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     >
       <body className="flex min-h-full flex-col">
         <IdentityProvider>
-          <StoreProvider>{children}</StoreProvider>
+          {children}
         </IdentityProvider>
       </body>
     </html>

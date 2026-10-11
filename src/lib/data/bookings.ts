@@ -11,9 +11,11 @@ import {
   bookingToDb,
   isoToDate,
 } from "./mappers";
+import { requireSiteAccess } from "./access";
 import { assertNoOverlap } from "./overlap";
 
 export async function listBookings(): Promise<Booking[]> {
+  await requireSiteAccess();
   const rows = await prisma.booking.findMany({ orderBy: { checkIn: "asc" } });
   return rows.map(bookingFromDb);
 }
@@ -27,6 +29,7 @@ export async function listBookings(): Promise<Booking[]> {
 export async function createBooking(
   input: BookingInput,
 ): Promise<Booking> {
+  await requireSiteAccess();
   validateBooking(input);
   const booking = await prisma.$transaction(async (tx) => {
     await assertNoOverlap(tx, isoToDate(input.checkIn), isoToDate(input.checkOut));
@@ -59,6 +62,7 @@ export async function updateBooking(
   id: string,
   patch: Partial<BookingInput>,
 ): Promise<void> {
+  await requireSiteAccess();
   await prisma.$transaction(async (tx) => {
     const existing = await tx.booking.findUniqueOrThrow({ where: { id } });
     const current = bookingFromDb(existing);
@@ -99,6 +103,7 @@ export async function deleteBooking(
   id: string,
   { withCleanings = false }: { withCleanings?: boolean } = {},
 ): Promise<void> {
+  await requireSiteAccess();
   await prisma.$transaction(async (tx) => {
     if (withCleanings) {
       await tx.cleaningSchedule.deleteMany({ where: { bookingId: id } });
