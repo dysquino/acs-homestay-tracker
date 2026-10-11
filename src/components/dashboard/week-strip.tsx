@@ -31,7 +31,7 @@ export function WeekStrip({ events, today }: { events: UpcomingEvent[]; today: I
           </LinkButton>
         }
       />
-      <ol className="grid grid-cols-1 gap-2 px-4 pt-2 pb-5 sm:grid-cols-7 sm:px-5">
+      <ol className="grid grid-cols-1 gap-2 px-4 pt-2 pb-5 sm:px-5 xl:grid-cols-7">
         {days.map((date) => {
           const dayEvents = events.filter((e) => e.date === date);
           const isToday = date === today;
@@ -39,11 +39,11 @@ export function WeekStrip({ events, today }: { events: UpcomingEvent[]; today: I
             <li
               key={date}
               className={cn(
-                "flex gap-3 rounded-2xl p-3 sm:min-h-28 sm:flex-col sm:gap-2",
+                "flex gap-3 rounded-2xl p-3 xl:min-h-28 xl:flex-col xl:gap-2",
                 isToday ? "bg-brand-50" : "bg-slate-50",
               )}
             >
-              <div className="w-14 shrink-0 sm:w-auto">
+              <div className="w-14 shrink-0 xl:w-auto">
                 <p className="text-[11px] font-medium text-slate-500 uppercase">
                   {isToday ? "Today" : formatWeekday(date)}
                 </p>

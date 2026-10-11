@@ -350,7 +350,7 @@ function Segmented<T extends string | number>({
           aria-pressed={o.value === value}
           onClick={() => onChange(o.value)}
           className={cn(
-            "rounded-full px-3 py-1 text-xs font-medium transition-colors",
+            "rounded-full px-3 py-1 text-xs font-medium transition-colors pointer-coarse:py-2",
             o.value === value
               ? "bg-brand-700 text-white shadow-sm"
               : "text-slate-600 hover:text-slate-900",

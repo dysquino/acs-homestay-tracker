@@ -1,13 +1,14 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 
 import { PaymentBadge, SourceBadge } from "@/components/ui/badge";
 import {
   CardList,
-  CardRow,
+  CompactRow,
   EmptyState,
   RowActions,
+  RowTitle,
   Table,
   TableWrap,
   Td,
@@ -15,10 +16,13 @@ import {
   Thead,
   Tr,
 } from "@/components/ui/table";
+import { DetailSheet } from "@/components/ui/detail-sheet";
+import { Pagination } from "@/components/ui/pagination";
 import { nightCount } from "@/lib/dates";
 import { formatCurrency, formatDate, formatShortDate } from "@/lib/format";
 import { bookingNetIncome } from "@/lib/selectors";
 import type { Booking } from "@/lib/types";
+import { usePagination } from "@/lib/use-pagination";
 
 /**
  * One row per booking. Cards cost ~260px of height each, which stops working
@@ -69,14 +73,24 @@ export function BookingTable({
   onEdit,
   onDelete,
   emptyAction,
+  resetKey,
 }: {
   bookings: Booking[];
+  /** Changes with the page's filters/sort — sends the table back to page 1. */
+  resetKey: string;
   sort: Sort;
   onSortChange: (sort: Sort) => void;
   onEdit: (booking: Booking) => void;
   onDelete: (booking: Booking) => void;
   emptyAction?: ReactNode;
 }) {
+  // Totals below cover every filtered booking; only the rows are paged.
+  const paging = usePagination(bookings, resetKey);
+  // The booking whose details are open; looked up fresh so an edit shows.
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const selected = bookings.find((b) => b.id === selectedId) ?? null;
+  const setSelected = (b: Booking | null) => setSelectedId(b?.id ?? null);
+
   if (bookings.length === 0) {
     return (
       <EmptyState
@@ -102,28 +116,15 @@ export function BookingTable({
   return (
     <>
       <CardList>
-        {bookings.map((b) => (
-          <CardRow key={b.id}>
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <p className="truncate font-medium text-slate-900">{b.guestName}</p>
-                <p className="mt-0.5 text-xs text-slate-500">
-                  {formatShortDate(b.checkIn)} → {formatShortDate(b.checkOut)} ·{" "}
-                  {nightCount(b.checkIn, b.checkOut)}n
-                </p>
-              </div>
-              <p className="shrink-0 font-semibold text-slate-900">
-                {formatCurrency(bookingNetIncome(b))}
-              </p>
-            </div>
-            <div className="mt-2 flex items-center justify-between gap-2">
-              <div className="flex items-center gap-1.5">
-                <SourceBadge source={b.source} />
-                <PaymentBadge status={b.paymentStatus} />
-              </div>
-              <RowActions onEdit={() => onEdit(b)} onDelete={() => onDelete(b)} />
-            </div>
-          </CardRow>
+        {paging.pageItems.map((b) => (
+          <CompactRow
+            key={b.id}
+            onOpen={() => setSelected(b)}
+            title={b.guestName}
+            subtitle={`${formatShortDate(b.checkIn)} → ${formatShortDate(b.checkOut)} · ${nightCount(b.checkIn, b.checkOut)}n`}
+            amount={formatCurrency(bookingNetIncome(b))}
+            tags={<PaymentBadge status={b.paymentStatus} />}
+          />
         ))}
         <li className="flex items-baseline justify-between gap-3 bg-slate-50 px-4 py-2.5 text-sm">
           <span className="font-medium text-slate-700">{count}</span>
@@ -157,11 +158,13 @@ export function BookingTable({
             </Th>
           </Thead>
           <tbody className="divide-y divide-slate-100">
-            {bookings.map((b) => (
+            {paging.pageItems.map((b) => (
               <Tr key={b.id}>
                 <Td>
                   <div className="flex max-w-sm items-baseline gap-2">
-                    <span className="shrink-0 font-medium text-slate-900">{b.guestName}</span>
+                    <span className="shrink-0">
+                      <RowTitle onOpen={() => setSelected(b)}>{b.guestName}</RowTitle>
+                    </span>
                     {b.contactInfo || b.notes ? (
                       <span className="hidden truncate text-xs text-slate-400 xl:inline" title={b.contactInfo || b.notes}>
                         {b.contactInfo || b.notes}
@@ -216,6 +219,47 @@ export function BookingTable({
           </tfoot>
         </Table>
       </TableWrap>
+      <Pagination paging={paging} noun="bookings" />
+
+      <DetailSheet
+        open={selected !== null}
+        onClose={() => setSelected(null)}
+        title={selected?.guestName ?? ""}
+        tags={
+          selected ? (
+            <>
+              <SourceBadge source={selected.source} />
+              <PaymentBadge status={selected.paymentStatus} />
+            </>
+          ) : null
+        }
+        fields={
+          selected
+            ? [
+                { label: "Check-in", value: formatDate(selected.checkIn) },
+                { label: "Check-out", value: formatDate(selected.checkOut) },
+                { label: "Nights", value: nightCount(selected.checkIn, selected.checkOut) },
+                { label: "Guests", value: selected.guestsCount },
+                { label: "Payout", value: <span className="font-semibold">{formatCurrency(bookingNetIncome(selected))}</span> },
+                ...(selected.platformFee
+                  ? [{ label: "Airbnb service fee", value: `${formatCurrency(selected.platformFee)} (already deducted)` }]
+                  : []),
+                ...(selected.contactInfo ? [{ label: "Contact", value: selected.contactInfo }] : []),
+                { label: "Notes", value: selected.notes || <span className="text-slate-400">—</span> },
+              ]
+            : []
+        }
+        onEdit={() => {
+          if (!selected) return;
+          setSelected(null);
+          onEdit(selected);
+        }}
+        onDelete={() => {
+          if (!selected) return;
+          setSelected(null);
+          onDelete(selected);
+        }}
+      />
     </>
   );
 }

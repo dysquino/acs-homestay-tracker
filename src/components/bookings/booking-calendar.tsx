@@ -18,7 +18,7 @@ import type { Booking, ISODate } from "@/lib/types";
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
-const BAR_HEIGHT = 22; // px, must match the row height below
+const BAR_HEIGHT = 26; // px, must match the row height below — tall enough to tap
 const HEADER_SPACE = 26; // px reserved for the date number
 
 type Bar = {
@@ -96,7 +96,7 @@ export function BookingCalendar({
 
   return (
     <div>
-      <div className="mb-3 flex items-center justify-between gap-2">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-1">
           <Button
             size="sm"
@@ -121,11 +121,11 @@ export function BookingCalendar({
           </Button>
         </div>
 
-        <h3 className="text-sm font-semibold text-slate-900">
+        <h3 className="text-sm font-semibold whitespace-nowrap text-slate-900">
           {formatMonth(cursor)}
         </h3>
 
-        <div className="flex items-center gap-3 text-xs text-slate-600">
+        <div className="flex w-full items-center gap-3 text-xs text-slate-600 sm:w-auto">
           <span className="flex items-center gap-1.5">
             <span className="h-2.5 w-2.5 rounded-sm bg-airbnb-600" />
             Airbnb
@@ -137,13 +137,13 @@ export function BookingCalendar({
         </div>
       </div>
 
-      <div className="overflow-x-auto">
-        <div className="min-w-[640px] overflow-hidden rounded-lg border border-slate-200">
+      <div>
+        <div className="overflow-hidden rounded-lg border border-slate-200">
           <div className="grid grid-cols-7 border-b border-slate-200 bg-slate-50">
             {WEEKDAYS.map((d) => (
               <div
                 key={d}
-                className="px-2 py-1.5 text-center text-[11px] font-semibold text-slate-500"
+                className="px-1 py-1.5 text-center text-[11px] font-semibold text-slate-500 sm:px-2"
               >
                 {d}
               </div>
@@ -200,7 +200,7 @@ export function BookingCalendar({
                         gridRow: bar.lane + 1,
                         height: BAR_HEIGHT - 4,
                       }}
-                      className={`pointer-events-auto mx-0.5 flex items-center overflow-hidden px-1.5 text-left text-[11px] font-medium text-white transition-opacity hover:opacity-85 ${
+                      className={`pointer-events-auto mx-0.5 flex items-center overflow-hidden px-1 text-left text-[11px] font-medium text-white sm:px-1.5 transition-opacity hover:opacity-85 ${
                         bar.booking.source === "airbnb"
                           ? "bg-airbnb-600"
                           : "bg-direct-600"

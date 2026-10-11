@@ -7,6 +7,8 @@ import { ValidationError, validateBooking } from "@/lib/validation";
 
 import { cleaningExpenseFields } from "./cleaning-expense-fields";
 import { bookingToDb, isoToDate } from "./mappers";
+import { assertNoOverlap } from "./overlap";
+import { rangesOverlap } from "@/lib/dates";
 
 /** One row of a previewed Airbnb import, already turned into a decision. */
 export type ImportInstruction = {
@@ -110,6 +112,17 @@ export async function importAirbnbBookings(
           updated++;
         } else {
           toCreate.push(c);
+        }
+      }
+
+      // No double bookings: against what's saved, and within this file.
+      for (const [i, c] of toCreate.entries()) {
+        await assertNoOverlap(tx, isoToDate(c.input.checkIn), isoToDate(c.input.checkOut));
+        const twin = toCreate
+          .slice(0, i)
+          .find((o) => rangesOverlap(o.input.checkIn, o.input.checkOut, c.input.checkIn, c.input.checkOut));
+        if (twin) {
+          throw new ValidationError(`${c.item.guestName} and ${twin.item.guestName} overlap in this file.`);
         }
       }
 

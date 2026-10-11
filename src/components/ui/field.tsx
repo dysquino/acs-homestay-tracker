@@ -7,8 +7,10 @@ import type {
 
 import { cn } from "@/lib/cn";
 
+// 16px text on touch screens: iOS Safari zooms the whole page into any
+// field smaller than that when it's tapped.
 const CONTROL =
-  "block w-full rounded-md border-0 bg-white px-3 py-2 text-sm text-slate-900 " +
+  "block w-full rounded-md border-0 bg-white px-3 py-2 text-sm pointer-coarse:text-base text-slate-900 " +
   "ring-1 ring-inset ring-slate-300 placeholder:text-slate-400 " +
   "focus:ring-2 focus:ring-inset focus:ring-brand-600 focus:outline-none " +
   "disabled:bg-slate-50 disabled:text-slate-500";

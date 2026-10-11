@@ -36,7 +36,7 @@ export function AirbnbImportModal({ open, onClose }: { open: boolean; onClose: (
     () => (stage.name === "preview" ? planImport(stage.parsed.rows, bookings) : []),
     [stage, bookings],
   );
-  const actionable = plan.filter((p) => p.action !== "skip");
+  const actionable = plan.filter((p) => p.action === "create" || p.action === "update");
   const chosen = actionable.filter((p) => !unselected.has(p.row.confirmationCode));
 
   function close() {
@@ -153,7 +153,11 @@ export function AirbnbImportModal({ open, onClose }: { open: boolean; onClose: (
                 {stage.fileName}:{" "}
                 {plan.filter((p) => p.action === "create").length} new,{" "}
                 {plan.filter((p) => p.action === "update").length} to update,{" "}
-                {plan.filter((p) => p.action === "skip").length} already imported.
+                {plan.filter((p) => p.action === "skip").length} already imported
+                {plan.some((p) => p.action === "blocked")
+                  ? `, ${plan.filter((p) => p.action === "blocked").length} blocked (dates overlap another booking)`
+                  : ""}
+                .
               </p>
               <RulesNote />
 
@@ -173,7 +177,10 @@ export function AirbnbImportModal({ open, onClose }: { open: boolean; onClose: (
                       <PreviewRow
                         key={p.row.confirmationCode}
                         p={p}
-                        checked={p.action !== "skip" && !unselected.has(p.row.confirmationCode)}
+                        checked={
+                          (p.action === "create" || p.action === "update") &&
+                          !unselected.has(p.row.confirmationCode)
+                        }
                         onToggle={() => toggle(p.row.confirmationCode)}
                       />
                     ))}
@@ -229,12 +236,12 @@ function RulesNote() {
 function PreviewRow({ p, checked, onToggle }: { p: PlannedRow; checked: boolean; onToggle: () => void }) {
   const { row } = p;
   return (
-    <tr className={p.action === "skip" ? "text-slate-400" : undefined}>
+    <tr className={p.action === "skip" || p.action === "blocked" ? "text-slate-400" : undefined}>
       <td className="px-3 py-2 align-top">
         <input
           type="checkbox"
           checked={checked}
-          disabled={p.action === "skip"}
+          disabled={p.action === "skip" || p.action === "blocked"}
           onChange={onToggle}
           aria-label={`Import ${row.guestName}`}
           className="h-4 w-4 rounded border-slate-300 text-brand-700 focus:ring-brand-600"
@@ -251,6 +258,7 @@ function PreviewRow({ p, checked, onToggle }: { p: PlannedRow; checked: boolean;
       <td className="px-3 py-2 align-top text-xs">
         {p.action === "create" ? <Badge tone="green">New</Badge> : null}
         {p.action === "skip" ? <Badge>Already imported</Badge> : null}
+        {p.action === "blocked" ? <Badge tone="red">Blocked</Badge> : null}
         {p.action === "update" ? (
           <span>
             <Badge tone="amber">Updates existing</Badge>
@@ -260,9 +268,12 @@ function PreviewRow({ p, checked, onToggle }: { p: PlannedRow; checked: boolean;
           </span>
         ) : null}
         {p.conflicts.length > 0 ? (
-          <span className="mt-1 flex items-start gap-1 text-amber-700">
+          <span
+            className={`mt-1 flex items-start gap-1 ${p.action === "blocked" ? "text-red-700" : "text-amber-700"}`}
+          >
             <WarningIcon className="mt-px h-3.5 w-3.5 shrink-0" />
             Overlaps {p.conflicts.map((c) => c.guestName).join(", ")}
+            {p.action === "blocked" ? " — double bookings aren't allowed" : ""}
           </span>
         ) : null}
       </td>

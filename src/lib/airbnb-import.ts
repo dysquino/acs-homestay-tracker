@@ -177,10 +177,14 @@ export type PlannedRow =
   /** Same guest and dates as a hand-entered booking: link it and correct its money. */
   | { row: ImportRow; action: "update"; bookingId: string; existing: Booking; conflicts: Booking[] }
   /** This confirmation code was imported before. */
-  | { row: ImportRow; action: "skip"; conflicts: [] };
+  | { row: ImportRow; action: "skip"; conflicts: [] }
+  /** A new booking whose dates overlap another — double bookings aren't allowed. */
+  | { row: ImportRow; action: "blocked"; conflicts: Booking[] };
 
 export function planImport(rows: ImportRow[], existing: Booking[]): PlannedRow[] {
   const codes = new Set(existing.map((b) => b.confirmationCode).filter(Boolean));
+  // Rows planned as new so far, so two rows of the same file can't overlap either.
+  const planned: Booking[] = [];
 
   return rows.map((row): PlannedRow => {
     if (codes.has(row.confirmationCode)) return { row, action: "skip", conflicts: [] };
@@ -201,6 +205,23 @@ export function planImport(rows: ImportRow[], existing: Booking[]): PlannedRow[]
         conflicts: findConflicts(existing, row.checkIn, row.checkOut, match.id),
       };
     }
-    return { row, action: "create", conflicts: findConflicts(existing, row.checkIn, row.checkOut) };
+    const conflicts = findConflicts([...existing, ...planned], row.checkIn, row.checkOut);
+    if (conflicts.length > 0) return { row, action: "blocked", conflicts };
+    planned.push({
+      id: `import:${row.confirmationCode}`,
+      guestName: row.guestName,
+      source: "airbnb",
+      checkIn: row.checkIn,
+      checkOut: row.checkOut,
+      guestsCount: 1,
+      totalPayout: row.totalPayout,
+      platformFee: row.platformFee,
+      paymentStatus: "paid",
+      contactInfo: "",
+      notes: "",
+      createdBy: "",
+      confirmationCode: row.confirmationCode,
+    });
+    return { row, action: "create", conflicts: [] };
   });
 }

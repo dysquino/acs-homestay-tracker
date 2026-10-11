@@ -1,45 +1,86 @@
 import type { ReactNode } from "react";
 
 import { cn } from "@/lib/cn";
-import { EditIcon, TrashIcon } from "@/components/ui/icons";
+import { ChevronRightIcon, EditIcon, TrashIcon } from "@/components/ui/icons";
 
 /**
- * Wraps a <Table>, hidden below `sm` in favor of a <CardList> — dense
- * multi-column tables don't shrink to phone width usefully even with
- * horizontal scroll, so narrow screens get a stacked-card layout instead.
- * Every table in this app has a CardList counterpart; see bookings/
- * expenses/cleaning pages.
+ * Wraps a <Table>, shown only on wide (xl) screens. Below that — phones,
+ * tablets, and a laptop with the sidebar open — the multi-column tables got
+ * crowded (names cut off, the payout column pushed out of view), so those
+ * screens get a <CardList> of <CompactRow>s instead: just enough to recognise
+ * a row, with the rest in a details sheet one tap away. Every table in this
+ * app has a CardList counterpart; see bookings/expenses/cleaning.
  */
 export function TableWrap({ children }: { children: ReactNode }) {
   return (
-    <div className="-mx-4 hidden overflow-x-auto sm:mx-0 sm:block">
+    <div className="hidden overflow-x-auto xl:block">
       <div className="inline-block min-w-full align-middle">{children}</div>
     </div>
   );
 }
 
-/** Mobile counterpart to <TableWrap>/<Table> — a stacked list of <CardRow>s. */
+/** Counterpart to <TableWrap>/<Table> below xl — a list of <CompactRow>s. */
 export function CardList({ children }: { children: ReactNode }) {
-  return <ul className="divide-y divide-slate-100 sm:hidden">{children}</ul>;
+  return <ul className="divide-y divide-slate-100 xl:hidden">{children}</ul>;
 }
 
-export function CardRow({ children }: { children: ReactNode }) {
-  return <li className="p-4">{children}</li>;
-}
-
-/** A label/value pair within a CardRow, for secondary details. */
-export function CardField({
-  label,
-  children,
+/**
+ * One tappable row of a <CardList>: the title (up to two lines, never cut to
+ * a few letters), a subtitle, the amount, and a tag or two. Tapping anywhere
+ * opens the row's details — the title is a real button stretched over the
+ * whole row, so it's keyboard- and screen-reader-friendly. `action` is a
+ * quick action that stays in the row (e.g. "Mark paid"); it sits above the
+ * stretched button so tapping it doesn't also open the details.
+ */
+export function CompactRow({
+  title,
+  subtitle,
+  amount,
+  tags,
+  action,
+  onOpen,
 }: {
-  label: string;
-  children: ReactNode;
+  title: ReactNode;
+  subtitle: ReactNode;
+  amount: ReactNode;
+  tags?: ReactNode;
+  action?: ReactNode;
+  onOpen: () => void;
 }) {
   return (
-    <div className="flex items-baseline justify-between gap-3 text-xs">
-      <span className="text-slate-500">{label}</span>
-      <span className="text-right text-slate-700">{children}</span>
-    </div>
+    <li className="relative flex items-center gap-2 px-4 py-3 transition-colors hover:bg-slate-50 active:bg-slate-100">
+      <div className="min-w-0 flex-1">
+        <button
+          type="button"
+          onClick={onOpen}
+          className="line-clamp-2 text-left font-medium text-slate-900 after:absolute after:inset-0 focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-brand-600 focus-visible:after:ring-inset"
+        >
+          {title}
+        </button>
+        <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-500">
+          <span>{subtitle}</span>
+          {tags}
+        </div>
+      </div>
+      <div className="flex shrink-0 flex-col items-end gap-1">
+        <span className="font-semibold whitespace-nowrap text-slate-900 tabular-nums">{amount}</span>
+        {action ? <div className="relative z-10">{action}</div> : null}
+      </div>
+      <ChevronRightIcon aria-hidden="true" className="h-4 w-4 shrink-0 text-slate-300" />
+    </li>
+  );
+}
+
+/** The main cell of a desktop table row, as a button opening the same details. */
+export function RowTitle({ children, onOpen }: { children: ReactNode; onOpen: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className="text-left font-medium text-slate-900 hover:text-brand-700 hover:underline"
+    >
+      {children}
+    </button>
   );
 }
 
@@ -92,7 +133,7 @@ export function RowActions({
         onClick={onEdit}
         aria-label="Edit"
         title="Edit"
-        className="rounded-md p-1.5 text-slate-500 transition-colors hover:bg-slate-200/70 hover:text-slate-900"
+        className="rounded-md p-1.5 text-slate-500 transition-colors hover:bg-slate-200/70 hover:text-slate-900 pointer-coarse:p-2.5"
       >
         <EditIcon className="h-4 w-4" />
       </button>
@@ -101,7 +142,7 @@ export function RowActions({
         onClick={onDelete}
         aria-label="Delete"
         title="Delete"
-        className="rounded-md p-1.5 text-slate-500 transition-colors hover:bg-red-100 hover:text-red-700"
+        className="rounded-md p-1.5 text-slate-500 transition-colors hover:bg-red-100 hover:text-red-700 pointer-coarse:p-2.5"
       >
         <TrashIcon className="h-4 w-4" />
       </button>

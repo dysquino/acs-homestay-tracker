@@ -69,6 +69,13 @@ export type MonthSummary = {
   income: number;
   expenses: number;
   net: number;
+  /**
+   * The part of `net` actually in hand: income from bookings marked paid
+   * (split by nights, same as `income`) minus expenses already paid out
+   * (refunded / paid directly — not ones still owed back to whoever fronted
+   * them). Answers "have we got this month's profit yet?".
+   */
+  collected: number;
 };
 
 export function monthSummary(
@@ -80,7 +87,23 @@ export function monthSummary(
   const to = endOfMonth(anyDayInMonth);
   const income = incomeInRange(bookings, from, to);
   const spent = expensesInRange(expenses, from, to);
-  return { month: from, income, expenses: spent, net: income - spent };
+  const paidIncome = incomeInRange(
+    bookings.filter((b) => b.paymentStatus === "paid"),
+    from,
+    to,
+  );
+  const paidOut = expensesInRange(
+    expenses.filter((e) => e.refundStatus === "refunded"),
+    from,
+    to,
+  );
+  return {
+    month: from,
+    income,
+    expenses: spent,
+    net: income - spent,
+    collected: paidIncome - paidOut,
+  };
 }
 
 /** `count` consecutive month summaries ending at (and including) `endMonth`. */
@@ -205,6 +228,28 @@ export function unrefundedExpenses(expenses: Expense[]): Expense[] {
     .sort((a, b) => a.date.localeCompare(b.date));
 }
 
+/**
+ * A booking's cleanings that deleting the booking would keep (just unlinked)
+ * because real work or money is recorded on them — mirrors the rule in
+ * `deleteBooking`. Only an untouched auto-created turnover (scheduled,
+ * unpaid, no cleaner, no notes) is removed with its booking.
+ */
+export function cleaningsKeptOnDelete(
+  cleaning: CleaningRecord[],
+  bookingId: string,
+): CleaningRecord[] {
+  return cleaning.filter(
+    (c) =>
+      c.bookingId === bookingId &&
+      !(
+        c.status === "scheduled" &&
+        c.paymentStatus === "unpaid" &&
+        c.cleanerName === "" &&
+        c.notes === ""
+      ),
+  );
+}
+
 /** Distinct cleaner names already used, for the datalist on the form. */
 export function knownCleaners(cleaning: CleaningRecord[]): string[] {
   const byLowerCase = new Map<string, string>();
@@ -215,3 +260,34 @@ export function knownCleaners(cleaning: CleaningRecord[]): string[] {
   return [...byLowerCase.values()].sort((a, b) => a.localeCompare(b));
 }
 
+
+export type MoneyInBank = {
+  /** Payouts of bookings marked paid. */
+  income: number;
+  incomeCount: number;
+  /** Expenses already settled: paid directly, or refunded to whoever fronted them. */
+  spent: number;
+  expenseCount: number;
+  balance: number;
+};
+
+/**
+ * What should be in the bank, all time: income from paid bookings minus
+ * expenses that have actually been paid out. Pending and partial bookings
+ * aren't counted (that money hasn't arrived), nor are expenses still owed
+ * back to whoever fronted them (that money hasn't left yet). Assumes every
+ * payout lands in the bank and nothing else is withdrawn.
+ */
+export function moneyInBank(bookings: Booking[], expenses: Expense[]): MoneyInBank {
+  const paid = bookings.filter((b) => b.paymentStatus === "paid");
+  const settled = expenses.filter((e) => e.refundStatus === "refunded");
+  const income = paid.reduce((sum, b) => sum + bookingNetIncome(b), 0);
+  const spent = settled.reduce((sum, e) => sum + e.amount, 0);
+  return {
+    income,
+    incomeCount: paid.length,
+    spent,
+    expenseCount: settled.length,
+    balance: income - spent,
+  };
+}

@@ -5,9 +5,14 @@ import { useEffect, type ReactNode } from "react";
 import { Button } from "./button";
 
 /**
- * A plain centered dialog. Closes on Escape or backdrop click, locks body
- * scroll while open. Deliberately not a full focus-trap implementation —
- * enough for the handful of forms in this app.
+ * A plain centered dialog (a bottom sheet on phones). Closes on Escape or
+ * backdrop click, locks body scroll while open. Deliberately not a full
+ * focus-trap implementation — enough for the handful of forms in this app.
+ *
+ * Never taller than the screen: only the body scrolls, so the title/close
+ * button and the footer's actions always stay in view. (Letting the whole
+ * dialog overflow a bottom-anchored sheet pushed its top off-screen, out of
+ * reach of scrolling.)
  */
 export function Modal({
   open,
@@ -44,7 +49,7 @@ export function Modal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center overflow-y-auto bg-slate-900/40 p-0 sm:items-center sm:p-4"
+      className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/40 p-0 sm:items-center sm:p-4"
       role="presentation"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose();
@@ -54,11 +59,11 @@ export function Modal({
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className={`my-0 w-full rounded-t-2xl bg-white shadow-xl sm:my-8 sm:rounded-xl ${
+        className={`flex max-h-[92dvh] w-full flex-col rounded-t-2xl bg-white shadow-xl sm:max-h-[calc(100dvh-2rem)] sm:rounded-xl ${
           wide ? "sm:max-w-3xl" : "sm:max-w-lg"
         }`}
       >
-        <header className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
+        <header className="flex shrink-0 items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
           <div>
             <h2 className="text-base font-semibold text-slate-900">{title}</h2>
             {description ? (
@@ -76,10 +81,10 @@ export function Modal({
           </Button>
         </header>
 
-        <div className="px-5 py-4">{children}</div>
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-4">{children}</div>
 
         {footer ? (
-          <footer className="flex flex-wrap justify-end gap-2 border-t border-slate-200 bg-slate-50 px-5 py-3 sm:rounded-b-xl">
+          <footer className="flex shrink-0 flex-wrap justify-end gap-2 rounded-none border-t border-slate-200 bg-slate-50 px-5 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:rounded-b-xl">
             {footer}
           </footer>
         ) : null}

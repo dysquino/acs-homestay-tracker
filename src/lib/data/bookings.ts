@@ -11,6 +11,7 @@ import {
   bookingToDb,
   isoToDate,
 } from "./mappers";
+import { assertNoOverlap } from "./overlap";
 
 export async function listBookings(): Promise<Booking[]> {
   const rows = await prisma.booking.findMany({ orderBy: { checkIn: "asc" } });
@@ -28,6 +29,7 @@ export async function createBooking(
 ): Promise<Booking> {
   validateBooking(input);
   const booking = await prisma.$transaction(async (tx) => {
+    await assertNoOverlap(tx, isoToDate(input.checkIn), isoToDate(input.checkOut));
     const created = await tx.booking.create({ data: bookingToDb(input) });
     await tx.cleaningSchedule.create({
       data: {
@@ -60,7 +62,13 @@ export async function updateBooking(
   await prisma.$transaction(async (tx) => {
     const existing = await tx.booking.findUniqueOrThrow({ where: { id } });
     const current = bookingFromDb(existing);
-    validateBooking({ ...current, ...patch });
+    const next = { ...current, ...patch };
+    validateBooking(next);
+    // Only when the dates move, so a booking that overlapped from before
+    // double bookings were blocked can still have its payment etc. updated.
+    if (next.checkIn !== current.checkIn || next.checkOut !== current.checkOut) {
+      await assertNoOverlap(tx, isoToDate(next.checkIn), isoToDate(next.checkOut), id);
+    }
 
     await tx.booking.update({ where: { id }, data: bookingPatchToDb(patch) });
 
@@ -82,9 +90,19 @@ export async function updateBooking(
  * Deleting a booking drops any turnover that was auto-created and never
  * touched (no cleaner, no notes), and unlinks (rather than deletes) any turnover with real work
  * recorded against it — same rule as the old client-side store.
+ *
+ * `withCleanings` deletes every linked cleaning instead — for a cancelled
+ * stay whose (e.g. imported, pre-paid) cleaning never happened. A paid
+ * cleaning's expense goes with it via the schema's onDelete: Cascade.
  */
-export async function deleteBooking(id: string): Promise<void> {
+export async function deleteBooking(
+  id: string,
+  { withCleanings = false }: { withCleanings?: boolean } = {},
+): Promise<void> {
   await prisma.$transaction(async (tx) => {
+    if (withCleanings) {
+      await tx.cleaningSchedule.deleteMany({ where: { bookingId: id } });
+    }
     await tx.cleaningSchedule.deleteMany({
       where: {
         bookingId: id,

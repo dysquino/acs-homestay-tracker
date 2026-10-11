@@ -12,7 +12,9 @@ import type { MonthSummary } from "@/lib/selectors";
  * The one hero figure on the dashboard: profit for the selected month, in
  * the single saturated block (like the reference's card) so the eye lands
  * here first. Below it: the profit trend as an area chart with the selected
- * month marked, and a meter for how much of income the expenses consumed.
+ * month marked (wide screens only — it fills the height this card gets from
+ * sitting beside the chart; stacked on smaller screens it would only repeat
+ * the chart), and a meter for how much of income the expenses consumed.
  */
 
 type Props = {
@@ -56,6 +58,8 @@ export function ProfitHero({ months, selectedIndex }: Props) {
         ) : null}
       </div>
 
+      <Collected net={current.net} collected={current.collected} />
+
       <TrendArea months={months} selectedIndex={selectedIndex} />
 
       <div className="mt-auto pt-5">
@@ -90,6 +94,47 @@ export function ProfitHero({ months, selectedIndex }: Props) {
   );
 }
 
+/**
+ * How much of the month's profit is actually in hand: paid bookings minus
+ * expenses already paid out (see `MonthSummary.collected`). The bar only
+ * shows when there's a positive profit to measure against.
+ */
+function Collected({ net, collected }: { net: number; collected: number }) {
+  const share = net > 0 ? Math.min(Math.max(collected / net, 0), 1) : null;
+  const toCome = net - collected;
+
+  return (
+    <div
+      className="mt-4 rounded-2xl bg-white/10 px-3.5 py-3"
+      title="Bookings marked paid (split by nights this month) minus expenses already paid out — not ones still owed back to whoever fronted them."
+    >
+      <div className="flex items-baseline justify-between gap-3 text-xs text-white/90">
+        <span>Collected so far</span>
+        <span className="text-base font-semibold text-white">{formatSigned(collected)}</span>
+      </div>
+      {share !== null ? (
+        <div
+          className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/20"
+          role="meter"
+          aria-label="Share of this month's profit collected"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={Math.round(share * 100)}
+        >
+          <div className="h-full rounded-r-[4px] bg-white" style={{ width: `${share * 100}%` }} />
+        </div>
+      ) : null}
+      <p className="mt-1.5 text-[11px] text-white/80">
+        {share === null
+          ? "Paid bookings minus expenses paid out"
+          : toCome >= 1
+            ? `${Math.round(share * 100)}% · ${formatWhole(toCome)} still to come in`
+            : "All of this month's profit is in"}
+      </p>
+    </div>
+  );
+}
+
 function TrendArea({ months, selectedIndex }: Props) {
   const W = 100;
   const H = 100;
@@ -106,7 +151,7 @@ function TrendArea({ months, selectedIndex }: Props) {
   const cy = (y(values[selectedIndex]) / H) * 100;
 
   return (
-    <div className="mt-5" role="img" aria-label={`Profit trend, ${formatMonth(months[0].month)} to ${formatMonth(months[months.length - 1].month)}`}>
+    <div className="mt-5 hidden lg:block" role="img" aria-label={`Profit trend, ${formatMonth(months[0].month)} to ${formatMonth(months[months.length - 1].month)}`}>
       <div className="relative h-20">
         {/* Stretched to fit; non-scaling-stroke keeps the line a true 2px. */}
         <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="h-full w-full overflow-visible" aria-hidden="true">

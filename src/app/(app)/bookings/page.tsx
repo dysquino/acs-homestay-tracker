@@ -19,7 +19,8 @@ import { CalendarIcon, ListIcon, PlusIcon } from "@/components/ui/icons";
 import { ConfirmDialog } from "@/components/ui/modal";
 import { cn } from "@/lib/cn";
 import { today } from "@/lib/dates";
-import { formatDateRange } from "@/lib/format";
+import { formatCurrency, formatDate, formatDateRange } from "@/lib/format";
+import { cleaningsKeptOnDelete } from "@/lib/selectors";
 import { useStore } from "@/lib/store";
 import {
   BOOKING_SOURCES,
@@ -32,13 +33,28 @@ import {
 type View = "list" | "calendar";
 
 export default function BookingsPage() {
-  const { bookings, deleteBooking } = useStore();
+  const { bookings, cleaning, deleteBooking } = useStore();
 
   const [view, setView] = useState<View>("calendar");
   const [formOpen, setFormOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [editing, setEditing] = useState<Booking | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Booking | null>(null);
+  const [alsoDeleteCleanings, setAlsoDeleteCleanings] = useState(false);
+  // Cleanings a plain delete would keep — offered for deletion as well, e.g.
+  // the pre-paid cleaning of an imported booking that was then cancelled.
+  const keptCleanings = useMemo(
+    () => (pendingDelete ? cleaningsKeptOnDelete(cleaning, pendingDelete.id) : []),
+    [cleaning, pendingDelete],
+  );
+  const keptPaidTotal = keptCleanings
+    .filter((c) => c.paymentStatus === "paid")
+    .reduce((s, c) => s + c.paymentAmount, 0);
+
+  function askDelete(booking: Booking) {
+    setAlsoDeleteCleanings(false);
+    setPendingDelete(booking);
+  }
 
   const [source, setSource] = useState<BookingSource | "all">("all");
   const [payment, setPayment] = useState<PaymentStatus | "all">("all");
@@ -162,10 +178,11 @@ export default function BookingsPage() {
 
           <BookingTable
             bookings={sorted}
+            resetKey={JSON.stringify([source, payment, from, to, includePast, sort])}
             sort={sort}
             onSortChange={setSort}
             onEdit={openEdit}
-            onDelete={setPendingDelete}
+            onDelete={askDelete}
             emptyAction={
               <Button variant="primary" onClick={openAdd}>
                 <PlusIcon className="h-4 w-4" />
@@ -198,18 +215,52 @@ export default function BookingsPage() {
             <>
               <strong>{pendingDelete.guestName}</strong> —{" "}
               {formatDateRange(pendingDelete.checkIn, pendingDelete.checkOut)}.
-              Its auto-scheduled cleaning will be removed too, unless a cleaner
-              was already assigned or paid.
+              {keptCleanings.length === 0 ? (
+                <> Its auto-scheduled cleaning will be removed too.</>
+              ) : (
+                <>
+                  {" "}
+                  Its cleaning has work or payment recorded, so it&apos;s kept on
+                  the Cleaning page unless you also delete it:
+                  <span className="mt-3 block space-y-1 rounded-lg bg-slate-50 p-3 text-xs">
+                    {keptCleanings.map((c) => (
+                      <span key={c.id} className="block">
+                        {formatDate(c.date)} · {formatCurrency(c.paymentAmount)} ·{" "}
+                        {c.paymentStatus === "paid" ? "Paid" : "Unpaid"}
+                        {c.cleanerName ? ` · ${c.cleanerName}` : ""}
+                      </span>
+                    ))}
+                  </span>
+                  <label className="mt-3 flex items-start gap-2.5 py-1 text-sm text-slate-700">
+                    <input
+                      type="checkbox"
+                      checked={alsoDeleteCleanings}
+                      onChange={(e) => setAlsoDeleteCleanings(e.target.checked)}
+                      className="mt-0.5 h-4 w-4 shrink-0 rounded border-slate-300 text-brand-700 focus:ring-brand-600 pointer-coarse:h-5 pointer-coarse:w-5"
+                    />
+                    <span>
+                      Also delete {keptCleanings.length === 1 ? "this cleaning" : "these cleanings"}
+                      {keptPaidTotal > 0
+                        ? ` and ${keptCleanings.length === 1 ? "its" : "their"} ${formatCurrency(keptPaidTotal)} expense`
+                        : ""}
+                      <span className="block text-xs text-slate-500">
+                        For a cancelled stay where the cleaning never happened.
+                      </span>
+                    </span>
+                  </label>
+                </>
+              )}
             </>
           ) : null
         }
         onCancel={() => setPendingDelete(null)}
         onConfirm={async () => {
           const target = pendingDelete;
+          const withCleanings = alsoDeleteCleanings;
           setPendingDelete(null);
           if (!target) return;
           try {
-            await deleteBooking(target.id);
+            await deleteBooking(target.id, { withCleanings });
           } catch {
             alert("Couldn't delete this booking. Please try again.");
           }
@@ -236,7 +287,7 @@ function ViewTab({
       onClick={onClick}
       aria-pressed={active}
       className={cn(
-        "flex items-center gap-1.5 rounded px-3 py-1.5 text-xs font-medium transition-colors",
+        "flex items-center gap-1.5 rounded px-3 py-1.5 text-xs font-medium transition-colors pointer-coarse:py-2.5",
         active
           ? "bg-white text-slate-900 shadow-sm"
           : "text-slate-600 hover:text-slate-900",

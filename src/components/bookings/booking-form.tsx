@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -33,9 +33,7 @@ type FormState = {
   checkOut: string;
   guestsCount: string;
   totalPayout: string;
-  platformFee: string;
   paymentStatus: PaymentStatus;
-  contactInfo: string;
   notes: string;
 };
 
@@ -48,9 +46,7 @@ function initialState(booking: Booking | null): FormState {
       checkOut: addDays(today(), 2),
       guestsCount: "2",
       totalPayout: "",
-      platformFee: "",
       paymentStatus: "pending",
-      contactInfo: "",
       notes: "",
     };
   }
@@ -61,9 +57,7 @@ function initialState(booking: Booking | null): FormState {
     checkOut: booking.checkOut,
     guestsCount: String(booking.guestsCount),
     totalPayout: String(booking.totalPayout),
-    platformFee: booking.platformFee ? String(booking.platformFee) : "",
     paymentStatus: booking.paymentStatus,
-    contactInfo: booking.contactInfo,
     notes: booking.notes,
   };
 }
@@ -81,6 +75,9 @@ export function BookingForm({
   onClose: () => void;
 }) {
   const submit = useSubmit();
+  // Invalid or overlapping dates block saving (no double bookings); the
+  // fields below report it up because the submit button lives in the footer.
+  const [blocked, setBlocked] = useState(false);
   return (
     <Modal
       open={open}
@@ -95,7 +92,7 @@ export function BookingForm({
       footer={
         <>
           <Button onClick={onClose}>Cancel</Button>
-          <Button type="submit" form={FORM_ID} variant="primary" disabled={submit.saving}>
+          <Button type="submit" form={FORM_ID} variant="primary" disabled={submit.saving || blocked}>
             {submit.saving ? "Saving…" : booking ? "Save changes" : "Add booking"}
           </Button>
         </>
@@ -108,6 +105,7 @@ export function BookingForm({
         booking={booking}
         onClose={onClose}
         submit={submit}
+        onBlockedChange={setBlocked}
       />
     </Modal>
   );
@@ -117,10 +115,12 @@ function BookingFields({
   booking,
   onClose,
   submit,
+  onBlockedChange,
 }: {
   booking: Booking | null;
   onClose: () => void;
   submit: Submit;
+  onBlockedChange: (blocked: boolean) => void;
 }) {
   const { bookings, addBooking, updateBooking } = useStore();
   const { user } = useIdentity();
@@ -138,6 +138,20 @@ function BookingFields({
     [bookings, form.checkIn, form.checkOut, booking?.id],
   );
 
+  // Double bookings aren't allowed. When editing, only new dates are held to
+  // that, so a booking that overlapped from before the rule can still be
+  // updated (the server applies the same rule).
+  const datesChanged =
+    !booking || form.checkIn !== booking.checkIn || form.checkOut !== booking.checkOut;
+  const overlapBlocked = conflicts.length > 0 && datesChanged;
+  // Checked live, not just on submit: an inverted range can't be saved, and
+  // while it's inverted the overlap check above can't run either.
+  const datesInverted = Boolean(form.checkIn && form.checkOut && form.checkOut <= form.checkIn);
+  useEffect(
+    () => onBlockedChange(overlapBlocked || datesInverted),
+    [overlapBlocked, datesInverted, onBlockedChange],
+  );
+
   const nights = nightCount(form.checkIn, form.checkOut);
 
   function validate(): boolean {
@@ -151,15 +165,13 @@ function BookingFields({
       next.guestsCount = "Enter a whole number of at least 1.";
     if (form.totalPayout !== "" && Number(form.totalPayout) < 0)
       next.totalPayout = "Cannot be negative.";
-    if (form.platformFee !== "" && Number(form.platformFee) < 0)
-      next.platformFee = "Cannot be negative.";
     setErrors(next);
     return Object.keys(next).length === 0;
   }
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!validate()) return;
+    if (!validate() || overlapBlocked || datesInverted) return;
 
     const payload = {
       guestName: form.guestName.trim(),
@@ -168,9 +180,11 @@ function BookingFields({
       checkOut: form.checkOut,
       guestsCount: Number(form.guestsCount) || 1,
       totalPayout: Number(form.totalPayout) || 0,
-      platformFee: form.source === "airbnb" ? Number(form.platformFee) || 0 : 0,
+      // No longer on the form; an edit keeps whatever the booking already has
+      // (e.g. the service fee an Airbnb import recorded).
+      platformFee: booking?.platformFee ?? 0,
       paymentStatus: form.paymentStatus,
-      contactInfo: form.contactInfo.trim(),
+      contactInfo: booking?.contactInfo ?? "",
       notes: form.notes.trim(),
       createdBy: booking?.createdBy ?? user?.name ?? "Unknown",
     };
@@ -232,7 +246,7 @@ function BookingFields({
         <Field
           label="Check-out"
           required
-          error={errors.checkOut}
+          error={datesInverted ? "Check-out must be after check-in." : errors.checkOut}
           hint={
             nights > 0 ? `${nights} night${nights > 1 ? "s" : ""}` : undefined
           }
@@ -247,6 +261,42 @@ function BookingFields({
             />
           )}
         </Field>
+
+        {/* Right under the dates it's about, so on a phone the reason the
+            save button is disabled is in view, not at the bottom of the form. */}
+        <div className="empty:hidden sm:col-span-2">
+          {conflicts.length > 0 ? (
+            <div
+              role={overlapBlocked ? "alert" : undefined}
+              className={`flex gap-2.5 rounded-lg border p-3 ${
+                overlapBlocked ? "border-red-200 bg-red-50" : "border-amber-200 bg-amber-50"
+              }`}
+            >
+              <WarningIcon
+                className={`mt-0.5 h-4 w-4 shrink-0 ${overlapBlocked ? "text-red-600" : "text-amber-600"}`}
+              />
+              <div className={`text-xs ${overlapBlocked ? "text-red-800" : "text-amber-900"}`}>
+                <p className="font-medium">
+                  These dates overlap {conflicts.length} existing booking
+                  {conflicts.length > 1 ? "s" : ""}.
+                </p>
+                <ul className="mt-1 space-y-0.5">
+                  {conflicts.map((c) => (
+                    <li key={c.id}>
+                      {c.guestName} — {formatDateRange(c.checkIn, c.checkOut)} (
+                      {c.source === "airbnb" ? "Airbnb" : "Direct"})
+                    </li>
+                  ))}
+                </ul>
+                <p className="mt-1.5">
+                  {overlapBlocked
+                    ? "Double bookings aren't allowed. Change the dates to save — or delete the other booking first if it was cancelled."
+                    : "This booking already overlapped before double bookings were blocked. You can still update it, but its dates can't be moved to another overlap."}
+                </p>
+              </div>
+            </div>
+          ) : null}
+        </div>
 
         <Field label="Number of guests" error={errors.guestsCount}>
           {(id) => (
@@ -280,19 +330,6 @@ function BookingFields({
           )}
         </Field>
 
-        {form.source === "airbnb" ? (
-          <Field label="Platform fee" hint="Optional, for reference — already taken out of the payout" error={errors.platformFee}>
-            {(id) => (
-              <CurrencyInput
-                id={id}
-                value={form.platformFee}
-                onChange={(e) => set("platformFee", e.target.value)}
-                placeholder="0.00"
-              />
-            )}
-          </Field>
-        ) : null}
-
         <Field label="Payment status">
           {(id) => (
             <Select
@@ -308,21 +345,6 @@ function BookingFields({
                 </option>
               ))}
             </Select>
-          )}
-        </Field>
-
-        <Field
-          label="Contact number or email"
-          hint="Optional — useful for direct bookings"
-          className="sm:col-span-2"
-        >
-          {(id) => (
-            <Input
-              id={id}
-              value={form.contactInfo}
-              onChange={(e) => set("contactInfo", e.target.value)}
-              placeholder="0917 555 0143 or guest@example.com"
-            />
           )}
         </Field>
 
@@ -345,29 +367,6 @@ function BookingFields({
         </p>
       ) : null}
 
-      {conflicts.length > 0 ? (
-        <div className="flex gap-2.5 rounded-lg border border-amber-200 bg-amber-50 p-3">
-          <WarningIcon className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
-          <div className="text-xs text-amber-900">
-            <p className="font-medium">
-              These dates overlap {conflicts.length} existing booking
-              {conflicts.length > 1 ? "s" : ""}.
-            </p>
-            <ul className="mt-1 space-y-0.5">
-              {conflicts.map((c) => (
-                <li key={c.id}>
-                  {c.guestName} — {formatDateRange(c.checkIn, c.checkOut)} (
-                  {c.source === "airbnb" ? "Airbnb" : "Direct"})
-                </li>
-              ))}
-            </ul>
-            <p className="mt-1.5">
-              You can still save — double-check this isn&apos;t a
-              double-booking.
-            </p>
-          </div>
-        </div>
-      ) : null}
     </form>
   );
 }

@@ -3,12 +3,13 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import type { ComponentType, ReactNode, SVGProps } from "react";
+import { useRef, type ComponentType, type ReactNode, type SVGProps } from "react";
 
 import { cn } from "@/lib/cn";
 import { ACCOUNTS, useIdentity } from "@/lib/identity";
 import {
   CalendarIcon,
+  DownloadIcon,
   HomeIcon,
   ReceiptIcon,
   SparklesIcon,
@@ -68,6 +69,9 @@ export function AppShell({ children }: { children: ReactNode }) {
             );
           })}
         </nav>
+        <div className="px-3">
+          <ExportMenu />
+        </div>
         <div className="flex items-center justify-between gap-2 px-5 py-3">
           <IdentityPicker />
           <p className="text-xs text-slate-400">v{APP_VERSION}</p>
@@ -77,7 +81,10 @@ export function AppShell({ children }: { children: ReactNode }) {
       {/* Mobile top bar */}
       <header className="no-print flex items-center justify-between gap-3 bg-white px-4 py-3 shadow-[0_1px_2px_rgba(15,23,42,0.06)] lg:hidden">
         <Brand />
-        <IdentityPicker />
+        <div className="flex items-center gap-1">
+          <ExportMenu compact />
+          <IdentityPicker />
+        </div>
       </header>
 
       <main className="min-w-0 flex-1 pb-20 lg:pb-0">
@@ -110,6 +117,62 @@ export function AppShell({ children }: { children: ReactNode }) {
   );
 }
 
+const EXPORTS: { table: string; label: string }[] = [
+  { table: "bookings", label: "Bookings" },
+  { table: "expenses", label: "Expenses" },
+  { table: "cleaning", label: "Cleaning" },
+];
+
+/**
+ * CSV backups of each table — a standalone copy, independent of this app
+ * still running (the lesson from the database going unreachable for 11
+ * days). Tucked into the sidebar / mobile top bar rather than a dashboard
+ * panel, since it's an occasional chore. A native <details> keeps it
+ * keyboard-accessible without custom menu logic. `compact` is the mobile
+ * top bar's icon-only version, opening as a dropdown.
+ */
+function ExportMenu({ compact }: { compact?: boolean }) {
+  const ref = useRef<HTMLDetailsElement>(null);
+  const close = () => ref.current?.removeAttribute("open");
+
+  return (
+    <details ref={ref} className={cn("group", compact && "relative")}>
+      <summary
+        aria-label={compact ? "Export data" : undefined}
+        className={cn(
+          "flex cursor-pointer list-none items-center gap-2.5 rounded-full text-sm font-medium text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900 [&::-webkit-details-marker]:hidden",
+          compact ? "h-10 w-10 justify-center" : "px-3.5 py-2.5",
+        )}
+      >
+        <DownloadIcon className={compact ? "h-5 w-5" : "h-4.5 w-4.5"} />
+        {compact ? null : "Export data"}
+      </summary>
+      <div
+        className={cn(
+          compact
+            ? "absolute right-0 z-50 mt-1 w-56 rounded-2xl bg-white p-2 shadow-[0_8px_24px_rgba(15,23,42,0.16)]"
+            : "pb-1 pl-9",
+        )}
+      >
+        {compact ? (
+          <p className="px-2 pt-1 pb-1.5 text-xs text-slate-500">Download a CSV backup</p>
+        ) : null}
+        {EXPORTS.map((e) => (
+          <a
+            key={e.table}
+            href={`/api/export/${e.table}`}
+            download
+            onClick={close}
+            className="block rounded-lg px-2 py-1.5 text-sm text-slate-600 hover:bg-slate-100 hover:text-slate-900 pointer-coarse:py-2.5"
+          >
+            {e.label} (.csv)
+          </a>
+        ))}
+      </div>
+    </details>
+  );
+}
+
 /**
  * Who's using this browser — attribution only (see identity.tsx), not
  * access control. A plain <select> so it's keyboard- and screen-reader-
@@ -135,7 +198,7 @@ function IdentityPicker() {
           const next = ACCOUNTS.find((a) => a.id === e.target.value);
           if (next) setUser(next);
         }}
-        className="min-w-0 max-w-24 truncate rounded-md border-0 bg-transparent py-0.5 text-xs font-medium text-slate-600 focus-visible:outline-2 focus-visible:outline-slate-400"
+        className="min-w-0 max-w-24 truncate rounded-md border-0 bg-transparent py-0.5 text-xs font-medium pointer-coarse:py-2 pointer-coarse:text-base text-slate-600 focus-visible:outline-2 focus-visible:outline-slate-400"
       >
         {ACCOUNTS.map((a) => (
           <option key={a.id} value={a.id}>
