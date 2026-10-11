@@ -6,6 +6,7 @@ import type { Booking, BookingRequest } from "@/lib/types";
 import { ValidationError } from "@/lib/validation";
 
 import { requireSiteAccess } from "./access";
+import { assertNoAirbnbClash } from "./airbnb-calendar";
 import { createBookingWithTurnover } from "./booking-create";
 import { bookingFromDb, bookingRequestFromDb, dateToISO } from "./mappers";
 
@@ -32,6 +33,9 @@ export type DecideResult = { ok: true; booking?: Booking } | { ok: false; error:
 export async function approveBookingRequest(id: string, actor: string): Promise<DecideResult> {
   await requireSiteAccess();
   try {
+    // Before the transaction: this may read Airbnb's feed over the network.
+    const pending = await prisma.bookingRequest.findUnique({ where: { id } });
+    if (pending) await assertNoAirbnbClash(dateToISO(pending.checkIn), dateToISO(pending.checkOut));
     const booking = await prisma.$transaction(async (tx) => {
       const req = await tx.bookingRequest.findUnique({ where: { id } });
       if (!req || req.status !== "PENDING") {

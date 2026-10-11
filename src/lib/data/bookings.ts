@@ -10,6 +10,7 @@ import {
   isoToDate,
 } from "./mappers";
 import { requireSiteAccess } from "./access";
+import { assertNoAirbnbClash } from "./airbnb-calendar";
 import { createBookingWithTurnover } from "./booking-create";
 import { assertNoOverlap } from "./overlap";
 
@@ -25,6 +26,7 @@ export async function createBooking(
 ): Promise<Booking> {
   await requireSiteAccess();
   validateBooking(input);
+  if (input.source === "direct") await assertNoAirbnbClash(input.checkIn, input.checkOut);
   const booking = await prisma.$transaction((tx) => createBookingWithTurnover(tx, input));
   return bookingFromDb(booking);
 }
@@ -41,6 +43,13 @@ export async function updateBooking(
   patch: Partial<BookingInput>,
 ): Promise<void> {
   await requireSiteAccess();
+  // The Airbnb check may read Airbnb's feed, so it runs before the transaction.
+  const before = bookingFromDb(await prisma.booking.findUniqueOrThrow({ where: { id } }));
+  const after = { ...before, ...patch };
+  const datesMove = after.checkIn !== before.checkIn || after.checkOut !== before.checkOut;
+  if (after.source === "direct" && (datesMove || before.source !== "direct")) {
+    await assertNoAirbnbClash(after.checkIn, after.checkOut);
+  }
   await prisma.$transaction(async (tx) => {
     const existing = await tx.booking.findUniqueOrThrow({ where: { id } });
     const current = bookingFromDb(existing);

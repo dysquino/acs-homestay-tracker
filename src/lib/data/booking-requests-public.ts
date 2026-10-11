@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import type { BookingRequestInput } from "@/lib/types";
 import { ValidationError, validateBookingRequest } from "@/lib/validation";
 
+import { airbnbBlocks } from "./airbnb-calendar";
 import { isoToDate } from "./mappers";
 
 /**
@@ -56,7 +57,9 @@ export async function submitBookingRequest(
   const taken = await prisma.booking.count({
     where: { checkIn: { lt: checkOut }, checkOut: { gt: checkIn } },
   });
-  if (taken > 0) {
+  const { blocks } = await airbnbBlocks();
+  const airbnbTaken = blocks.some((b) => b.checkIn < request.checkOut && request.checkIn < b.checkOut);
+  if (taken > 0 || airbnbTaken) {
     return { ok: false, error: "Sorry, some of those nights were just booked. Please pick other dates." };
   }
 

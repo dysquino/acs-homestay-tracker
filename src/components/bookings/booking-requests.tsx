@@ -10,6 +10,7 @@ import { ConfirmDialog, Modal } from "@/components/ui/modal";
 import { getBookingLinkPath } from "@/lib/data/booking-requests";
 import { nightCount } from "@/lib/dates";
 import { formatDateRange } from "@/lib/format";
+import { blockAsBooking } from "@/lib/airbnb-ical";
 import { findConflicts } from "@/lib/selectors";
 import { useStore } from "@/lib/store";
 import type { Booking, BookingRequest } from "@/lib/types";
@@ -23,7 +24,9 @@ const sentAt = new Intl.DateTimeFormat("en-PH", { month: "short", day: "numeric"
  * filled in. Hidden when there's nothing waiting.
  */
 export function BookingRequests({ onApproved }: { onApproved: (booking: Booking) => void }) {
-  const { bookingRequests, bookings, approveRequest, declineRequest } = useStore();
+  const { bookingRequests, bookings, airbnbBlocks, approveRequest, declineRequest } = useStore();
+  // Requests become direct bookings, so unimported Airbnb reservations count too.
+  const taken = [...bookings, ...airbnbBlocks.map(blockAsBooking)];
   const [busy, setBusy] = useState<string | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [toDecline, setToDecline] = useState<BookingRequest | null>(null);
@@ -53,7 +56,7 @@ export function BookingRequests({ onApproved }: { onApproved: (booking: Booking)
       />
       <ul className="divide-y divide-slate-100">
         {bookingRequests.map((r) => {
-          const clashes = findConflicts(bookings, r.checkIn, r.checkOut);
+          const clashes = findConflicts(taken, r.checkIn, r.checkOut);
           const nights = nightCount(r.checkIn, r.checkOut);
           const contactHref = r.contactInfo.includes("@")
             ? `mailto:${r.contactInfo}`

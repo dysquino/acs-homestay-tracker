@@ -175,3 +175,17 @@ model BookingRequest {
 
   @@index([status, createdAt])
 }
+
+/// The last good copy of the Airbnb calendar feed (AIRBNB_ICAL_URL), so its
+/// reservations can block direct bookings without fetching Airbnb on every
+/// check, and keep blocking if Airbnb is briefly unreachable. One row.
+model AirbnbCalendarCache {
+  id           String   @id @default("airbnb")
+  /// Parsed reservations: [{ code, checkIn, checkOut }] (dates YYYY-MM-DD).
+  reservations Json
+  /// When the feed was last read successfully.
+  fetchedAt    DateTime
+  /// When a read was last attempted, and why it failed (null if it didn't).
+  checkedAt    DateTime
+  lastError    String?
+}
