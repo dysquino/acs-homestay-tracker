@@ -1,0 +1,58 @@
+# Daily backup of the live site's data (bookings, expenses, cleaning).
+#
+# Runs the backup skill's script against the live site, encrypts the result
+# (this repository is public, and its workflow files are downloadable by any
+# signed-in GitHub user), and keeps it for 90 days under the run's
+# "Artifacts". Download one and decrypt it with:
+#   node .claude/skills/backup-live-data/scripts/backup-crypto.mjs decrypt <file> <folder>
+#
+# Needs two repository secrets (Settings → Secrets and variables → Actions):
+#   BACKUP_SITE_PASSWORD   the site's access code (same as SITE_PASSWORD in Vercel)
+#   BACKUP_ENCRYPTION_KEY  any long random text; keep a copy — it's needed to decrypt
+#
+# Scheduled runs only happen from the default branch (main). GitHub emails
+# you if a run fails, and pauses schedules after 60 days without repository
+# activity (re-enable from the Actions tab).
+name: Daily backup
+
+on:
+  schedule:
+    - cron: "0 18 * * *" # 18:00 UTC = 02:00 in Manila
+  workflow_dispatch: # "Run workflow" button for an on-demand backup
+
+permissions:
+  contents: read
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Download the live data
+        env:
+          BACKUP_SITE_PASSWORD: ${{ secrets.BACKUP_SITE_PASSWORD }}
+        run: node .claude/skills/backup-live-data/scripts/backup.mjs --out "$RUNNER_TEMP/backups"
+
+      - name: Encrypt
+        id: encrypt
+        env:
+          BACKUP_ENCRYPTION_KEY: ${{ secrets.BACKUP_ENCRYPTION_KEY }}
+        run: |
+          name="acs-homestay-backup-$(TZ=Asia/Manila date +%Y-%m-%d_%H%M)"
+          node .claude/skills/backup-live-data/scripts/backup-crypto.mjs encrypt "$RUNNER_TEMP/backups" "$RUNNER_TEMP/$name.acsbackup"
+          rm -rf "$RUNNER_TEMP/backups"
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+
+      - name: Save the encrypted backup
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.encrypt.outputs.name }}
+          path: ${{ runner.temp }}/${{ steps.encrypt.outputs.name }}.acsbackup
+          retention-days: 90
+          if-no-files-found: error
