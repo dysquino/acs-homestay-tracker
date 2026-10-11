@@ -95,6 +95,31 @@ export type CleaningRecord = {
   createdBy: string;
 };
 
+export type BookingRequestStatus = "pending" | "approved" | "declined";
+
+/** A stay a guest asked for through the private booking link. */
+export type BookingRequest = {
+  id: string;
+  guestName: string;
+  contactInfo: string;
+  checkIn: ISODate;
+  checkOut: ISODate;
+  guestsCount: number;
+  message: string;
+  status: BookingRequestStatus;
+  /** The booking it became, once approved. */
+  bookingId: string | null;
+  decidedBy: string | null;
+  /** When the guest sent it (ISO timestamp). */
+  createdAt: string;
+};
+
+/** What a guest submits from the booking page. */
+export type BookingRequestInput = Pick<
+  BookingRequest,
+  "guestName" | "contactInfo" | "checkIn" | "checkOut" | "guestsCount" | "message"
+>;
+
 export type User = {
   id: string;
   name: string;

@@ -2,6 +2,7 @@ import "server-only";
 
 import type {
   Booking as DbBooking,
+  BookingRequest as DbBookingRequest,
   CleaningSchedule as DbCleaning,
   Expense as DbExpense,
   BookingSource as DbBookingSource,
@@ -16,6 +17,7 @@ import type { Decimal } from "@prisma/client/runtime/library";
 import type {
   Booking,
   BookingInput,
+  BookingRequest,
   CleaningPaymentStatus,
   CleaningRecord,
   CleaningStatus,
@@ -256,4 +258,20 @@ export function cleaningPatchToDb(patch: Partial<Omit<CleaningRecord, "id">>) {
   if (patch.notes !== undefined) out.notes = patch.notes;
   if (patch.createdBy !== undefined) out.createdBy = patch.createdBy;
   return out;
+}
+
+export function bookingRequestFromDb(row: DbBookingRequest): BookingRequest {
+  return {
+    id: row.id,
+    guestName: row.guestName,
+    contactInfo: row.contactInfo,
+    checkIn: dateToISO(row.checkIn),
+    checkOut: dateToISO(row.checkOut),
+    guestsCount: row.guestsCount,
+    message: row.message,
+    status: row.status.toLowerCase() as BookingRequest["status"],
+    bookingId: row.bookingId,
+    decidedBy: row.decidedBy,
+    createdAt: row.createdAt.toISOString(),
+  };
 }

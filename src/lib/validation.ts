@@ -6,6 +6,7 @@ import {
   EXPENSE_REFUND_STATUSES,
   PAYMENT_STATUSES,
   type BookingInput,
+  type BookingRequestInput,
   type CleaningRecord,
   type ExpenseInput,
 } from "./types";
@@ -95,4 +96,35 @@ export function validateCleaning(c: Omit<CleaningRecord, "id">): void {
   oneOf(c.paymentStatus, CLEANING_PAYMENT_STATUSES, "Payment status");
   text(c.notes, "Notes", { max: MAX_TEXT });
   text(c.createdBy, "Created by", { max: MAX_NAME });
+}
+
+export const MAX_REQUEST_NIGHTS = 30;
+const MAX_REQUEST_DAYS_AHEAD = 365;
+const MAX_REQUEST_GUESTS = 20;
+
+function addDaysISO(iso: string, days: number): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10);
+}
+
+/**
+ * A guest's booking request, from a public page — so stricter than the
+ * owners' booking form: required contact, no past dates, a cap on length and
+ * how far ahead. `today` is the homestay's local date (Asia/Manila).
+ */
+export function validateBookingRequest(r: BookingRequestInput, today: string): void {
+  text(r.guestName, "Your name", { max: 100, required: true });
+  text(r.contactInfo, "Contact number or email", { max: 100, required: true });
+  text(r.message, "Message", { max: 1000 });
+  date(r.checkIn, "Check-in");
+  date(r.checkOut, "Check-out");
+  if (r.checkOut <= r.checkIn) fail("Check-out must be after check-in.");
+  if (r.checkIn < today) fail("Check-in can't be in the past.");
+  if (r.checkIn > addDaysISO(today, MAX_REQUEST_DAYS_AHEAD)) fail("Please choose dates within the next year.");
+  if (r.checkOut > addDaysISO(r.checkIn, MAX_REQUEST_NIGHTS)) {
+    fail(`Stays can be at most ${MAX_REQUEST_NIGHTS} nights — message us for longer stays.`);
+  }
+  if (!Number.isInteger(r.guestsCount) || r.guestsCount < 1 || r.guestsCount > MAX_REQUEST_GUESTS) {
+    fail(`Number of guests must be between 1 and ${MAX_REQUEST_GUESTS}.`);
+  }
 }

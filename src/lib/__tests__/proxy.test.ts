@@ -28,4 +28,11 @@ describe("access gate matcher", () => {
   it("does not open up other images by accident", () => {
     expect(gated("/other-photo.jpg")).toBe(true);
   });
+
+  it("opens exactly /book (the guests' booking page) — not /bookings or anything under /book", () => {
+    expect(gated("/book")).toBe(false);
+    for (const path of ["/bookings", "/book/admin", "/booking", "/books"]) {
+      expect(gated(path), path).toBe(true);
+    }
+  });
 });

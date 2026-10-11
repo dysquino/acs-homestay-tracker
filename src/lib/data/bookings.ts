@@ -1,6 +1,5 @@
 "use server";
 
-import { DEFAULT_CLEANING_FEE } from "@/lib/constants";
 import { prisma } from "@/lib/prisma";
 import type { Booking, BookingInput } from "@/lib/types";
 import { validateBooking } from "@/lib/validation";
@@ -8,10 +7,10 @@ import { validateBooking } from "@/lib/validation";
 import {
   bookingFromDb,
   bookingPatchToDb,
-  bookingToDb,
   isoToDate,
 } from "./mappers";
 import { requireSiteAccess } from "./access";
+import { createBookingWithTurnover } from "./booking-create";
 import { assertNoOverlap } from "./overlap";
 
 export async function listBookings(): Promise<Booking[]> {
@@ -20,34 +19,13 @@ export async function listBookings(): Promise<Booking[]> {
   return rows.map(bookingFromDb);
 }
 
-/**
- * Creates a booking and its auto-suggested turnover cleaning (scheduled for
- * the check-out date) in one transaction — a confirmed requirement, ported
- * as-is from the old client-side store. The user can reassign or delete the
- * turnover afterward.
- */
+/** A booking plus its turnover cleaning, in one transaction (see booking-create.ts). */
 export async function createBooking(
   input: BookingInput,
 ): Promise<Booking> {
   await requireSiteAccess();
   validateBooking(input);
-  const booking = await prisma.$transaction(async (tx) => {
-    await assertNoOverlap(tx, isoToDate(input.checkIn), isoToDate(input.checkOut));
-    const created = await tx.booking.create({ data: bookingToDb(input) });
-    await tx.cleaningSchedule.create({
-      data: {
-        date: created.checkOut,
-        bookingId: created.id,
-        cleanerName: "",
-        status: "SCHEDULED",
-        paymentAmount: DEFAULT_CLEANING_FEE,
-        paymentStatus: "UNPAID",
-        notes: "",
-        createdBy: created.createdBy,
-      },
-    });
-    return created;
-  });
+  const booking = await prisma.$transaction((tx) => createBookingWithTurnover(tx, input));
   return bookingFromDb(booking);
 }
 
