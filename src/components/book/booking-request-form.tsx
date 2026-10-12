@@ -142,12 +142,6 @@ export function BookingRequestForm({
 
   return (
     <form onSubmit={submit} className="space-y-5" noValidate>
-      {/* InstaPay instructions + screenshot — pre-form, so the guest sees them
-          before they commit to filling out the booking request. The
-          screenshot is optional; PaymentInfo renders null until the owner
-          configures bank details. */}
-      <PaymentInfo />
-
       {/* Calendar */}
       <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
         <div className="mb-3 flex items-center justify-between gap-2">
@@ -315,6 +309,13 @@ export function BookingRequestForm({
           This is a request, not a confirmed booking — we&apos;ll get back to you.
         </p>
       </section>
+
+      {/* InstaPay instructions — at the bottom, after the guest has committed
+          to filling out the booking request. The screenshot upload above is
+          already optional; the bank details here are for guests who want to
+          pay before sending the request. PaymentInfo renders null until the
+          owner configures bank details. */}
+      <PaymentInfo />
     </form>
   );
 }

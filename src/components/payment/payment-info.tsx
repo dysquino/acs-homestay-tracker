@@ -8,23 +8,23 @@ import { getPublicPaymentConfig } from "@/lib/data/payment-config";
 
 import type { PaymentConfigData } from "@/lib/data/payment-config";
 
-const QR_PATH = "/qr-code.JPG";
+const FALLBACK_QR_PATH = "/qr-code.JPG";
 
 /**
- * The bank details + InstaPay QR shown above the booking form on /book. The
- * QR itself is a static asset at /public/qr-code.JPG — this component just
- * renders it and adds copy-to-clipboard for the account name and number.
+ * The bank details + InstaPay QR shown above the booking form on /book.
  *
- * Three states:
- * - nothing configured yet → "Payment instructions will appear here once the
- *   owner sets them up." (section hidden, nothing to show)
- * - text fields set but the QR file is missing → text + copy buttons only
- * - fully configured → QR + text + copy buttons
+ * QR source priority:
+ * 1. The override bytes set in PaymentConfig (the owner replaced the default).
+ * 2. The static asset at /public/qr-code.JPG (the built-in default).
+ * 3. Hidden, with an amber note that the QR isn't available.
+ *
+ * The 1×1 probe is only used for the static fallback case — when an
+ * override is uploaded, we already know the QR exists (it's in the row).
  */
 export function PaymentInfo() {
   const [config, setConfig] = useState<PaymentConfigData | null>(null);
   const [loaded, setLoaded] = useState(false);
-  const [qrOk, setQrOk] = useState(false);
+  const [fallbackQrOk, setFallbackQrOk] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -51,6 +51,15 @@ export function PaymentInfo() {
 
   if (!config) return null;
 
+  const hasOverride = Boolean(config.qrCodeBytes && config.qrCodeMime);
+  // Only the fallback path needs a 404 probe — if there's an override, the
+  // bytes are guaranteed to render (they came from the server).
+  const qrSrc: string | null = hasOverride
+    ? bytesToDataUrl(config.qrCodeBytes!, config.qrCodeMime!)
+    : fallbackQrOk
+      ? FALLBACK_QR_PATH
+      : null;
+
   return (
     <section className="rounded-2xl border border-brand-200 bg-brand-50/40 p-4 shadow-sm sm:p-5">
       <h2 className="text-sm font-semibold text-slate-900">Pay via InstaPay</h2>
@@ -61,10 +70,10 @@ export function PaymentInfo() {
       </p>
 
       <div className="mt-4 grid gap-4 sm:grid-cols-[180px_auto] sm:items-start">
-        {qrOk ? (
+        {qrSrc ? (
           /* eslint-disable-next-line @next/next/no-img-element */
           <img
-            src={QR_PATH}
+            src={qrSrc}
             alt={`${config.bankName} InstaPay QR code`}
             width={180}
             height={180}
@@ -90,22 +99,23 @@ export function PaymentInfo() {
         </dl>
       </div>
 
-      {/* Hidden 1×1 probe: tells us whether /qr-code.JPG exists. If it 404s, we
-          hide the broken <img> above and the user still sees the text + a note
-          that the QR isn't available right now. */}
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={QR_PATH}
-        alt=""
-        width={1}
-        height={1}
-        aria-hidden
-        onLoad={() => setQrOk(true)}
-        onError={() => setQrOk(false)}
-        className="hidden"
-      />
+      {/* Hidden 1×1 probe for the fallback QR only. Only attached when we
+          actually depend on the static asset (no override). */}
+      {!hasOverride ? (
+        /* eslint-disable-next-line @next/next/no-img-element */
+        <img
+          src={FALLBACK_QR_PATH}
+          alt=""
+          width={1}
+          height={1}
+          aria-hidden
+          onLoad={() => setFallbackQrOk(true)}
+          onError={() => setFallbackQrOk(false)}
+          className="hidden"
+        />
+      ) : null}
 
-      {!qrOk ? (
+      {!qrSrc ? (
         <p className="mt-3 text-xs text-amber-700">
           The QR image isn&apos;t available right now — please use the account details above.
         </p>
@@ -148,4 +158,10 @@ function CopyButton({ value }: { value: string }) {
       <span className="ml-1">{copied ? "Copied" : "Copy"}</span>
     </Button>
   );
+}
+
+function bytesToDataUrl(bytes: Uint8Array, mime: string): string {
+  let binary = "";
+  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+  return `data:${mime};base64,${btoa(binary)}`;
 }

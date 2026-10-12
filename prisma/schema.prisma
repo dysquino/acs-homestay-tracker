@@ -183,13 +183,19 @@ model BookingRequest {
 
 /// The bank details shown on /book so guests can pay via InstaPay. One row
 /// (singleton by id) — edited from /payment-settings, read by the public
-/// booking page. The QR image itself lives as a static asset at
-/// /public/qr-code.JPG (no upload UI to keep Settings minimal).
+/// booking page. The QR is uploaded here (bytes + sniffed MIME); if unset,
+/// the public page falls back to the static asset at /public/qr-code.JPG.
 model PaymentConfig {
   id            String   @id @default("singleton")
   bankName      String
   accountName   String
   accountNumber String
+  /// Optional QR override uploaded from Settings. Same magic-byte + size
+  /// rules as a payment screenshot (src/lib/payment-screenshot.ts). When
+  /// null, /book falls back to /public/qr-code.JPG so the static file
+  /// works as a built-in default.
+  qrCode        Bytes?
+  qrCodeMime    String?
   updatedAt     DateTime @updatedAt
   updatedBy     String
 }
