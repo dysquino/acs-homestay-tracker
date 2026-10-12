@@ -409,3 +409,30 @@ model AirbnbCalendarCache {
   checkedAt    DateTime
   lastError    String?
 }
+
+/// A leftover table in the production database with no model behind it here —
+/// a date-blocking feature that was built, then reverted, leaving the table
+/// behind when the schema was `db:push`ed without it. It holds 0 rows.
+///
+/// Declared here purely so Prisma's schema diff knows to leave it alone:
+/// without it, `db:push` emits `DROP TABLE "DateBlock"`, which would silently
+/// destroy the table on the next unrelated schema change. Nothing in the app
+/// reads or writes it. If that feature is ever revived, delete this model and
+/// build the real one on top of the existing table.
+///
+/// The shape must mirror the live table exactly — including `reason` having no
+/// default and the (startDate, endDate) index — because Prisma still diffs an
+/// `@@ignore`d model's columns. Any mismatch shows up as a DROP INDEX or a DROP
+/// DEFAULT against the live table instead of the DROP TABLE we're avoiding.
+model DateBlock {
+  id        String   @id @default(cuid())
+  startDate DateTime
+  endDate   DateTime
+  reason    String   @default("")
+  createdBy String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([startDate, endDate])
+  @@ignore
+}
