@@ -176,6 +176,12 @@ model BookingRequest {
   /// `src/lib/payment-screenshot.ts`. Capped at MAX_PAYMENT_SCREENSHOT_BYTES.
   paymentScreenshot     Bytes?
   paymentScreenshotMime String?
+  /// ID photo uploaded by the guest for seamless check-in. Same magic-byte
+  /// + size rules as the payment screenshot. The guest-side form requires
+  /// it; the server doesn't (old clients stay compatible) — but the form is
+  /// the only realistic path guests use.
+  idPhoto     Bytes?
+  idPhotoMime String?
   createdAt   DateTime             @default(now())
 
   @@index([status, createdAt])

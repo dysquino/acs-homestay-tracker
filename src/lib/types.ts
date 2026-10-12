@@ -117,6 +117,14 @@ export type BookingRequest = {
    */
   hasPaymentScreenshot: boolean;
   paymentScreenshotMime: string | null;
+  /**
+   * Whether an ID photo is on file. Bytes fetched on demand via
+   * `getBookingRequestIdPhoto(id)`. Required by the guest-side form
+   * for seamless check-in, but the server doesn't enforce it (old clients
+   * stay compatible).
+   */
+  hasIdPhoto: boolean;
+  idPhotoMime: string | null;
   /** When the guest sent it (ISO timestamp). */
   createdAt: string;
 };
