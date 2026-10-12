@@ -142,19 +142,24 @@ export default function CleaningPage() {
         }
       />
 
-      <div className="mb-5 grid gap-3 sm:grid-cols-3">
+      {/* One row even on a phone (compact tiles): three stacked tiles took a
+          whole screen before the list started. */}
+      <div className="mb-5 grid grid-cols-3 gap-2 sm:gap-3">
         <StatTile
+          compact
           label="Owed to cleaners"
           value={formatCurrency(totalOwed)}
           hint={`${unpaidCount} completed, unpaid`}
           tone={totalOwed > 0 ? "negative" : "positive"}
         />
         <StatTile
+          compact
           label="Scheduled"
           value={cleaning.filter((c) => c.status === "scheduled").length}
           hint="Not yet marked complete"
         />
         <StatTile
+          compact
           label="Unassigned"
           value={
             cleaning.filter((c) => c.status === "scheduled" && !c.cleanerName.trim()).length
@@ -168,6 +173,7 @@ export default function CleaningPage() {
         <Card className="overflow-hidden">
           <FilterBar
             filtersActive={filtersActive}
+            activeCount={[cleaner !== "all", status !== "all", payment !== "all", from, to].filter(Boolean).length}
             onClear={() => {
               setCleaner("all");
               setStatus("all");

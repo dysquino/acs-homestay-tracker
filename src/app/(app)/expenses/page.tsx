@@ -223,19 +223,24 @@ function ExpensesPageContent() {
         </h2>
       </div>
 
-      <div className="mb-5 grid gap-3 sm:grid-cols-3">
+      {/* One row even on a phone (compact tiles); the month is in the selector
+          right above, so phones drop it from the labels. */}
+      <div className="mb-5 grid grid-cols-3 gap-2 sm:gap-3">
         <StatTile
-          label={`Income — ${formatMonth(summary.month)}`}
+          compact
+          label={<>Income<span className="hidden sm:inline"> — {formatMonth(summary.month)}</span></>}
           value={formatWhole(summary.income)}
           hint="Booking payouts, split by nights per month"
           tone="brand"
         />
         <StatTile
-          label={`Expenses — ${formatMonth(summary.month)}`}
+          compact
+          label={<>Expenses<span className="hidden sm:inline"> — {formatMonth(summary.month)}</span></>}
           value={formatWhole(summary.expenses)}
         />
         <StatTile
-          label={`Profit — ${formatMonth(summary.month)}`}
+          compact
+          label={<>Profit<span className="hidden sm:inline"> — {formatMonth(summary.month)}</span></>}
           value={formatWhole(summary.net)}
           tone={summary.net >= 0 ? "positive" : "negative"}
           hint={summary.net >= 0 ? "In the black" : "Spending exceeds income"}
@@ -246,6 +251,7 @@ function ExpensesPageContent() {
         <Card className="overflow-hidden">
           <FilterBar
             filtersActive={filtersActive}
+            activeCount={[category !== "all", refund !== "all", paidBy !== "all", from, to].filter(Boolean).length}
             onClear={() => {
               setCategory("all");
               setRefund("all");

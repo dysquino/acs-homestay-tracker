@@ -161,7 +161,11 @@ function BookingsPageContent() {
 
       {view === "list" ? (
         <Card className="overflow-hidden">
-          <FilterBar filtersActive={filtersActive} onClear={clearFilters}>
+          <FilterBar
+            filtersActive={filtersActive}
+            activeCount={[source !== "all", payment !== "all", from, to, includePast].filter(Boolean).length}
+            onClear={clearFilters}
+          >
               <Field label="Source" className="min-w-36 flex-1">
                 {(id) => (
                   <Select id={id} value={source} onChange={(e) => setSource(e.target.value as BookingSource | "all")}>

@@ -11,7 +11,7 @@ const TONE_COLOR: Record<NonNullable<Props["tone"]>, string> = {
 };
 
 type Props = {
-  label: string;
+  label: ReactNode;
   value: ReactNode;
   hint?: ReactNode;
   tone?: "neutral" | "positive" | "negative" | "brand";
@@ -19,11 +19,25 @@ type Props = {
    * current (last) point in the tile's tone color, the rest in a
    * de-emphasis gray, per the stat-tile contract: value + delta + sparkline. */
   trend?: number[];
+  /**
+   * Fits three tiles side by side on a phone: tighter padding and a number
+   * that scales to the tile's width below `sm`, and the hint (the explanatory
+   * line) only from `sm` up,
+   * where there's room — it stays as the tile's tooltip. Unchanged from `sm`.
+   */
+  compact?: boolean;
 };
 
-export function StatTile({ label, value, hint, tone = "neutral", trend }: Props) {
+export function StatTile({ label, value, hint, tone = "neutral", trend, compact }: Props) {
   return (
-    <div className={cn("rounded-3xl bg-white p-4 sm:p-5", SOFT_SHADOW)}>
+    <div
+      className={cn(
+        "bg-white",
+        compact ? "@container rounded-2xl p-3 sm:rounded-3xl sm:p-5" : "rounded-3xl p-4 sm:p-5",
+        SOFT_SHADOW,
+      )}
+      title={compact && typeof hint === "string" ? hint : undefined}
+    >
       <div className="flex items-start justify-between gap-2">
         <p className="text-xs font-medium text-slate-500">{label}</p>
         {trend && trend.length > 1 ? (
@@ -32,7 +46,10 @@ export function StatTile({ label, value, hint, tone = "neutral", trend }: Props)
       </div>
       <p
         className={cn(
-          "mt-1 text-xl font-semibold tabular-nums",
+          "mt-1 font-semibold tabular-nums",
+          // On a phone the number scales with the tile's width (cqw), so a
+          // six-digit amount like −₱113,343 still fits a 320px-wide screen.
+          compact ? "text-[clamp(0.75rem,17cqw,1.125rem)] whitespace-nowrap sm:text-xl" : "text-xl",
           tone === "positive" && "text-emerald-700",
           tone === "negative" && "text-red-700",
           tone === "brand" && "text-brand-800",
@@ -41,7 +58,7 @@ export function StatTile({ label, value, hint, tone = "neutral", trend }: Props)
       >
         {value}
       </p>
-      {hint ? <p className="mt-0.5 text-xs text-slate-500">{hint}</p> : null}
+      {hint ? <p className={cn("mt-0.5 text-xs text-slate-500", compact && "hidden sm:block")}>{hint}</p> : null}
     </div>
   );
 }
