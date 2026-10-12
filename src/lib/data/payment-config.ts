@@ -43,6 +43,10 @@ export type PaymentConfigData = {
   /// Cleaning fee for long stays (>= 5 nights). If 0, falls back to
   /// `cleaningFee` when the stay would have used this tier.
   cleaningFeeLong: number;
+  /// Nights at which a stay flips from "short" to "long" (and starts using
+  /// `cleaningFeeLong` instead of `cleaningFee`). Owner-tunable; defaults
+  /// to 5 to preserve the original behavior.
+  longStayThresholdNights: number;
   /// Whether the ID photo is required on the public /book form. Defaults
   /// to true (preserves the original required-by-default behavior).
   idPhotoRequired: boolean;
@@ -61,6 +65,7 @@ function rowToConfig(row: {
   nightlyRate: Decimal;
   cleaningFee: Decimal;
   cleaningFeeLong: Decimal;
+  longStayThresholdNights: number;
   idPhotoRequired: boolean;
   paymentScreenshotRequired: boolean;
   updatedAt: Date;
@@ -74,6 +79,7 @@ function rowToConfig(row: {
     nightlyRate: Number(row.nightlyRate),
     cleaningFee: Number(row.cleaningFee),
     cleaningFeeLong: Number(row.cleaningFeeLong),
+    longStayThresholdNights: row.longStayThresholdNights,
     idPhotoRequired: row.idPhotoRequired,
     paymentScreenshotRequired: row.paymentScreenshotRequired,
     updatedAt: row.updatedAt.toISOString(),
@@ -108,6 +114,8 @@ export type SetPaymentConfigInput = {
   cleaningFee?: number;
   /** Cleaning fee for long stays (>= 5 nights, peso). */
   cleaningFeeLong?: number;
+  /** Nights at which a stay flips to the long-stay fee. 2..60. */
+  longStayThresholdNights?: number;
   /** Whether the ID photo is required on /book. */
   idPhotoRequired?: boolean;
   /** Whether the payment screenshot is required on /book. */
@@ -161,6 +169,18 @@ export async function setPaymentConfig(input: SetPaymentConfigInput): Promise<Pa
           return Math.round(n * 100) / 100;
         })()
       : undefined;
+  // Long-stay threshold — coerced to a positive integer; lower bound 2
+  // (a 1-night stay can never be "long"), upper bound 60 (already a
+  // long-term rental past that point).
+  const longStayThresholdNights =
+    input.longStayThresholdNights !== undefined
+      ? (() => {
+          const n = Math.trunc(Number(input.longStayThresholdNights));
+          if (!Number.isFinite(n) || n < 2 || n > 60)
+            throw new Error("Long-stay threshold must be a whole number of nights between 2 and 60.");
+          return n;
+        })()
+      : undefined;
 
   // Build the patch; start from text-only fields, then apply QR + rates.
   const data: Record<string, unknown> = { bankName, accountName, accountNumber, updatedBy };
@@ -177,6 +197,7 @@ export async function setPaymentConfig(input: SetPaymentConfigInput): Promise<Pa
   if (nightlyRate !== undefined) data.nightlyRate = nightlyRate;
   if (cleaningFee !== undefined) data.cleaningFee = cleaningFee;
   if (cleaningFeeLong !== undefined) data.cleaningFeeLong = cleaningFeeLong;
+  if (longStayThresholdNights !== undefined) data.longStayThresholdNights = longStayThresholdNights;
   if (input.idPhotoRequired !== undefined) data.idPhotoRequired = input.idPhotoRequired;
   if (input.paymentScreenshotRequired !== undefined)
     data.paymentScreenshotRequired = input.paymentScreenshotRequired;
@@ -192,6 +213,7 @@ export async function setPaymentConfig(input: SetPaymentConfigInput): Promise<Pa
       nightlyRate: nightlyRate ?? 0,
       cleaningFee: cleaningFee ?? 0,
       cleaningFeeLong: cleaningFeeLong ?? 0,
+      longStayThresholdNights: longStayThresholdNights ?? 5,
       idPhotoRequired: input.idPhotoRequired ?? true,
       paymentScreenshotRequired: input.paymentScreenshotRequired ?? false,
       qrCode: input.qrCode && input.qrCode !== null ? Buffer.from(input.qrCode.bytes) : undefined,

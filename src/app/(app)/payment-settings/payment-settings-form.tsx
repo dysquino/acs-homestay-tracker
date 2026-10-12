@@ -39,6 +39,12 @@ export function PaymentSettingsForm({
   const [nightlyRate, setNightlyRate] = useState<number>(initial?.nightlyRate ?? 0);
   const [cleaningFee, setCleaningFee] = useState<number>(initial?.cleaningFee ?? 0);
   const [cleaningFeeLong, setCleaningFeeLong] = useState<number>(initial?.cleaningFeeLong ?? 0);
+  // Owner-tunable long-stay threshold. The server accepts 2..60; default 5
+  // preserves the original behavior. We clamp client-side to keep the input
+  // from drifting into invalid values as the user types.
+  const [longStayThresholdNights, setLongStayThresholdNights] = useState<number>(
+    initial?.longStayThresholdNights ?? 5,
+  );
   // Default to the schema defaults so the very first save (which `create`s
   // the row) still works without the user touching these.
   const [idPhotoRequired, setIdPhotoRequired] = useState<boolean>(initial?.idPhotoRequired ?? true);
@@ -137,6 +143,7 @@ export function PaymentSettingsForm({
           nightlyRate,
           cleaningFee,
           cleaningFeeLong,
+          longStayThresholdNights,
           idPhotoRequired,
           paymentScreenshotRequired,
         });
@@ -176,7 +183,7 @@ export function PaymentSettingsForm({
             />
           )}
         </Field>
-        <Field label="Cleaning fee (long stay)" hint="Used for stays of 5 nights or more. Leave 0 to keep using the short-stay fee.">
+        <Field label="Cleaning fee (long stay)" hint="Used for stays of the threshold or more. Leave 0 to keep using the short-stay fee.">
           {(id) => (
             <CurrencyInput
               id={id}
@@ -185,6 +192,25 @@ export function PaymentSettingsForm({
               value={cleaningFeeLong || ""}
               onChange={(e) => setCleaningFeeLong(e.target.value === "" ? 0 : Number(e.target.value))}
               placeholder="0"
+            />
+          )}
+        </Field>
+        <Field
+          label="Long-stay threshold (nights)"
+          hint="Stays of this length or more use the long-stay cleaning fee. Range 2-60."
+        >
+          {(id) => (
+            <Input
+              id={id}
+              type="number"
+              min={2}
+              max={60}
+              step={1}
+              value={longStayThresholdNights || ""}
+              onChange={(e) => {
+                const v = e.target.value === "" ? 5 : Number(e.target.value);
+                if (Number.isFinite(v)) setLongStayThresholdNights(Math.max(2, Math.min(60, Math.trunc(v))));
+              }}
             />
           )}
         </Field>

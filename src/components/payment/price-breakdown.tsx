@@ -2,19 +2,24 @@
 
 import { formatCurrency, formatWhole } from "@/lib/format";
 
-/** Threshold (nights) at which the long-stay cleaning rate is used. */
-export const LONG_STAY_THRESHOLD = 5;
+/** Default long-stay threshold when the owner hasn't configured one. */
+export const DEFAULT_LONG_STAY_THRESHOLD = 5;
 
 export type PricingConfig = {
   /** Per-night rate (peso). 0 means "not configured". */
   nightlyRate: number;
-  /** Cleaning fee for short stays (< 5 nights). 0 means "not set". */
+  /** Cleaning fee for short stays (< threshold nights). 0 means "not set". */
   cleaningFee: number;
   /**
-   * Cleaning fee for long stays (>= 5 nights). 0 falls back to the
+   * Cleaning fee for long stays (>= threshold nights). 0 falls back to the
    * short-stay fee when the stay would have used this tier.
    */
   cleaningFeeLong: number;
+  /**
+   * Nights at which a stay flips to the long-stay fee. Owner-tunable from
+   * Payment Settings; defaults to 5 to preserve the original behavior.
+   */
+  longStayThresholdNights: number;
   /**
    * Whether the ID photo is required on the form. When false, the field
    * is shown as optional and the form doesn't block submission for it.
@@ -50,6 +55,9 @@ export function PriceBreakdown({
   nights: number;
 }) {
   const { nightlyRate, cleaningFee, cleaningFeeLong } = pricing;
+  // Defensive default — the server is the source of truth, but if a caller
+  // forgets to pass the field the old behavior (5 nights) is preserved.
+  const longStayThreshold = pricing.longStayThresholdNights || DEFAULT_LONG_STAY_THRESHOLD;
   const configured = nightlyRate > 0 || cleaningFee > 0 || cleaningFeeLong > 0;
   if (!configured) return null;
 
@@ -67,14 +75,14 @@ export function PriceBreakdown({
               {cleaningFeeLong > 0 && cleaningFeeLong !== cleaningFee ? (
                 <>
                   {" "}
-                  (<strong className="text-slate-900">{formatCurrency(cleaningFeeLong)}</strong> for stays of 5+ nights)
+                  (<strong className="text-slate-900">{formatCurrency(cleaningFeeLong)}</strong> for stays of {longStayThreshold}+ nights)
                 </>
               ) : null}
             </>
           ) : cleaningFeeLong > 0 ? (
             <>
               {" "}
-              + <strong className="text-slate-900">{formatCurrency(cleaningFeeLong)}</strong> cleaning fee (5+ nights)
+              + <strong className="text-slate-900">{formatCurrency(cleaningFeeLong)}</strong> cleaning fee ({longStayThreshold}+ nights)
             </>
           ) : null}
           . Pick your dates to see the total.
@@ -85,13 +93,13 @@ export function PriceBreakdown({
 
   // Dates picked — full breakdown. The tier label only differs when the two
   // fees are non-zero AND the long tier is being applied.
-  const isLongStay = nights >= LONG_STAY_THRESHOLD;
+  const isLongStay = nights >= longStayThreshold;
   const shortFee = cleaningFee > 0 ? cleaningFee : cleaningFeeLong;
   const longFee = cleaningFeeLong > 0 ? cleaningFeeLong : cleaningFee;
   const effectiveFee = isLongStay ? longFee : shortFee;
   const tierLabel =
     isLongStay && cleaningFeeLong > 0 && cleaningFeeLong !== cleaningFee
-      ? `Cleaning fee (${LONG_STAY_THRESHOLD}+ nights)`
+      ? `Cleaning fee (${longStayThreshold}+ nights)`
       : "Cleaning fee";
 
   const subtotal = nightlyRate * nights;

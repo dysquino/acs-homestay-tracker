@@ -37,6 +37,9 @@ export default async function BookPage({
     nightlyRate: config?.nightlyRate ?? 0,
     cleaningFee: config?.cleaningFee ?? 0,
     cleaningFeeLong: config?.cleaningFeeLong ?? 0,
+    // Default to 5 nights — preserves the original "long stay" cutoff
+    // until the owner changes it from Settings.
+    longStayThresholdNights: config?.longStayThresholdNights ?? 5,
     // Defaults preserve the original behavior: ID photo was required,
     // payment screenshot was optional. Settings can override either.
     idPhotoRequired: config?.idPhotoRequired ?? true,
