@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { formatCurrency, formatSigned, formatWhole } from "../format";
+import { formatAccountNumber, formatCurrency, formatSigned, formatWhole } from "../format";
 
 describe("money formatting", () => {
   it("shows centavos when there are some, so rows add up to their total", () => {
@@ -21,5 +21,25 @@ describe("money formatting", () => {
   it("rounds computed figures to whole pesos", () => {
     expect(formatWhole(23587.33)).toBe("₱23,587");
     expect(formatSigned(-1234.6)).toBe("−₱1,235");
+  });
+});
+
+describe("formatAccountNumber", () => {
+  it("groups digits in fours from the left", () => {
+    expect(formatAccountNumber("109420670200")).toBe("1094 2067 0200");
+  });
+
+  it("strips anything that isn't a digit before formatting", () => {
+    expect(formatAccountNumber("1094 2067 0200")).toBe("1094 2067 0200");
+    expect(formatAccountNumber("1094-2067-0200")).toBe("1094 2067 0200");
+  });
+
+  it("leaves short numbers as-is when fewer than four digits", () => {
+    expect(formatAccountNumber("123")).toBe("123");
+  });
+
+  it("does not add a trailing space when length is not a multiple of four", () => {
+    expect(formatAccountNumber("12345")).toBe("1234 5");
+    expect(formatAccountNumber("1234567890")).toBe("1234 5678 90");
   });
 });
