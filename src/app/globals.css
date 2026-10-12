@@ -37,6 +37,14 @@ html {
   color-scheme: light;
 }
 
+/* Below lg the top bar is sticky (app-shell.tsx): keep anything scrolled into
+   view — e.g. a table jumping back to its top on "Next page" — clear of it. */
+@media (width < 64rem) {
+  html {
+    scroll-padding-top: 5rem;
+  }
+}
+
 body {
   background: #f1f2f4; /* canvas — white cards float on it */
   color: #0f172a;

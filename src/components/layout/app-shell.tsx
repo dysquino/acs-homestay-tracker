@@ -100,8 +100,11 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
       </aside>
 
-      {/* Mobile top bar */}
-      <header className="no-print flex items-center justify-between gap-3 bg-white px-4 py-3 shadow-[0_1px_2px_rgba(15,23,42,0.06)] lg:hidden">
+      {/* Mobile top bar — sticky, like the bottom tabs, so the brand, export
+          and who's-recording stay in reach while a long page scrolls. Its
+          height is reserved as scroll padding in globals.css, so jumps to a
+          spot on the page (e.g. pagination) don't land underneath it. */}
+      <header className="no-print sticky top-0 z-30 flex items-center justify-between gap-3 bg-white px-4 py-3 shadow-[0_1px_2px_rgba(15,23,42,0.06)] lg:hidden">
         <Brand />
         <div className="flex items-center gap-1">
           <ExportMenu compact />

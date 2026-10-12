@@ -18,7 +18,10 @@ export function Pagination({ paging, noun }: { paging: Paging; noun: string }) {
   function go(page: number) {
     paging.setPage(page);
     const card = ref.current?.closest("section");
-    if (card && card.getBoundingClientRect().top < 0) card.scrollIntoView({ block: "start" });
+    // Below lg a sticky top bar covers the top of the screen; its height is
+    // the page's scroll-padding-top (globals.css), so count that as hidden.
+    const covered = parseFloat(getComputedStyle(document.documentElement).scrollPaddingTop) || 0;
+    if (card && card.getBoundingClientRect().top < covered) card.scrollIntoView({ block: "start" });
   }
 
   return (
