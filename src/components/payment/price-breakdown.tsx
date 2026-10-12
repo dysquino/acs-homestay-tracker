@@ -108,9 +108,6 @@ export function PriceBreakdown({
         <span className="text-sm font-medium text-slate-700">Total</span>
         <span className="text-base font-semibold text-slate-900 tabular-nums">{formatCurrency(total)}</span>
       </div>
-      <p className="mt-2 text-xs text-slate-500">
-        We&apos;ll confirm the final amount when we reply — this is an estimate.
-      </p>
     </section>
   );
 }
