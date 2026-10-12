@@ -1,4 +1,4 @@
-# Daily backup of the live site's data (bookings, expenses, cleaning).
+# Daily backup of the live site's data (bookings, expenses, cleaning, blocked dates).
 #
 # Runs the backup skill's script against the live site, encrypts the result
 # (this repository is public, and its workflow files are downloadable by any

@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 
 import { PageHeader } from "@/components/layout/app-shell";
 import { AirbnbImportModal } from "@/components/bookings/airbnb-import";
+import { BlockDatesForm, BlockedDatesList, BlockSheet } from "@/components/bookings/block-dates";
 import { BookingCalendar } from "@/components/bookings/booking-calendar";
 import {
   BookingTable,
@@ -14,19 +15,22 @@ import {
 import { BookingForm } from "@/components/bookings/booking-form";
 import { AirbnbSyncStatus } from "@/components/bookings/airbnb-sync";
 import { BookingRequests, ShareBookingLink } from "@/components/bookings/booking-requests";
-import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Field, Select } from "@/components/ui/field";
-import { DateRangeFilter, FilterBar } from "@/components/ui/filter-bar";
-import { CalendarIcon, ListIcon, PlusIcon } from "@/components/ui/icons";
+import { FilterBar } from "@/components/ui/filter-bar";
+import { HeaderAction, HeaderActions } from "@/components/ui/header-action";
+import { CalendarIcon, CalendarOffIcon, ListIcon, UploadIcon } from "@/components/ui/icons";
 import { ConfirmDialog } from "@/components/ui/modal";
+import { PeriodPicker } from "@/components/ui/period-picker";
 import { cn } from "@/lib/cn";
 import { today } from "@/lib/dates";
 import { formatCurrency, formatDate, formatDateRange } from "@/lib/format";
+import { presetPeriod, stayInPeriod, type Period, type PresetKey } from "@/lib/period";
 import { cleaningsKeptOnDelete } from "@/lib/selectors";
 import { useStore } from "@/lib/store";
 import {
   BOOKING_SOURCES,
+  type DateBlock,
   PAYMENT_STATUSES,
   type Booking,
   type BookingSource,
@@ -34,6 +38,8 @@ import {
 } from "@/lib/types";
 
 type View = "list" | "calendar";
+
+const PERIOD_PRESETS: PresetKey[] = ["upcoming", "thisMonth", "nextMonth", "lastMonth", "thisYear", "lastYear", "all"];
 
 /**
  * Accepts ?import=1 (the dashboard's "Import finished Airbnb stays" action)
@@ -50,12 +56,14 @@ export default function BookingsPage() {
 
 function BookingsPageContent() {
   const params = useSearchParams();
-  const { bookings, cleaning, airbnbBlocks, deleteBooking } = useStore();
+  const { bookings, cleaning, airbnbBlocks, dateBlocks, deleteBooking } = useStore();
 
   const [view, setView] = useState<View>("calendar");
   const [formOpen, setFormOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(() => params.get("import") === "1");
   const [editing, setEditing] = useState<Booking | null>(null);
+  const [blockOpen, setBlockOpen] = useState(false);
+  const [viewingBlock, setViewingBlock] = useState<DateBlock | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Booking | null>(null);
   const [alsoDeleteCleanings, setAlsoDeleteCleanings] = useState(false);
   // Cleanings a plain delete would keep — offered for deletion as well, e.g.
@@ -75,37 +83,24 @@ function BookingsPageContent() {
 
   const [source, setSource] = useState<BookingSource | "all">("all");
   const [payment, setPayment] = useState<PaymentStatus | "all">("all");
-  const [from, setFrom] = useState("");
-  const [to, setTo] = useState("");
-  const [includePast, setIncludePast] = useState(false);
   const [sort, setSort] = useState<Sort>({ key: "checkIn", dir: "asc" });
 
   const t = today();
+  // The list's period (◀ ▾ ▶ in its status line); "Upcoming" hides stays
+  // already checked out, as the old "Include past bookings" box did.
+  const [period, setPeriod] = useState<Period>(() => presetPeriod("upcoming", t));
 
   const filtered = useMemo(() => {
     return bookings.filter((b) => {
       if (source !== "all" && b.source !== source) return false;
       if (payment !== "all" && b.paymentStatus !== payment) return false;
-      if (from && b.checkOut < from) return false;
-      if (to && b.checkIn > to) return false;
-      if (!includePast && b.checkOut < t) return false;
-      return true;
+      return stayInPeriod(b.checkIn, b.checkOut, period, t);
     });
-  }, [bookings, source, payment, from, to, includePast, t]);
+  }, [bookings, source, payment, period, t]);
 
   const sorted = useMemo(() => sortBookings(filtered, sort), [filtered, sort]);
 
-  const filtersActive =
-    source !== "all" ||
-    payment !== "all" ||
-    from !== "" ||
-    to !== "" ||
-    includePast;
-
-  function openAdd() {
-    setEditing(null);
-    setFormOpen(true);
-  }
+  const filtersActive = source !== "all" || payment !== "all";
 
   function openEdit(booking: Booking) {
     setEditing(booking);
@@ -115,9 +110,6 @@ function BookingsPageContent() {
   function clearFilters() {
     setSource("all");
     setPayment("all");
-    setFrom("");
-    setTo("");
-    setIncludePast(false);
   }
 
   return (
@@ -126,20 +118,22 @@ function BookingsPageContent() {
         title="Bookings"
         description="Airbnb and direct reservations in one place."
         action={
-          <div className="flex flex-wrap items-center gap-2">
-            <ShareBookingLink />
-            <Button onClick={() => setImportOpen(true)}>Import Airbnb CSV</Button>
-            <Button variant="primary" onClick={openAdd}>
-              <PlusIcon className="h-4 w-4" />
-              Add booking
-            </Button>
-          </div>
+          <HeaderActions count={3}>
+            <ShareBookingLink asAction />
+            {/* No "Add booking": direct guests book through the booking link
+                (their request is approved into a booking), Airbnb stays come
+                in from the CSV. Existing bookings are still edited here. */}
+            <HeaderAction icon={UploadIcon} label="Import Airbnb CSV" shortLabel="Import CSV" onClick={() => setImportOpen(true)} />
+            <HeaderAction icon={CalendarOffIcon} label="Block dates" onClick={() => setBlockOpen(true)} />
+          </HeaderActions>
         }
       />
 
       <AirbnbSyncStatus />
 
       <BookingRequests onApproved={openEdit} />
+
+      <BlockedDatesList />
 
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <div className="inline-flex rounded-md bg-slate-100 p-0.5">
@@ -164,7 +158,8 @@ function BookingsPageContent() {
           {/* overflow-clip, not -hidden: hidden would stop the month headings sticking. */}
           <FilterBar
             filtersActive={filtersActive}
-            activeCount={[source !== "all", payment !== "all", from, to, includePast].filter(Boolean).length}
+            activeCount={[source !== "all", payment !== "all"].filter(Boolean).length}
+            period={<PeriodPicker value={period} onChange={setPeriod} presets={PERIOD_PRESETS} />}
             onClear={clearFilters}
           >
               <Field label="Source" className="min-w-36 flex-1">
@@ -191,42 +186,37 @@ function BookingsPageContent() {
                   </Select>
                 )}
               </Field>
-              <DateRangeFilter from={from} to={to} onFromChange={setFrom} onToChange={setTo} />
-              <label className="mb-2.5 flex shrink-0 items-center gap-2 text-xs text-slate-600">
-                <input
-                  type="checkbox"
-                  checked={includePast}
-                  onChange={(e) => setIncludePast(e.target.checked)}
-                  className="h-3.5 w-3.5 rounded border-slate-300 text-brand-700 focus:ring-brand-600"
-                />
-                Include past bookings
-              </label>
             </FilterBar>
+
 
           <BookingTable
             bookings={sorted}
-            resetKey={JSON.stringify([source, payment, from, to, includePast, sort])}
+            resetKey={JSON.stringify([source, payment, period, sort])}
             sort={sort}
             onSortChange={setSort}
             onEdit={openEdit}
             onDelete={askDelete}
-            emptyAction={
-              <Button variant="primary" onClick={openAdd}>
-                <PlusIcon className="h-4 w-4" />
-                Add booking
-              </Button>
-            }
+            emptyAction={<ShareBookingLink />}
           />
         </Card>
       ) : (
         <Card>
           <div className="p-3 sm:p-4">
-            <BookingCalendar bookings={bookings} airbnbBlocks={airbnbBlocks} onSelect={openEdit} />
+            <BookingCalendar
+              bookings={bookings}
+              airbnbBlocks={airbnbBlocks}
+              dateBlocks={dateBlocks}
+              onSelect={openEdit}
+              onSelectBlock={setViewingBlock}
+            />
           </div>
         </Card>
       )}
 
       <AirbnbImportModal open={importOpen} onClose={() => setImportOpen(false)} />
+
+      <BlockDatesForm open={blockOpen} onClose={() => setBlockOpen(false)} />
+      <BlockSheet block={viewingBlock} onClose={() => setViewingBlock(null)} />
 
       <BookingForm
         open={formOpen}

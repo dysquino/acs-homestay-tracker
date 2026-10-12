@@ -84,7 +84,21 @@ export function monthSummary(
   anyDayInMonth: ISODate = today(),
 ): MonthSummary {
   const from = startOfMonth(anyDayInMonth);
-  const to = endOfMonth(anyDayInMonth);
+  return { month: from, ...rangeSummary(bookings, expenses, from, endOfMonth(anyDayInMonth)) };
+}
+
+/**
+ * The same figures as `monthSummary` for any span (e.g. the Expenses page's
+ * chosen period); `null` leaves that side open ("All time").
+ */
+export function rangeSummary(
+  bookings: Booking[],
+  expenses: Expense[],
+  fromOrNull: ISODate | null,
+  toOrNull: ISODate | null,
+): Omit<MonthSummary, "month"> {
+  const from = fromOrNull ?? "0000-01-01";
+  const to = toOrNull ?? "9999-12-31";
   const income = incomeInRange(bookings, from, to);
   const spent = expensesInRange(expenses, from, to);
   const paidIncome = incomeInRange(
@@ -98,7 +112,6 @@ export function monthSummary(
     to,
   );
   return {
-    month: from,
     income,
     expenses: spent,
     net: income - spent,

@@ -76,14 +76,15 @@ export function CompactRow({
  * how many rows, and their total. Pinned while you scroll through its group —
  * just under the sticky top bar (4rem) below lg, at the very top from lg up.
  * The list's Card must use overflow-clip, not -hidden, or it won't pin.
+ * Leave out `amount` for a one-row group: the row already shows it.
  */
-export function GroupHeading({ title, detail, amount }: { title: ReactNode; detail: ReactNode; amount: ReactNode }) {
+export function GroupHeading({ title, detail, amount }: { title: ReactNode; detail: ReactNode; amount?: ReactNode }) {
   return (
     <li className="sticky top-16 z-10 flex items-baseline justify-between gap-3 bg-slate-50/95 px-4 py-1.5 text-xs text-slate-600 backdrop-blur lg:top-0">
       <span>
         <span className="font-semibold text-slate-900">{title}</span> · {detail}
       </span>
-      <span className="font-semibold text-slate-900 tabular-nums">{amount}</span>
+      {amount ? <span className="font-semibold text-slate-900 tabular-nums">{amount}</span> : null}
     </li>
   );
 }

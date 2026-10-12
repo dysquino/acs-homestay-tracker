@@ -11,8 +11,10 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader } from "@/components/ui/card";
 import { Field, Select } from "@/components/ui/field";
-import { DateRangeFilter, FilterBar } from "@/components/ui/filter-bar";
-import { ChevronLeftIcon, ChevronRightIcon, PlusIcon, SparklesIcon } from "@/components/ui/icons";
+import { FilterBar } from "@/components/ui/filter-bar";
+import { PlusIcon, SparklesIcon } from "@/components/ui/icons";
+import { HeaderAction, HeaderActions } from "@/components/ui/header-action";
+import { PeriodPicker } from "@/components/ui/period-picker";
 import { DetailSheet } from "@/components/ui/detail-sheet";
 import { ConfirmDialog } from "@/components/ui/modal";
 import { Pagination } from "@/components/ui/pagination";
@@ -31,8 +33,9 @@ import {
   Thead,
   Tr,
 } from "@/components/ui/table";
-import { addMonths, isSameMonth, startOfMonth, today } from "@/lib/dates";
-import { formatCurrency, formatDate, formatMonth } from "@/lib/format";
+import { today } from "@/lib/dates";
+import { formatCurrency, formatDate } from "@/lib/format";
+import { inPeriod, periodLabel, presetPeriod, type Period, type PresetKey } from "@/lib/period";
 import {
   amountOwedByCleaner,
   groupRuns,
@@ -48,6 +51,8 @@ import {
   type CleaningRecord,
   type CleaningStatus,
 } from "@/lib/types";
+
+const PERIOD_PRESETS: PresetKey[] = ["thisMonth", "nextMonth", "lastMonth", "last3", "thisYear", "all"];
 
 export default function CleaningPage() {
   const { cleaning, bookings, updateCleaning, deleteCleaning } = useStore();
@@ -65,14 +70,11 @@ export default function CleaningPage() {
   const [cleaner, setCleaner] = useState("all");
   const [status, setStatus] = useState<CleaningStatus | "all">("all");
   const [payment, setPayment] = useState<CleaningPaymentStatus | "all">("all");
-  const [from, setFrom] = useState("");
-  const [to, setTo] = useState("");
-  // The list follows a month (arrows in its status line), so it's one month
-  // long instead of every cleaning ever. The tiles above stay "right now"
-  // figures. "Show all months" lifts the month; a From/To range replaces it.
-  const [monthCursor, setMonthCursor] = useState(() => startOfMonth(today()));
-  const [scope, setScope] = useState<"month" | "all">("month");
-  const monthScoped = scope === "month" && !from && !to;
+  // The list follows a period (◀ October 2026 ▾ ▶ in its status line), so
+  // it's one month long instead of every cleaning ever. The tiles above stay
+  // "right now" figures.
+  const t = today();
+  const [period, setPeriod] = useState<Period>(() => presetPeriod("thisMonth", t));
 
   const bookingById = useMemo(
     () => new Map(bookings.map((b) => [b.id, b])),
@@ -86,20 +88,18 @@ export default function CleaningPage() {
   const filtered = useMemo(() => {
     return cleaning
       .filter((c) => {
-        if (monthScoped && !isSameMonth(c.date, monthCursor)) return false;
+        if (!inPeriod(c.date, period, t)) return false;
         const name = c.cleanerName.trim() || "Unassigned";
         if (cleaner !== "all" && name.toLowerCase() !== cleaner.toLowerCase()) return false;
         if (status !== "all" && c.status !== status) return false;
         if (payment !== "all" && c.paymentStatus !== payment) return false;
-        if (from && c.date < from) return false;
-        if (to && c.date > to) return false;
         return true;
       })
       .sort((a, b) => b.date.localeCompare(a.date));
-  }, [cleaning, monthScoped, monthCursor, cleaner, status, payment, from, to]);
+  }, [cleaning, period, t, cleaner, status, payment]);
   const paging = usePagination(
     filtered,
-    JSON.stringify([monthScoped && monthCursor, cleaner, status, payment, from, to]),
+    JSON.stringify([period, cleaner, status, payment]),
   );
   const filteredTotal = filtered.reduce((s, c) => s + c.paymentAmount, 0);
   // Day headings for the phone/tablet list (always newest first here).
@@ -114,9 +114,7 @@ export default function CleaningPage() {
   const filtersActive =
     cleaner !== "all" ||
     status !== "all" ||
-    payment !== "all" ||
-    from !== "" ||
-    to !== "";
+    payment !== "all";
 
   function openAdd() {
     setEditing(null);
@@ -151,10 +149,9 @@ export default function CleaningPage() {
         title="Cleaning"
         description="Turnovers between guests — who cleaned, and who's been paid."
         action={
-          <Button variant="primary" onClick={openAdd}>
-            <PlusIcon className="h-4 w-4" />
-            Add cleaning
-          </Button>
+          <HeaderActions count={1}>
+            <HeaderAction primary icon={PlusIcon} label="Add cleaning" onClick={openAdd} />
+          </HeaderActions>
         }
       />
 
@@ -163,7 +160,7 @@ export default function CleaningPage() {
       <div className="mb-5 grid grid-cols-3 gap-2 sm:gap-3">
         <StatTile
           compact
-          label="Owed to cleaners"
+          label={<>Owed<span className="hidden sm:inline"> to cleaners</span></>}
           value={formatCurrency(totalOwed)}
           hint={`${unpaidCount} completed, unpaid`}
           tone={totalOwed > 0 ? "negative" : "positive"}
@@ -190,13 +187,12 @@ export default function CleaningPage() {
         <Card className="overflow-clip">
           <FilterBar
             filtersActive={filtersActive}
-            activeCount={[cleaner !== "all", status !== "all", payment !== "all", from, to].filter(Boolean).length}
+            activeCount={[cleaner !== "all", status !== "all", payment !== "all"].filter(Boolean).length}
+            period={<PeriodPicker value={period} onChange={setPeriod} presets={PERIOD_PRESETS} />}
             onClear={() => {
               setCleaner("all");
               setStatus("all");
               setPayment("all");
-              setFrom("");
-              setTo("");
             }}
           >
               <Field label="Cleaner" className="min-w-36 flex-1">
@@ -235,60 +231,18 @@ export default function CleaningPage() {
                   </Select>
                 )}
               </Field>
-              <DateRangeFilter from={from} to={to} onFromChange={setFrom} onToChange={setTo} />
             </FilterBar>
 
-          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b border-slate-100 px-4 py-1.5 text-xs text-slate-600 sm:px-5">
-            <span className="flex items-center gap-1">
-              {monthScoped ? (
-                <button
-                  type="button"
-                  aria-label="Previous month"
-                  onClick={() => setMonthCursor(addMonths(monthCursor, -1))}
-                  className="rounded-md p-1 text-slate-500 hover:bg-slate-100 pointer-coarse:p-2"
-                >
-                  <ChevronLeftIcon className="h-4 w-4" />
-                </button>
-              ) : null}
-              <span className="font-medium text-slate-900">
-                {from || to ? "Your From/To range" : monthScoped ? formatMonth(monthCursor) : "All months"}
-              </span>
-              {monthScoped ? (
-                <button
-                  type="button"
-                  aria-label="Next month"
-                  onClick={() => setMonthCursor(addMonths(monthCursor, 1))}
-                  className="rounded-md p-1 text-slate-500 hover:bg-slate-100 pointer-coarse:p-2"
-                >
-                  <ChevronRightIcon className="h-4 w-4" />
-                </button>
-              ) : null}
-              <span>
-                {" · "}
-                {filtered.length} cleaning{filtered.length === 1 ? "" : "s"} ·{" "}
-                <span className="font-semibold text-slate-900">{formatCurrency(filteredTotal)}</span>
-              </span>
-            </span>
-            {from || to ? null : (
-              <button
-                type="button"
-                onClick={() => setScope(monthScoped ? "all" : "month")}
-                className="font-medium text-brand-700 hover:underline pointer-coarse:py-2"
-              >
-                {monthScoped ? "Show all months" : `Only ${formatMonth(monthCursor)}`}
-              </button>
-            )}
-          </div>
 
           {filtered.length === 0 ? (
             <EmptyState
               title={
-                monthScoped && !filtersActive ? `No cleanings in ${formatMonth(monthCursor)}` : "No cleaning records match"
+                filtersActive ? "No cleaning records match" : `No cleanings in ${periodLabel(period)}`
               }
               message={
-                monthScoped
-                  ? "Use the arrows for another month, tap “Show all months”, or add a cleaning."
-                  : "Records are created automatically when you add a booking — or add one manually."
+                filtersActive
+                  ? "Try clearing the filters, or pick another period."
+                  : "Use the arrows or tap the period to look elsewhere. Records are created automatically when you add a booking — or add one manually."
               }
               action={
                 <Button variant="primary" onClick={openAdd}>
@@ -305,7 +259,7 @@ export default function CleaningPage() {
                     key={`day-${g.key}`}
                     title={formatDate(g.key)}
                     detail={`${g.count} cleaning${g.count === 1 ? "" : "s"}`}
-                    amount={formatCurrency(g.total)}
+                    amount={g.count > 1 ? formatCurrency(g.total) : undefined}
                   />,
                   ...g.items.map((c) => {
                   const booking = c.bookingId ? bookingById.get(c.bookingId) : undefined;
@@ -329,6 +283,10 @@ export default function CleaningPage() {
                   );
                   }),
                 ])}
+                <li className="flex items-baseline justify-between gap-3 bg-slate-50 px-4 py-2.5 text-sm">
+                  <span className="font-medium text-slate-700">{filtered.length} cleaning{filtered.length === 1 ? "" : "s"}</span>
+                  <span className="font-semibold text-slate-900">{formatCurrency(filteredTotal)}</span>
+                </li>
               </CardList>
 
               <TableWrap>
@@ -405,6 +363,19 @@ export default function CleaningPage() {
                     );
                   })}
                 </tbody>
+                <tfoot className="border-t border-slate-200 bg-slate-50">
+                  <tr>
+                    <Td className="font-medium text-slate-700">{filtered.length} cleaning{filtered.length === 1 ? "" : "s"}</Td>
+                    <Td>{null}</Td>
+                    <Td className="hidden md:table-cell">{null}</Td>
+                    <Td>{null}</Td>
+                    <Td align="right" className="font-semibold whitespace-nowrap tabular-nums text-slate-900">
+                      {formatCurrency(filteredTotal)}
+                    </Td>
+                    <Td>{null}</Td>
+                    <Td>{null}</Td>
+                  </tr>
+                </tfoot>
               </Table>
               </TableWrap>
               <Pagination paging={paging} noun="records" />

@@ -82,9 +82,12 @@ export async function submitBookingRequest(
   const taken = await prisma.booking.count({
     where: { checkIn: { lt: checkOut }, checkOut: { gt: checkIn } },
   });
+  const blocked = await prisma.dateBlock.count({
+    where: { startDate: { lt: checkOut }, endDate: { gt: checkIn } },
+  });
   const { blocks } = await airbnbBlocks();
   const airbnbTaken = blocks.some((b) => b.checkIn < request.checkOut && request.checkIn < b.checkOut);
-  if (taken > 0 || airbnbTaken) {
+  if (taken > 0 || blocked > 0 || airbnbTaken) {
     return { ok: false, error: "Sorry, some of those nights were just booked. Please pick other dates." };
   }
 

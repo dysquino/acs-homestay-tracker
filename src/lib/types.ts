@@ -118,6 +118,21 @@ export type CleaningRecord = {
   createdBy: string;
 };
 
+/**
+ * Dates closed with no guest (maintenance, owners' own use). `checkIn` /
+ * `checkOut` work like a booking's — `checkOut` is the first free day — so
+ * the same overlap rules apply.
+ */
+export type DateBlock = {
+  id: string;
+  checkIn: ISODate;
+  checkOut: ISODate;
+  reason: string;
+  createdBy: string;
+};
+
+export type DateBlockInput = Omit<DateBlock, "id">;
+
 export type BookingRequestStatus = "pending" | "approved" | "declined";
 
 /** A stay a guest asked for through the private booking link. */

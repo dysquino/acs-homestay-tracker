@@ -1,11 +1,11 @@
 ---
 name: backup-live-data
-description: Back up the live ACs Homestay Tracker data (bookings, expenses, cleaning) from https://acs-homestay-tracker.vercel.app into a timestamped folder of CSVs with a manifest, and compare row counts with the previous backup. Use this whenever the user asks to back up, export, download, save, snapshot or archive the app's data or the production/live/deployed site's records — including before a deployment, a database change or migration, a bulk delete, or "just in case" — even if they don't say the word "backup".
+description: Back up the live ACs Homestay Tracker data (bookings, expenses, cleaning, blocked dates) from https://acs-homestay-tracker.vercel.app into a timestamped folder of CSVs with a manifest, and compare row counts with the previous backup. Use this whenever the user asks to back up, export, download, save, snapshot or archive the app's data or the production/live/deployed site's records — including before a deployment, a database change or migration, a bulk delete, or "just in case" — even if they don't say the word "backup".
 ---
 
 # Back up the live tracker data
 
-The deployed site has a CSV export per table (`/api/export/bookings`, `/expenses`, `/cleaning` — see `src/app/api/export/[table]/route.ts`). They exist so there's always a copy that doesn't depend on the app or database staying up (the database was once unreachable for 11 days). This skill downloads all three into a new folder in one go.
+The deployed site has a CSV export per table (`/api/export/bookings`, `/expenses`, `/cleaning`, `/blocked-dates` — see `src/app/api/export/[table]/route.ts`). They exist so there's always a copy that doesn't depend on the app or database staying up (the database was once unreachable for 11 days). This skill downloads them all into a new folder in one go. Blocked dates is optional: if the live site predates it (404), it's skipped with a note rather than failing the backup.
 
 ## Run it
 
@@ -19,7 +19,7 @@ Options, only when the user asks for something different:
 - `--out <dir>` — where backups go. Default: `~/Documents/acs-homestay-backups/`, outside the repo on purpose: the files contain guests' names and money records, and must never be committed.
 - `--url <site>` — a different deployment (e.g. a Vercel preview URL).
 
-Each run creates `<out>/YYYY-MM-DD_HHMMSS/` with `bookings.csv`, `expenses.csv`, `cleaning.csv` and `manifest.json` (source, time, and per table: rows, bytes, SHA-256). It's all-or-nothing: if any table fails, the partial folder is removed, so a folder that exists is always a complete backup.
+Each run creates `<out>/YYYY-MM-DD_HHMMSS/` with `bookings.csv`, `expenses.csv`, `cleaning.csv`, `blocked-dates.csv` and `manifest.json` (source, time, and per table: rows, bytes, SHA-256). It's all-or-nothing: if any table fails, the partial folder is removed, so a folder that exists is always a complete backup.
 
 ## Automatic daily backups
 

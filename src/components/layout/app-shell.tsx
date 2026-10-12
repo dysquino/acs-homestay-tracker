@@ -156,6 +156,7 @@ const EXPORTS: { table: string; label: string }[] = [
   { table: "bookings", label: "Bookings" },
   { table: "expenses", label: "Expenses" },
   { table: "cleaning", label: "Cleaning" },
+  { table: "blocked-dates", label: "Blocked dates" },
 ];
 
 /**
@@ -286,7 +287,8 @@ export function PageHeader({
       {/* Allowed to shrink so its buttons wrap onto a new line on a phone —
           `shrink-0` kept a row of three buttons wider than the screen, which
           made the whole page scroll sideways. */}
-      {action ? <div className="no-print min-w-0 max-w-full">{action}</div> : null}
+      {/* Full width on a phone, so a set of HeaderActions can share the row. */}
+      {action ? <div className="no-print w-full min-w-0 max-w-full sm:w-auto">{action}</div> : null}
     </div>
   );
 }

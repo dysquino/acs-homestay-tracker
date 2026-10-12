@@ -72,9 +72,12 @@ export function finishedUnimported(
   return reservations.filter((r) => r.checkOut <= today && !inApp(r, bookings));
 }
 
-/** Calendar feed (iCal) of direct bookings, for Airbnb's "Import calendar". */
+/**
+ * Calendar feed (iCal) of direct bookings, for Airbnb's "Import calendar".
+ * `blocked` marks the owners' blocked dates, which go out the same way.
+ */
 export function directBookingsIcal(
-  bookings: Pick<Booking, "id" | "checkIn" | "checkOut">[],
+  bookings: (Pick<Booking, "id" | "checkIn" | "checkOut"> & { blocked?: boolean })[],
   now: Date = new Date(),
 ): string {
   const stamp = now.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
@@ -93,7 +96,7 @@ export function directBookingsIcal(
       `DTSTART;VALUE=DATE:${day(b.checkIn)}`,
       `DTEND;VALUE=DATE:${day(b.checkOut)}`,
       // Dates only — the feed is reachable by anyone with its link.
-      "SUMMARY:Direct booking",
+      b.blocked ? "SUMMARY:Not available" : "SUMMARY:Direct booking",
       "TRANSP:OPAQUE",
       "END:VEVENT",
     ]),

@@ -18,6 +18,7 @@ import { useIdentity } from "@/lib/identity";
 import { addDays, nightCount, today } from "@/lib/dates";
 import { formatDateRange } from "@/lib/format";
 import { blockAsBooking, isAirbnbBlock } from "@/lib/airbnb-ical";
+import { dateBlockAsBooking } from "@/lib/date-blocks";
 import { findConflicts } from "@/lib/selectors";
 import { useStore } from "@/lib/store";
 import { useSubmit, type Submit } from "@/lib/use-submit";
@@ -125,7 +126,7 @@ function BookingFields({
   submit: Submit;
   onBlockedChange: (blocked: boolean) => void;
 }) {
-  const { bookings, airbnbBlocks, addBooking, updateBooking, resync } = useStore();
+  const { bookings, airbnbBlocks, dateBlocks, addBooking, updateBooking, resync } = useStore();
   const { user } = useIdentity();
   const [form, setForm] = useState<FormState>(() => initialState(booking));
   const [errors, setErrors] = useState<Partial<Record<keyof FormState, string>>>(
@@ -137,17 +138,19 @@ function BookingFields({
     setForm((f) => ({ ...f, [key]: value }));
 
   // A direct booking must also stay clear of Airbnb reservations not imported
-  // yet (the server checks the same). Airbnb bookings aren't held to that:
+  // yet and of the owners' blocked dates (the server checks the same). Airbnb bookings aren't held to that:
   // Airbnb already keeps its own reservations apart.
   const conflicts = useMemo(
     () =>
       findConflicts(
-        form.source === "direct" ? [...bookings, ...airbnbBlocks.map(blockAsBooking)] : bookings,
+        form.source === "direct"
+          ? [...bookings, ...airbnbBlocks.map(blockAsBooking), ...dateBlocks.map(dateBlockAsBooking)]
+          : bookings,
         form.checkIn,
         form.checkOut,
         booking?.id,
       ),
-    [bookings, airbnbBlocks, form.source, form.checkIn, form.checkOut, booking?.id],
+    [bookings, airbnbBlocks, dateBlocks, form.source, form.checkIn, form.checkOut, booking?.id],
   );
 
   // Double bookings aren't allowed. When editing, only new dates (or a switch

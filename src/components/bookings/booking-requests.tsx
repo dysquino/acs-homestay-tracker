@@ -5,7 +5,8 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader } from "@/components/ui/card";
 import { Field, Input } from "@/components/ui/field";
-import { CalendarIcon, WarningIcon } from "@/components/ui/icons";
+import { HeaderAction } from "@/components/ui/header-action";
+import { CalendarIcon, LinkIcon, WarningIcon } from "@/components/ui/icons";
 import { ConfirmDialog, Modal } from "@/components/ui/modal";
 import { IdPhotoProof } from "@/components/bookings/id-photo";
 import { PaymentProof } from "@/components/bookings/payment-proof";
@@ -13,6 +14,7 @@ import { getBookingLinkPath } from "@/lib/data/booking-requests";
 import { nightCount } from "@/lib/dates";
 import { formatDateRange } from "@/lib/format";
 import { blockAsBooking } from "@/lib/airbnb-ical";
+import { dateBlockAsBooking } from "@/lib/date-blocks";
 import { findConflicts } from "@/lib/selectors";
 import { useStore } from "@/lib/store";
 import type { Booking, BookingRequest } from "@/lib/types";
@@ -26,9 +28,9 @@ const sentAt = new Intl.DateTimeFormat("en-PH", { month: "short", day: "numeric"
  * filled in. Hidden when there's nothing waiting.
  */
 export function BookingRequests({ onApproved }: { onApproved: (booking: Booking) => void }) {
-  const { bookingRequests, bookings, airbnbBlocks, approveRequest, declineRequest, resync } = useStore();
+  const { bookingRequests, bookings, airbnbBlocks, dateBlocks, approveRequest, declineRequest, resync } = useStore();
   // Requests become direct bookings, so unimported Airbnb reservations count too.
-  const taken = [...bookings, ...airbnbBlocks.map(blockAsBooking)];
+  const taken = [...bookings, ...airbnbBlocks.map(blockAsBooking), ...dateBlocks.map(dateBlockAsBooking)];
   const [busy, setBusy] = useState<string | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [toDecline, setToDecline] = useState<BookingRequest | null>(null);
@@ -151,8 +153,11 @@ export function BookingRequests({ onApproved }: { onApproved: (booking: Booking)
   );
 }
 
-/** "Share booking link": shows the private link with a Copy button. */
-export function ShareBookingLink() {
+/**
+ * "Share booking link": shows the private link with a Copy button. `asAction`
+ * renders the trigger as a page-header action (see HeaderAction).
+ */
+export function ShareBookingLink({ asAction }: { asAction?: boolean }) {
   const [open, setOpen] = useState(false);
   const [link, setLink] = useState<string | null>(null);
   const [state, setState] = useState<"idle" | "loading" | "missing" | "copied" | "error">("idle");
@@ -183,7 +188,11 @@ export function ShareBookingLink() {
 
   return (
     <>
-      <Button onClick={show}>Share booking link</Button>
+      {asAction ? (
+        <HeaderAction icon={LinkIcon} label="Share booking link" shortLabel="Share link" onClick={show} />
+      ) : (
+        <Button onClick={show}>Share booking link</Button>
+      )}
       <Modal
         open={open}
         onClose={() => setOpen(false)}

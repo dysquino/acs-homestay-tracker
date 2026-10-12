@@ -33,3 +33,26 @@ export async function assertNoOverlap(
     );
   }
 }
+
+/**
+ * Dates the owners blocked (maintenance, own use) are closed to direct
+ * bookings and guests' requests. Airbnb bookings aren't held to this: the
+ * block reaches Airbnb through the calendar feed, so an Airbnb stay on those
+ * dates was booked before the block and is real.
+ */
+export async function assertNotBlocked(
+  tx: Prisma.TransactionClient,
+  checkIn: Date,
+  checkOut: Date,
+): Promise<void> {
+  const block = await tx.dateBlock.findFirst({
+    where: { startDate: { lt: checkOut }, endDate: { gt: checkIn } },
+    select: { reason: true, startDate: true, endDate: true },
+  });
+  if (block) {
+    const lastDay = new Date(block.endDate.getTime() - 86_400_000);
+    throw new ValidationError(
+      `These dates are blocked${block.reason ? ` (${block.reason})` : ""} from ${dateToISO(block.startDate)} to ${dateToISO(lastDay)}. Remove the block first if the stay should go ahead.`,
+    );
+  }
+}

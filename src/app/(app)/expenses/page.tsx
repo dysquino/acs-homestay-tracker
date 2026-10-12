@@ -10,13 +10,10 @@ import { Badge, RefundBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader } from "@/components/ui/card";
 import { Field, Select } from "@/components/ui/field";
-import { DateRangeFilter, FilterBar } from "@/components/ui/filter-bar";
-import {
-  ChevronLeftIcon,
-  ChevronRightIcon,
-  ListIcon,
-  PlusIcon,
-} from "@/components/ui/icons";
+import { FilterBar } from "@/components/ui/filter-bar";
+import { ListIcon, PlusIcon } from "@/components/ui/icons";
+import { HeaderAction, HeaderActions } from "@/components/ui/header-action";
+import { PeriodPicker } from "@/components/ui/period-picker";
 import { DetailSheet } from "@/components/ui/detail-sheet";
 import { ConfirmDialog } from "@/components/ui/modal";
 import { Pagination } from "@/components/ui/pagination";
@@ -35,9 +32,10 @@ import {
   Thead,
   Tr,
 } from "@/components/ui/table";
-import { addMonths, isSameMonth, startOfMonth, today } from "@/lib/dates";
+import { today } from "@/lib/dates";
 import { formatCurrency, formatDate, formatMonth, formatWhole } from "@/lib/format";
-import { expensesByMonth, groupByDay, monthSummary } from "@/lib/selectors";
+import { inPeriod, periodLabel, periodRange, presetPeriod, type Period, type PresetKey } from "@/lib/period";
+import { expensesByMonth, groupByDay, rangeSummary } from "@/lib/selectors";
 import { useStore } from "@/lib/store";
 import { usePagination } from "@/lib/use-pagination";
 import {
@@ -51,6 +49,8 @@ import {
 } from "@/lib/types";
 
 type SortKey = "date" | "amount" | "category";
+
+const PERIOD_PRESETS: PresetKey[] = ["thisMonth", "lastMonth", "last3", "thisYear", "lastYear", "all"];
 
 /**
  * Accepts ?refund=owed&paidBy=<name> (the dashboard's "Refund <name>" action)
@@ -82,41 +82,33 @@ function ExpensesPageContent() {
     return r === "owed" || r === "refunded" ? r : "all";
   });
   const [paidBy, setPaidBy] = useState(() => params.get("paidBy") ?? "all");
-  const [from, setFrom] = useState("");
-  const [to, setTo] = useState("");
   const [sort, setSort] = useState<{ key: SortKey; dir: "asc" | "desc" }>({
     key: "date",
     dir: "desc",
   });
 
   const t = today();
-  const [monthCursor, setMonthCursor] = useState(() => startOfMonth(t));
-  const isCurrentMonth = monthCursor === startOfMonth(t);
-  // The list follows the month selector above (like the tiles), so it's one
-  // month long instead of every expense ever. "Show all months" lifts that;
-  // a From/To range replaces it; arriving from the dashboard's "Refund <name>"
-  // starts on all months, since unrefunded items can be older.
-  const [scope, setScope] = useState<"month" | "all">(() =>
-    params.get("refund") || params.get("paidBy") ? "all" : "month",
+  // The period the tiles and the list follow (◀ October 2026 ▾ ▶ in the
+  // list's filter row). Arriving from the dashboard's "Refund <name>" starts on all time,
+  // since unrefunded items can be older.
+  const [period, setPeriod] = useState<Period>(() =>
+    params.get("refund") || params.get("paidBy") ? { kind: "all" } : presetPeriod("thisMonth", t),
   );
-  const monthScoped = scope === "month" && !from && !to;
 
-  const summary = useMemo(
-    () => monthSummary(bookings, expenses, monthCursor),
-    [bookings, expenses, monthCursor],
-  );
+  const summary = useMemo(() => {
+    const { from, to } = periodRange(period, t);
+    return rangeSummary(bookings, expenses, from, to);
+  }, [bookings, expenses, period, t]);
 
   const filtered = useMemo(() => {
     return expenses.filter((e) => {
-      if (monthScoped && !isSameMonth(e.date, monthCursor)) return false;
+      if (!inPeriod(e.date, period, t)) return false;
       if (category !== "all" && e.category !== category) return false;
       if (refund !== "all" && e.refundStatus !== refund) return false;
       if (paidBy !== "all" && e.paidBy.trim() !== paidBy) return false;
-      if (from && e.date < from) return false;
-      if (to && e.date > to) return false;
       return true;
     });
-  }, [expenses, monthScoped, monthCursor, category, refund, paidBy, from, to]);
+  }, [expenses, period, t, category, refund, paidBy]);
 
   const sorted = useMemo(() => {
     const factor = sort.dir === "asc" ? 1 : -1;
@@ -129,14 +121,14 @@ function ExpensesPageContent() {
   }, [filtered, sort]);
   const paging = usePagination(
     sorted,
-    JSON.stringify([monthScoped && monthCursor, category, refund, paidBy, from, to, sort]),
+    JSON.stringify([period, category, refund, paidBy, sort]),
   );
   // Day headings (phones/tablets) only make sense when the list is in date order.
   const dayGroups = sort.key === "date" ? groupByDay(paging.pageItems, sorted) : null;
 
   const filteredTotal = filtered.reduce((s, e) => s + e.amount, 0);
   const byMonth = useMemo(() => expensesByMonth(expenses), [expenses]);
-  const filtersActive = category !== "all" || refund !== "all" || paidBy !== "all" || from !== "" || to !== "";
+  const filtersActive = category !== "all" || refund !== "all" || paidBy !== "all";
   // The fixed roster, plus any older name still on an expense.
   const payers = useMemo(
     () => [...new Set([...PAID_BY.map((p) => p.value), ...expenses.map((e) => e.paidBy.trim()).filter(Boolean)])],
@@ -206,56 +198,31 @@ function ExpensesPageContent() {
         title="Expenses"
         description="Bills, dues, repairs, supplies, and cleaning payments."
         action={
-          <Button variant="primary" onClick={openAdd}>
-            <PlusIcon className="h-4 w-4" />
-            Add expense
-          </Button>
+          <HeaderActions count={1}>
+            <HeaderAction primary icon={PlusIcon} label="Add expense" onClick={openAdd} />
+          </HeaderActions>
         }
       />
 
-      <div className="mb-3 flex items-center gap-2">
-        <Button
-          size="sm"
-          aria-label="Previous month"
-          onClick={() => setMonthCursor((m) => addMonths(m, -1))}
-        >
-          <ChevronLeftIcon className="h-4 w-4" />
-        </Button>
-        <Button
-          size="sm"
-          aria-label="Next month"
-          onClick={() => setMonthCursor((m) => addMonths(m, 1))}
-        >
-          <ChevronRightIcon className="h-4 w-4" />
-        </Button>
-        {!isCurrentMonth ? (
-          <Button size="sm" onClick={() => setMonthCursor(startOfMonth(t))}>
-            This month
-          </Button>
-        ) : null}
-        <h2 className="ml-1 text-sm font-semibold text-slate-900">
-          {formatMonth(monthCursor)}
-        </h2>
-      </div>
-
-      {/* One row even on a phone (compact tiles); the month is in the selector
-          right above, so phones drop it from the labels. */}
+      {/* One row even on a phone (compact tiles). They follow the period
+          picked in the list's filter row just below (named in the labels from
+          sm up), like the Bookings and Cleaning lists. */}
       <div className="mb-5 grid grid-cols-3 gap-2 sm:gap-3">
         <StatTile
           compact
-          label={<>Income<span className="hidden sm:inline"> — {formatMonth(summary.month)}</span></>}
+          label={<>Income<span className="hidden sm:inline"> — {periodLabel(period)}</span></>}
           value={formatWhole(summary.income)}
           hint="Booking payouts, split by nights per month"
           tone="brand"
         />
         <StatTile
           compact
-          label={<>Expenses<span className="hidden sm:inline"> — {formatMonth(summary.month)}</span></>}
+          label={<>Expenses<span className="hidden sm:inline"> — {periodLabel(period)}</span></>}
           value={formatWhole(summary.expenses)}
         />
         <StatTile
           compact
-          label={<>Profit<span className="hidden sm:inline"> — {formatMonth(summary.month)}</span></>}
+          label={<>Profit<span className="hidden sm:inline"> — {periodLabel(period)}</span></>}
           value={formatWhole(summary.net)}
           tone={summary.net >= 0 ? "positive" : "negative"}
           hint={summary.net >= 0 ? "In the black" : "Spending exceeds income"}
@@ -267,13 +234,12 @@ function ExpensesPageContent() {
         <Card className="overflow-clip">
           <FilterBar
             filtersActive={filtersActive}
-            activeCount={[category !== "all", refund !== "all", paidBy !== "all", from, to].filter(Boolean).length}
+            activeCount={[category !== "all", refund !== "all", paidBy !== "all"].filter(Boolean).length}
+            period={<PeriodPicker value={period} onChange={setPeriod} presets={PERIOD_PRESETS} />}
             onClear={() => {
               setCategory("all");
               setRefund("all");
               setPaidBy("all");
-              setFrom("");
-              setTo("");
             }}
           >
               <Field label="Category" className="min-w-40 flex-1">
@@ -312,36 +278,16 @@ function ExpensesPageContent() {
                   </Select>
                 )}
               </Field>
-              <DateRangeFilter from={from} to={to} onFromChange={setFrom} onToChange={setTo} />
             </FilterBar>
 
-          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b border-slate-100 px-4 py-2 text-xs text-slate-600 sm:px-5">
-            <span>
-              <span className="font-medium text-slate-900">
-                {from || to ? "Your From/To range" : monthScoped ? formatMonth(monthCursor) : "All months"}
-              </span>
-              {" · "}
-              {filtered.length} expense{filtered.length === 1 ? "" : "s"} ·{" "}
-              <span className="font-semibold text-slate-900">{formatCurrency(filteredTotal)}</span>
-            </span>
-            {from || to ? null : (
-              <button
-                type="button"
-                onClick={() => setScope(monthScoped ? "all" : "month")}
-                className="font-medium text-brand-700 hover:underline pointer-coarse:py-2"
-              >
-                {monthScoped ? "Show all months" : `Only ${formatMonth(monthCursor)}`}
-              </button>
-            )}
-          </div>
 
           {sorted.length === 0 ? (
             <EmptyState
-              title={monthScoped && !filtersActive ? `No expenses in ${formatMonth(monthCursor)}` : "No expenses match"}
+              title={filtersActive ? "No expenses match" : `No expenses in ${periodLabel(period)}`}
               message={
-                monthScoped
-                  ? "Pick another month above, tap “Show all months”, or record an expense."
-                  : "Try clearing the filters, or record the first expense."
+                filtersActive
+                  ? "Try clearing the filters, or pick another period above."
+                  : "Use the arrows or tap the period above to look elsewhere, or record an expense."
               }
               action={
                 <Button variant="primary" onClick={openAdd}>
@@ -359,7 +305,7 @@ function ExpensesPageContent() {
                       key={`day-${g.date}`}
                       title={formatDate(g.date)}
                       detail={`${g.count} expense${g.count === 1 ? "" : "s"}`}
-                      amount={formatCurrency(g.total)}
+                      amount={g.count > 1 ? formatCurrency(g.total) : undefined}
                     />
                   ) : null,
                   ...g.items.map((e) => (
