@@ -28,6 +28,9 @@ const TABLES = [
   { name: "bookings", firstColumn: "Guest Name" },
   { name: "expenses", firstColumn: "Date" },
   { name: "cleaning", firstColumn: "Date" },
+  // Optional: a site deployed before blocked dates existed answers 404, and
+  // that alone mustn't fail the backup of the other tables.
+  { name: "blocked-dates", firstColumn: "First Day", optional: true },
 ];
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -126,6 +129,7 @@ async function main() {
   mkdirSync(tmpDir, { recursive: true });
 
   const tables = {};
+  const skipped = [];
   try {
     for (const t of TABLES) {
       const url = `${siteUrl}/api/export/${t.name}`;
@@ -142,6 +146,10 @@ async function main() {
             ? `${t.name}: the site rejected the access code — check BACKUP_SITE_PASSWORD matches the site's SITE_PASSWORD.`
             : `${t.name}: unexpected redirect to ${where}.`,
         );
+      }
+      if (res.status === 404 && t.optional) {
+        skipped.push(t.name);
+        continue;
       }
       if (res.status !== 200) {
         const body = (await res.text()).slice(0, 200);
@@ -174,7 +182,10 @@ async function main() {
       const before = prev?.manifest?.tables?.[name]?.rows;
       const change =
         before === undefined ? "" : info.rows === before ? " (no change)" : ` (${info.rows - before > 0 ? "+" : ""}${info.rows - before} since ${prev.name})`;
-      console.log(`  ${name.padEnd(9)} ${String(info.rows).padStart(5)} rows  ${(info.bytes / 1024).toFixed(1)} KB${change}`);
+      console.log(`  ${name.padEnd(13)} ${String(info.rows).padStart(5)} rows  ${(info.bytes / 1024).toFixed(1)} KB${change}`);
+    }
+    if (skipped.length) {
+      console.log(`Skipped (not on the live site yet): ${skipped.join(", ")}.`);
     }
     const shrank = prev && Object.entries(tables).filter(([n, i]) => (prev.manifest.tables?.[n]?.rows ?? 0) > i.rows);
     if (shrank && shrank.length) {

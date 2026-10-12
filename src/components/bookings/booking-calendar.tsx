@@ -15,7 +15,10 @@ import {
 } from "@/lib/dates";
 import { formatCurrency, formatMonth } from "@/lib/format";
 import { blockAsBooking, isAirbnbBlock, type AirbnbReservation } from "@/lib/airbnb-ical";
-import type { Booking, ISODate } from "@/lib/types";
+import { dateBlockAsBooking, dateBlockId, isDateBlock } from "@/lib/date-blocks";
+import type { Booking, DateBlock, ISODate } from "@/lib/types";
+
+const BLOCK_STRIPES = "repeating-linear-gradient(135deg, rgb(241 245 249) 0 6px, rgb(226 232 240) 6px 12px)";
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -80,12 +83,17 @@ function layoutWeek(weekStart: ISODate, bookings: Booking[]): Bar[] {
 export function BookingCalendar({
   bookings,
   airbnbBlocks = [],
+  dateBlocks = [],
   onSelect,
+  onSelectBlock,
 }: {
   bookings: Booking[];
   /** Airbnb reservations not in the app yet — drawn striped, not clickable. */
   airbnbBlocks?: AirbnbReservation[];
+  /** The owners' blocked dates — drawn grey striped; tap to see or remove. */
+  dateBlocks?: DateBlock[];
   onSelect: (booking: Booking) => void;
+  onSelectBlock?: (block: DateBlock) => void;
 }) {
   const [cursor, setCursor] = useState<ISODate>(() => startOfMonth(today()));
   const t = today();
@@ -94,9 +102,16 @@ export function BookingCalendar({
     const days = monthGrid(cursor);
     return Array.from({ length: 6 }, (_, w) => {
       const weekDays = days.slice(w * 7, w * 7 + 7);
-      return { days: weekDays, bars: layoutWeek(weekDays[0], [...bookings, ...airbnbBlocks.map(blockAsBooking)]) };
+      return {
+        days: weekDays,
+        bars: layoutWeek(weekDays[0], [
+          ...bookings,
+          ...airbnbBlocks.map(blockAsBooking),
+          ...dateBlocks.map(dateBlockAsBooking),
+        ]),
+      };
     });
-  }, [cursor, bookings, airbnbBlocks]);
+  }, [cursor, bookings, airbnbBlocks, dateBlocks]);
 
   return (
     <div>
@@ -137,6 +152,13 @@ export function BookingCalendar({
           <span className="flex items-center gap-1.5">
             <span className="h-2.5 w-2.5 rounded-sm bg-direct-600" />
             Direct
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span
+              className="h-2.5 w-2.5 rounded-sm border border-slate-400"
+              style={{ backgroundImage: BLOCK_STRIPES }}
+            />
+            Blocked
           </span>
         </div>
       </div>
@@ -194,7 +216,28 @@ export function BookingCalendar({
                   style={{ paddingTop: HEADER_SPACE }}
                 >
                   {week.bars.map((bar) =>
-                    isAirbnbBlock(bar.booking) ? (
+                    isDateBlock(bar.booking) ? (
+                      <button
+                        key={bar.booking.id}
+                        type="button"
+                        onClick={() => {
+                          const block = dateBlocks.find((b) => b.id === dateBlockId(bar.booking));
+                          if (block) onSelectBlock?.(block);
+                        }}
+                        title={`${bar.booking.guestName} · ${bar.booking.checkIn} → ${addDays(bar.booking.checkOut, -1)}`}
+                        style={{
+                          gridColumn: `${bar.start + 1} / span ${bar.span}`,
+                          gridRow: bar.lane + 1,
+                          height: BAR_HEIGHT - 4,
+                          backgroundImage: BLOCK_STRIPES,
+                        }}
+                        className={`pointer-events-auto mx-0.5 flex items-center overflow-hidden border border-slate-400 px-1 text-left text-[11px] font-medium text-slate-700 hover:opacity-85 sm:px-1.5 ${
+                          bar.opensLeft ? "rounded-l-md" : "rounded-l-none"
+                        } ${bar.closesRight ? "rounded-r-md" : "rounded-r-none"}`}
+                      >
+                        <span className="truncate">{bar.booking.guestName}</span>
+                      </button>
+                    ) : isAirbnbBlock(bar.booking) ? (
                       <div
                         key={bar.booking.id}
                         title={`${bar.booking.guestName} · ${bar.booking.checkIn} → ${bar.booking.checkOut} — appears as a booking once you import your Airbnb CSV`}
@@ -243,7 +286,7 @@ export function BookingCalendar({
 
       <p className="mt-2 text-xs text-slate-500">
         Bars cover the nights booked — a check-out day is free for the next
-        guest. Tap a bar to edit that booking.
+        guest. Tap a bar to edit that booking, or a grey one to remove a block.
       </p>
     </div>
   );

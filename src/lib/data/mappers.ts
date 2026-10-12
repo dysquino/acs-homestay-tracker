@@ -2,6 +2,7 @@ import "server-only";
 
 import type {
   Booking as DbBooking,
+  DateBlock as DbDateBlock,
   BookingRequest as DbBookingRequest,
   CleaningSchedule as DbCleaning,
   Expense as DbExpense,
@@ -16,6 +17,7 @@ import type { Decimal } from "@prisma/client/runtime/library";
 
 import type {
   Booking,
+  DateBlock,
   BookingInput,
   BookingRequest,
   CleaningPaymentStatus,
@@ -287,5 +289,15 @@ export function bookingRequestFromDb(row: DbBookingRequest): BookingRequest {
     hasIdPhoto: row.idPhoto !== null,
     idPhotoMime: row.idPhotoMime,
     createdAt: row.createdAt.toISOString(),
+  };
+}
+
+export function dateBlockFromDb(row: DbDateBlock): DateBlock {
+  return {
+    id: row.id,
+    checkIn: dateToISO(row.startDate),
+    checkOut: dateToISO(row.endDate),
+    reason: row.reason,
+    createdBy: row.createdBy,
   };
 }

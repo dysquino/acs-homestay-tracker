@@ -27,6 +27,12 @@ import {
   updateBooking as updateBookingAction,
 } from "./data/bookings";
 import {
+  createDateBlock,
+  deleteDateBlock as deleteDateBlockAction,
+  listDateBlocks,
+  type BlockResult,
+} from "./data/date-blocks";
+import {
   createCleaning,
   deleteCleaning as deleteCleaningAction,
   listCleaning,
@@ -45,6 +51,8 @@ import type {
   BookingInput,
   BookingRequest,
   CleaningRecord,
+  DateBlock,
+  DateBlockInput,
   Expense,
   ExpenseInput,
 } from "./types";
@@ -83,6 +91,8 @@ type Data = {
   /** Airbnb stays that ended but were never imported (payout missing). */
   airbnbFinished: AirbnbReservation[];
   airbnbStatus: AirbnbSyncStatus;
+  /** Dates the owners closed with no guest (maintenance, own use). */
+  dateBlocks: DateBlock[];
 };
 
 type StoreValue = Data & {
@@ -118,6 +128,9 @@ type StoreValue = Data & {
   /** Resolves with the created booking, or an error to show (e.g. dates taken). */
   approveRequest: (id: string) => Promise<DecideResult>;
   declineRequest: (id: string) => Promise<DecideResult>;
+  /** Resolves with the block, or an error to show (e.g. a booking is on those dates). */
+  addDateBlock: (input: DateBlockInput) => Promise<BlockResult>;
+  deleteDateBlock: (id: string) => Promise<void>;
 };
 
 /** Background re-read while the app is open and visible (see StoreProvider). */
@@ -135,6 +148,7 @@ const EMPTY: Data = {
   airbnbBlocks: [],
   airbnbFinished: [],
   airbnbStatus: { enabled: false, fetchedAt: null, error: null },
+  dateBlocks: [],
 };
 
 export function StoreProvider({ children }: { children: ReactNode }) {
@@ -162,13 +176,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         listCleaning(),
         listBookingRequests(),
         listAirbnbBlocks(),
+        listDateBlocks(),
       ]);
     } catch (error) {
       if (request !== latest.current) return false;
       throw error;
     }
     if (request !== latest.current) return false;
-    const [bookings, expenses, cleaning, bookingRequests, airbnb] = lists;
+    const [bookings, expenses, cleaning, bookingRequests, airbnb, dateBlocks] = lists;
     setData({
       bookings,
       expenses,
@@ -177,6 +192,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       airbnbBlocks: airbnb.blocks,
       airbnbFinished: airbnb.finished,
       airbnbStatus: airbnb.status,
+      dateBlocks,
     });
     return true;
   }, []);
@@ -340,6 +356,23 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [refresh, actor],
   );
 
+  const addDateBlock = useCallback(
+    async (input: DateBlockInput) => {
+      const result = await createDateBlock(input);
+      if (result.ok) await refresh();
+      return result;
+    },
+    [refresh],
+  );
+
+  const deleteDateBlock = useCallback(
+    async (id: string) => {
+      await deleteDateBlockAction(id);
+      await refresh();
+    },
+    [refresh],
+  );
+
   const value = useMemo<StoreValue>(
     () => ({
       ...data,
@@ -360,6 +393,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       deleteCleaning,
       approveRequest,
       declineRequest,
+      addDateBlock,
+      deleteDateBlock,
     }),
     [
       data,
@@ -380,6 +415,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       deleteCleaning,
       approveRequest,
       declineRequest,
+      addDateBlock,
+      deleteDateBlock,
     ],
   );
 

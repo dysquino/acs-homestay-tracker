@@ -2,7 +2,7 @@
 
 import { useState, type ReactNode } from "react";
 
-import { PaymentBadge, SourceBadge } from "@/components/ui/badge";
+import { Badge, PaymentBadge, SourceBadge } from "@/components/ui/badge";
 import {
   CardList,
   GroupHeading,
@@ -21,7 +21,7 @@ import { DetailSheet } from "@/components/ui/detail-sheet";
 import { Pagination } from "@/components/ui/pagination";
 import { IdPhotoProof } from "@/components/bookings/id-photo";
 import { PaymentProof } from "@/components/bookings/payment-proof";
-import { nightCount } from "@/lib/dates";
+import { nightCount, today } from "@/lib/dates";
 import { formatCurrency, formatDate, formatMonth, formatShortDate } from "@/lib/format";
 import { bookingNetIncome, groupRuns } from "@/lib/selectors";
 import { useStore } from "@/lib/store";
@@ -70,6 +70,14 @@ export function sortBookings(bookings: Booking[], sort: Sort): Booking[] {
   });
 }
 
+/** "Oct 10 – 12", or "Oct 30 – Nov 2" across a month end. */
+function stayDates(checkIn: string, checkOut: string): string {
+  const out = formatShortDate(checkOut);
+  return checkIn.slice(0, 7) === checkOut.slice(0, 7)
+    ? `${formatShortDate(checkIn)} – ${out.split(" ").pop()}`
+    : `${formatShortDate(checkIn)} – ${out}`;
+}
+
 export function BookingTable({
   bookings,
   sort,
@@ -101,7 +109,7 @@ export function BookingTable({
     return (
       <EmptyState
         title="No bookings match"
-        message="Try clearing the filters, or add the first booking."
+        message="Try another period or clear the filters. New direct bookings come in through your booking link."
         action={emptyAction}
       />
     );
@@ -115,6 +123,7 @@ export function BookingTable({
         : { key, dir: "asc" },
     );
 
+  const t = today();
   const netTotal = bookings.reduce((s, b) => s + bookingNetIncome(b), 0);
   const nightsTotal = bookings.reduce((s, b) => s + nightCount(b.checkIn, b.checkOut), 0);
   const count = `${bookings.length} booking${bookings.length === 1 ? "" : "s"}`;
@@ -133,7 +142,7 @@ export function BookingTable({
               key={`month-${g.key}`}
               title={formatMonth(`${g.key}-01`)}
               detail={`${g.count} booking${g.count === 1 ? "" : "s"}`}
-              amount={formatCurrency(g.total)}
+              amount={g.count > 1 ? formatCurrency(g.total) : undefined}
             />
           ) : null,
           ...g.items.map((b) => (
@@ -141,9 +150,24 @@ export function BookingTable({
             key={b.id}
             onOpen={() => setSelected(b)}
             title={b.guestName}
-            subtitle={`${formatShortDate(b.checkIn)} → ${formatShortDate(b.checkOut)} · ${nightCount(b.checkIn, b.checkOut)}n`}
+            subtitle={
+              <span className="flex items-center gap-1.5">
+                <span
+                  aria-hidden="true"
+                  className={`h-2 w-2 shrink-0 rounded-full ${b.source === "airbnb" ? "bg-airbnb-600" : "bg-direct-600"}`}
+                />
+                <span className="sr-only">{b.source === "airbnb" ? "Airbnb" : "Direct"}, </span>
+                {stayDates(b.checkIn, b.checkOut)} · {nightCount(b.checkIn, b.checkOut)} night
+                {nightCount(b.checkIn, b.checkOut) === 1 ? "" : "s"}
+              </span>
+            }
             amount={formatCurrency(bookingNetIncome(b))}
-            tags={<PaymentBadge status={b.paymentStatus} />}
+            tags={
+              <>
+                {b.checkIn <= t && t < b.checkOut ? <Badge tone="brand">Staying now</Badge> : null}
+                <PaymentBadge status={b.paymentStatus} />
+              </>
+            }
           />
           )),
         ])}
@@ -167,7 +191,10 @@ export function BookingTable({
             </Th>
             <Th>Check-out</Th>
             <Th align="right">Nights</Th>
-            <Th align="right">Guests</Th>
+            {/* Guests only on wide screens: at ~1280px the table was a little
+                too wide and hid Payment and the actions behind a sideways
+                scroll. The count is in the booking's details too. */}
+            <Th align="right" className="hidden 2xl:table-cell">Guests</Th>
             <Th align="right" onClick={() => toggleSort("netIncome")} sort={dirFor("netIncome")}>
               Payout
             </Th>
@@ -201,7 +228,7 @@ export function BookingTable({
                 <Td align="right" className="tabular-nums">
                   {nightCount(b.checkIn, b.checkOut)}
                 </Td>
-                <Td align="right" className="tabular-nums">
+                <Td align="right" className="hidden tabular-nums 2xl:table-cell">
                   {b.guestsCount}
                 </Td>
                 <Td align="right" className="whitespace-nowrap">
@@ -230,7 +257,7 @@ export function BookingTable({
               <Td align="right" className="font-medium tabular-nums text-slate-700">
                 {nightsTotal}
               </Td>
-              <Td>{null}</Td>
+              <Td className="hidden 2xl:table-cell">{null}</Td>
               <Td align="right" className="font-semibold whitespace-nowrap tabular-nums text-slate-900">
                 {formatCurrency(netTotal)}
               </Td>

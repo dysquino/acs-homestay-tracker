@@ -3,8 +3,9 @@ import { NextRequest } from "next/server";
 import { listBookings } from "@/lib/data/bookings";
 import { listExpenses } from "@/lib/data/expenses";
 import { listCleaning } from "@/lib/data/cleaning";
+import { listDateBlocks } from "@/lib/data/date-blocks";
 import { csvResponse, toCsv } from "@/lib/csv";
-import { nightCount, today } from "@/lib/dates";
+import { addDays, daysBetween, nightCount, today } from "@/lib/dates";
 import {
   BOOKING_SOURCES,
   CLEANING_PAYMENT_STATUSES,
@@ -25,7 +26,7 @@ import {
  * standalone backup — not something that depends on this app still running.
  */
 
-const TABLES = ["bookings", "expenses", "cleaning"] as const;
+const TABLES = ["bookings", "expenses", "cleaning", "blocked-dates"] as const;
 type Table = (typeof TABLES)[number];
 
 function isTable(value: string): value is Table {
@@ -81,6 +82,16 @@ async function buildCsv(table: Table): Promise<string> {
         labelFor(EXPENSE_REFUND_STATUSES, e.refundStatus),
         e.cleaningId ? "Yes" : "",
       ]),
+    );
+  }
+
+  if (table === "blocked-dates") {
+    // Days as the owners picked them: the last day is the one before the
+    // first free day (stored like a check-out).
+    const blocks = await listDateBlocks();
+    return toCsv(
+      ["First Day", "Last Day", "Days", "Reason", "Created By"],
+      blocks.map((b) => [b.checkIn, addDays(b.checkOut, -1), daysBetween(b.checkIn, b.checkOut), b.reason, b.createdBy]),
     );
   }
 

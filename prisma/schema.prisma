@@ -120,6 +120,23 @@ model Booking {
   @@index([checkIn, checkOut])
 }
 
+/// Dates the owners close with no guest — maintenance, their own use. Same
+/// night-based span as a booking: `endDate` is the first free day (like a
+/// check-out), so [startDate, endDate) is blocked. Blocks the guests' booking
+/// link and direct bookings, and goes out in the calendar feed so Airbnb
+/// closes the dates too. Never counted as income, cleaning or an action item.
+model DateBlock {
+  id        String   @id @default(cuid())
+  startDate DateTime
+  endDate   DateTime
+  reason    String   @default("")
+  createdBy String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([startDate, endDate])
+}
+
 model Expense {
   id           String              @id @default(cuid())
   date         DateTime

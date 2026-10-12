@@ -105,6 +105,14 @@ export function ChevronRightIcon(props: SVGProps<SVGSVGElement>) {
   );
 }
 
+export function ChevronDownIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Icon {...props}>
+      <path d="m5 9 7 7 7-7" />
+    </Icon>
+  );
+}
+
 export function WarningIcon(props: SVGProps<SVGSVGElement>) {
   return (
     <Icon {...props}>
@@ -173,6 +181,25 @@ export function UploadIcon(props: SVGProps<SVGSVGElement>) {
     <Icon {...props}>
       <path d="M12 16V4m0 0-4 4m4-4 4 4" />
       <path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" />
+    </Icon>
+  );
+}
+
+export function LinkIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Icon {...props}>
+      <path d="M10 14a4 4 0 0 0 5.66 0l3-3a4 4 0 0 0-5.66-5.66l-1 1" />
+      <path d="M14 10a4 4 0 0 0-5.66 0l-3 3a4 4 0 0 0 5.66 5.66l1-1" />
+    </Icon>
+  );
+}
+
+/** A calendar with a slash — closed dates. */
+export function CalendarOffIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Icon {...props}>
+      <rect x="3" y="5" width="18" height="16" rx="2" />
+      <path d="M3 10h18M8 3v4M16 3v4M9 13l6 6M15 13l-6 6" />
     </Icon>
   );
 }

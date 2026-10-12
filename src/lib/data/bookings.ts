@@ -12,7 +12,7 @@ import {
 import { requireSiteAccess } from "./access";
 import { assertNoAirbnbClash } from "./airbnb-calendar";
 import { createBookingWithTurnover } from "./booking-create";
-import { assertNoOverlap } from "./overlap";
+import { assertNoOverlap, assertNotBlocked } from "./overlap";
 
 export async function listBookings(): Promise<Booking[]> {
   await requireSiteAccess();
@@ -57,8 +57,12 @@ export async function updateBooking(
     validateBooking(next);
     // Only when the dates move, so a booking that overlapped from before
     // double bookings were blocked can still have its payment etc. updated.
-    if (next.checkIn !== current.checkIn || next.checkOut !== current.checkOut) {
+    const moved = next.checkIn !== current.checkIn || next.checkOut !== current.checkOut;
+    if (moved) {
       await assertNoOverlap(tx, isoToDate(next.checkIn), isoToDate(next.checkOut), id);
+    }
+    if (next.source === "direct" && (moved || current.source !== "direct")) {
+      await assertNotBlocked(tx, isoToDate(next.checkIn), isoToDate(next.checkOut));
     }
 
     await tx.booking.update({ where: { id }, data: bookingPatchToDb(patch) });

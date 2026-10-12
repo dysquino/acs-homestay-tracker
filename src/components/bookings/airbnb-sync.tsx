@@ -4,7 +4,9 @@ import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Field, Input } from "@/components/ui/field";
+import { ChevronRightIcon } from "@/components/ui/icons";
 import { Modal } from "@/components/ui/modal";
+import { cn } from "@/lib/cn";
 import { getCalendarFeedPath } from "@/lib/data/airbnb";
 import { formatDateRange } from "@/lib/format";
 import { useStore } from "@/lib/store";
@@ -18,10 +20,11 @@ const ago = (iso: string) => {
 };
 
 /**
- * One line under the Bookings header: is the Airbnb calendar being read, and
- * which Airbnb reservations aren't imported yet (they block direct bookings).
- * "Airbnb calendar sync" opens the details plus the direct-bookings feed link
- * to paste into Airbnb, so Airbnb blocks those nights too.
+ * One tappable bar under the Bookings header: is the Airbnb calendar being
+ * read, and how many Airbnb reservations aren't imported yet (they block
+ * direct bookings). Tapping it opens the details plus the feed link to paste
+ * into Airbnb, so Airbnb closes the direct bookings' and blocked dates too.
+ * Kept to one line on a phone: the state and when, with the count as a badge.
  */
 export function AirbnbSyncStatus() {
   const { airbnbStatus: status, airbnbBlocks: blocks } = useStore();
@@ -52,27 +55,49 @@ export function AirbnbSyncStatus() {
     }
   }
 
-  const summary = !status.enabled
-    ? "Airbnb calendar not connected"
-    : status.fetchedAt
-      ? `Airbnb calendar checked ${ago(status.fetchedAt)}${blocks.length ? ` · ${blocks.length} reservation${blocks.length === 1 ? "" : "s"} not imported yet` : " · all reservations imported"}`
-      : "Airbnb calendar couldn't be read yet";
+  const tone = !status.enabled ? "off" : status.error || !status.fetchedAt ? "warn" : "ok";
+  const headline =
+    tone === "off"
+      ? "Airbnb calendar not connected"
+      : tone === "warn"
+        ? status.fetchedAt
+          ? "Airbnb sync problem"
+          : "Airbnb calendar not read yet"
+        : "Airbnb synced";
+  const when = status.enabled && status.fetchedAt ? ago(status.fetchedAt) : null;
 
   return (
     <>
-      <div className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-600">
-        <span className="flex items-center gap-1.5">
-          <span
-            aria-hidden="true"
-            className={`h-2 w-2 rounded-full ${!status.enabled ? "bg-slate-300" : status.error ? "bg-amber-500" : "bg-emerald-500"}`}
-          />
-          {summary}
-          {status.enabled && status.error ? <span className="text-amber-700"> · last check failed</span> : null}
+      <button
+        type="button"
+        onClick={openDetails}
+        aria-label={`${headline}${when ? `, checked ${when}` : ""}${status.enabled && blocks.length ? `, ${blocks.length} not imported` : ""}. Airbnb calendar sync details`}
+        className={cn(
+          "mb-4 flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-xs ring-1 ring-inset transition-colors sm:w-auto sm:min-w-96",
+          tone === "warn" ? "bg-amber-50 ring-amber-200 hover:bg-amber-100/70" : "bg-white ring-slate-200 hover:bg-slate-50",
+        )}
+      >
+        <span
+          aria-hidden="true"
+          className={cn(
+            "h-2 w-2 shrink-0 rounded-full",
+            tone === "off" ? "bg-slate-300" : tone === "warn" ? "bg-amber-500" : "bg-emerald-500",
+          )}
+        />
+        <span className="min-w-0 flex-1 truncate">
+          <span className={cn("font-medium", tone === "warn" ? "text-amber-900" : "text-slate-800")}>{headline}</span>
+          {when ? <span className="text-slate-500"> · {when}</span> : null}
+          {tone === "off" ? <span className="text-slate-500"> · set up</span> : null}
         </span>
-        <button type="button" onClick={openDetails} className="font-medium text-brand-700 hover:underline pointer-coarse:py-2">
-          Airbnb calendar sync
-        </button>
-      </div>
+        {status.enabled && blocks.length > 0 ? (
+          <span className="shrink-0 rounded-full bg-airbnb-50 px-2 py-0.5 font-medium text-airbnb-700 ring-1 ring-airbnb-600/20 ring-inset">
+            {blocks.length} not imported
+          </span>
+        ) : status.enabled && tone === "ok" ? (
+          <span className="shrink-0 text-slate-500">All imported</span>
+        ) : null}
+        <ChevronRightIcon className="h-4 w-4 shrink-0 text-slate-400" />
+      </button>
 
       <Modal
         open={open}
@@ -126,7 +151,8 @@ export function AirbnbSyncStatus() {
             {feed ? (
               <div className="mt-1 space-y-2">
                 <p>
-                  Paste this link into Airbnb so it blocks your direct bookings: Airbnb → listing → Availability →{" "}
+                  Paste this link into Airbnb so it closes your direct bookings and blocked dates: Airbnb → listing →
+                  Availability →{" "}
                   <strong>Connect calendars → Import calendar</strong>. Airbnb re-reads it every few hours.
                 </p>
                 <Field label="Direct bookings calendar link">
