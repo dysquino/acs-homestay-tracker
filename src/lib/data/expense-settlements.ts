@@ -1,6 +1,7 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
+import { requireReconciliationEnabled } from "@/lib/reconciliation-flag";
 import type { ExpenseSettlement, ExpenseSettlementInput } from "@/lib/types";
 import { ValidationError, validateExpenseSettlement } from "@/lib/validation";
 
@@ -26,6 +27,7 @@ import {
 /** Settlements against one expense, newest first. */
 export async function listExpenseSettlements(expenseId: string): Promise<ExpenseSettlement[]> {
   await requireSiteAccess();
+  requireReconciliationEnabled();
   const rows = await prisma.expenseSettlement.findMany({
     where: { expenseId },
     orderBy: { paidDate: "desc" },
@@ -36,6 +38,7 @@ export async function listExpenseSettlements(expenseId: string): Promise<Expense
 /** Every settlement across all expenses and bookings — the future outflow pool. */
 export async function listAllExpenseSettlements(): Promise<ExpenseSettlement[]> {
   await requireSiteAccess();
+  requireReconciliationEnabled();
   const rows = await prisma.expenseSettlement.findMany({
     orderBy: { paidDate: "desc" },
   });
@@ -46,6 +49,7 @@ export async function createExpenseSettlement(
   input: ExpenseSettlementInput,
 ): Promise<ExpenseSettlement> {
   await requireSiteAccess();
+  requireReconciliationEnabled();
   validateExpenseSettlement(input);
   await assertSourceExists(input);
   const row = await prisma.expenseSettlement.create({ data: expenseSettlementToDb(input) });
@@ -57,6 +61,7 @@ export async function updateExpenseSettlement(
   patch: Partial<ExpenseSettlementInput>,
 ): Promise<void> {
   await requireSiteAccess();
+  requireReconciliationEnabled();
   await prisma.$transaction(async (tx) => {
     const existing = await tx.expenseSettlement.findUniqueOrThrow({ where: { id } });
     if (existing.status === "VOIDED") {
@@ -82,6 +87,7 @@ export async function updateExpenseSettlement(
 /** Void, never delete (§7.13). */
 export async function voidExpenseSettlement(id: string, voidedBy: string): Promise<void> {
   await requireSiteAccess();
+  requireReconciliationEnabled();
   if (!voidedBy.trim()) throw new ValidationError("Voided by is required.");
   const existing = await prisma.expenseSettlement.findUniqueOrThrow({ where: { id } });
   if (existing.status === "VOIDED") return; // idempotent
