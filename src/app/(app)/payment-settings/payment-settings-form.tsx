@@ -39,6 +39,12 @@ export function PaymentSettingsForm({
   const [nightlyRate, setNightlyRate] = useState<number>(initial?.nightlyRate ?? 0);
   const [cleaningFee, setCleaningFee] = useState<number>(initial?.cleaningFee ?? 0);
   const [cleaningFeeLong, setCleaningFeeLong] = useState<number>(initial?.cleaningFeeLong ?? 0);
+  // Default to the schema defaults so the very first save (which `create`s
+  // the row) still works without the user touching these.
+  const [idPhotoRequired, setIdPhotoRequired] = useState<boolean>(initial?.idPhotoRequired ?? true);
+  const [paymentScreenshotRequired, setPaymentScreenshotRequired] = useState<boolean>(
+    initial?.paymentScreenshotRequired ?? false,
+  );
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -131,6 +137,8 @@ export function PaymentSettingsForm({
           nightlyRate,
           cleaningFee,
           cleaningFeeLong,
+          idPhotoRequired,
+          paymentScreenshotRequired,
         });
         setSaved(true);
         // The server is now the source of truth; staged changes are baked in.
@@ -207,6 +215,42 @@ export function PaymentSettingsForm({
             />
           )}
         </Field>
+      </div>
+
+      <div className="border-t border-slate-100 p-4 sm:p-5 space-y-3">
+        <div className="text-xs font-medium text-slate-800">Required fields on /book</div>
+        <p className="text-xs text-slate-500">
+          When a field is required, the form blocks submission until the guest attaches one. The
+          server stays permissive either way (old versions of the booking page keep working).
+        </p>
+        <label className="flex items-start gap-2.5 text-sm text-slate-700">
+          <input
+            type="checkbox"
+            checked={idPhotoRequired}
+            onChange={(e) => setIdPhotoRequired(e.target.checked)}
+            className="mt-0.5 h-4 w-4 shrink-0 rounded border-slate-300 text-brand-700 focus:ring-brand-600"
+          />
+          <span>
+            <span className="font-medium text-slate-900">ID photo required</span>
+            <span className="block text-xs text-slate-500">
+              For seamless check-in. Uncheck to let guests submit without an ID.
+            </span>
+          </span>
+        </label>
+        <label className="flex items-start gap-2.5 text-sm text-slate-700">
+          <input
+            type="checkbox"
+            checked={paymentScreenshotRequired}
+            onChange={(e) => setPaymentScreenshotRequired(e.target.checked)}
+            className="mt-0.5 h-4 w-4 shrink-0 rounded border-slate-300 text-brand-700 focus:ring-brand-600"
+          />
+          <span>
+            <span className="font-medium text-slate-900">Payment screenshot required</span>
+            <span className="block text-xs text-slate-500">
+              Guests must attach an InstaPay receipt before submitting. Uncheck to make it optional.
+            </span>
+          </span>
+        </label>
       </div>
 
       <div className="border-t border-slate-100 p-4 sm:p-5 space-y-3">

@@ -103,7 +103,10 @@ export function BookingRequestForm({
     if (!contactInfo.trim()) next.contactInfo = "Please enter a phone number or email so we can reach you.";
     const guests = Number(guestsCount);
     if (!Number.isInteger(guests) || guests < 1 || guests > 20) next.guestsCount = "Enter between 1 and 20 guests.";
-    if (!idPhoto) next.idPhoto = "An ID photo is required for check-in — please upload one above.";
+    if (pricing.idPhotoRequired && !idPhoto)
+      next.idPhoto = "An ID photo is required for check-in — please upload one above.";
+    if (pricing.paymentScreenshotRequired && !screenshot)
+      next.paymentScreenshot = "A payment screenshot is required — please upload one above.";
     setErrors(next);
     if (Object.keys(next).length > 0 || !checkIn || !checkOut) return;
 
@@ -298,10 +301,13 @@ export function BookingRequestForm({
           )}
         </Field>
 
-        <IdPhotoUpload onChange={setIdPhoto} />
+        <IdPhotoUpload onChange={setIdPhoto} required={pricing.idPhotoRequired} />
         {errors.idPhoto ? <p className="text-xs text-red-600">{errors.idPhoto}</p> : null}
 
-        <ScreenshotUpload onChange={setScreenshot} />
+        <ScreenshotUpload onChange={setScreenshot} required={pricing.paymentScreenshotRequired} />
+        {errors.paymentScreenshot ? (
+          <p className="text-xs text-red-600">{errors.paymentScreenshot}</p>
+        ) : null}
 
         {/* Honeypot: hidden from people, irresistible to bots. */}
         <div aria-hidden="true" className="absolute -left-[9999px] h-px w-px overflow-hidden">

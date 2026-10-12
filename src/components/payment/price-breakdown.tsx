@@ -15,6 +15,16 @@ export type PricingConfig = {
    * short-stay fee when the stay would have used this tier.
    */
   cleaningFeeLong: number;
+  /**
+   * Whether the ID photo is required on the form. When false, the field
+   * is shown as optional and the form doesn't block submission for it.
+   */
+  idPhotoRequired: boolean;
+  /**
+   * Whether the payment screenshot is required on the form. When true,
+   * the form blocks submission until a screenshot is attached.
+   */
+  paymentScreenshotRequired: boolean;
 };
 
 /**

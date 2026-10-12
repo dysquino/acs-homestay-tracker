@@ -229,6 +229,14 @@ model PaymentConfig {
   /// Cleaning fee for long-term bookings (>= 5 nights). If 0, falls back to
   /// `cleaningFee` for stays that would have used this tier.
   cleaningFeeLong Decimal @default(0) @db.Decimal(10, 2)
+  /// Whether the ID photo is required on the public /book form. When false,
+  /// the field is shown as optional and the form doesn't block submission
+  /// for it. The server stays permissive regardless (old /book versions
+  /// keep working).
+  idPhotoRequired          Boolean  @default(true)
+  /// Whether the payment screenshot is required on the public /book form.
+  /// When true, the form blocks submission until a screenshot is attached.
+  paymentScreenshotRequired Boolean  @default(false)
   updatedAt     DateTime @updatedAt
   updatedBy     String
 }

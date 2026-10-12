@@ -43,6 +43,12 @@ export type PaymentConfigData = {
   /// Cleaning fee for long stays (>= 5 nights). If 0, falls back to
   /// `cleaningFee` when the stay would have used this tier.
   cleaningFeeLong: number;
+  /// Whether the ID photo is required on the public /book form. Defaults
+  /// to true (preserves the original required-by-default behavior).
+  idPhotoRequired: boolean;
+  /// Whether the payment screenshot is required on the public /book form.
+  /// Defaults to false (was always optional before this flag existed).
+  paymentScreenshotRequired: boolean;
   updatedAt: string;
 };
 
@@ -55,6 +61,8 @@ function rowToConfig(row: {
   nightlyRate: Decimal;
   cleaningFee: Decimal;
   cleaningFeeLong: Decimal;
+  idPhotoRequired: boolean;
+  paymentScreenshotRequired: boolean;
   updatedAt: Date;
 }): PaymentConfigData {
   return {
@@ -66,6 +74,8 @@ function rowToConfig(row: {
     nightlyRate: Number(row.nightlyRate),
     cleaningFee: Number(row.cleaningFee),
     cleaningFeeLong: Number(row.cleaningFeeLong),
+    idPhotoRequired: row.idPhotoRequired,
+    paymentScreenshotRequired: row.paymentScreenshotRequired,
     updatedAt: row.updatedAt.toISOString(),
   };
 }
@@ -98,6 +108,10 @@ export type SetPaymentConfigInput = {
   cleaningFee?: number;
   /** Cleaning fee for long stays (>= 5 nights, peso). */
   cleaningFeeLong?: number;
+  /** Whether the ID photo is required on /book. */
+  idPhotoRequired?: boolean;
+  /** Whether the payment screenshot is required on /book. */
+  paymentScreenshotRequired?: boolean;
 };
 
 /**
@@ -163,6 +177,9 @@ export async function setPaymentConfig(input: SetPaymentConfigInput): Promise<Pa
   if (nightlyRate !== undefined) data.nightlyRate = nightlyRate;
   if (cleaningFee !== undefined) data.cleaningFee = cleaningFee;
   if (cleaningFeeLong !== undefined) data.cleaningFeeLong = cleaningFeeLong;
+  if (input.idPhotoRequired !== undefined) data.idPhotoRequired = input.idPhotoRequired;
+  if (input.paymentScreenshotRequired !== undefined)
+    data.paymentScreenshotRequired = input.paymentScreenshotRequired;
 
   const row = await prisma.paymentConfig.upsert({
     where: { id: "singleton" },
@@ -175,6 +192,8 @@ export async function setPaymentConfig(input: SetPaymentConfigInput): Promise<Pa
       nightlyRate: nightlyRate ?? 0,
       cleaningFee: cleaningFee ?? 0,
       cleaningFeeLong: cleaningFeeLong ?? 0,
+      idPhotoRequired: input.idPhotoRequired ?? true,
+      paymentScreenshotRequired: input.paymentScreenshotRequired ?? false,
       qrCode: input.qrCode && input.qrCode !== null ? Buffer.from(input.qrCode.bytes) : undefined,
       qrCodeMime:
         input.qrCode && input.qrCode !== null
