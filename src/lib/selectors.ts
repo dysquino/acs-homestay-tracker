@@ -291,3 +291,42 @@ export function moneyInBank(bookings: Booking[], expenses: Expense[]): MoneyInBa
     balance: income - spent,
   };
 }
+
+export type Group<T> = { key: string; items: T[]; count: number; total: number };
+
+/**
+ * Splits an already-sorted list into runs sharing a key (a day, a month…),
+ * for group headings in long lists. `items` is what's on screen (e.g. one
+ * page); `count`/`total` come from `all` (every matching record), so a group
+ * split across pages still shows its full total.
+ */
+export function groupRuns<T>(
+  items: T[],
+  all: T[],
+  keyOf: (x: T) => string,
+  amountOf: (x: T) => number,
+): Group<T>[] {
+  const totals = new Map<string, { count: number; total: number }>();
+  for (const x of all) {
+    const k = keyOf(x);
+    const t = totals.get(k) ?? { count: 0, total: 0 };
+    t.count += 1;
+    t.total += amountOf(x);
+    totals.set(k, t);
+  }
+  const groups: Group<T>[] = [];
+  for (const x of items) {
+    const k = keyOf(x);
+    const last = groups[groups.length - 1];
+    if (last && last.key === k) last.items.push(x);
+    else groups.push({ key: k, items: [x], ...(totals.get(k) ?? { count: 1, total: amountOf(x) }) });
+  }
+  return groups;
+}
+
+export type DayGroup<T> = { date: ISODate; items: T[]; count: number; total: number };
+
+/** groupRuns by `date`, totalling `amount` — for expense lists. */
+export function groupByDay<T extends { date: ISODate; amount: number }>(items: T[], all: T[] = items): DayGroup<T>[] {
+  return groupRuns(items, all, (x) => x.date, (x) => x.amount).map(({ key, ...g }) => ({ date: key, ...g }));
+}

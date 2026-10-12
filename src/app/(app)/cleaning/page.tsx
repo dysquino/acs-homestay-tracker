@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardHeader } from "@/components/ui/card";
 import { Field, Select } from "@/components/ui/field";
 import { DateRangeFilter, FilterBar } from "@/components/ui/filter-bar";
-import { PlusIcon, SparklesIcon } from "@/components/ui/icons";
+import { ChevronLeftIcon, ChevronRightIcon, PlusIcon, SparklesIcon } from "@/components/ui/icons";
 import { DetailSheet } from "@/components/ui/detail-sheet";
 import { ConfirmDialog } from "@/components/ui/modal";
 import { Pagination } from "@/components/ui/pagination";
@@ -21,6 +21,7 @@ import {
   CardList,
   CompactRow,
   EmptyState,
+  GroupHeading,
   RowActions,
   RowTitle,
   Table,
@@ -30,9 +31,11 @@ import {
   Thead,
   Tr,
 } from "@/components/ui/table";
-import { formatCurrency, formatDate } from "@/lib/format";
+import { addMonths, isSameMonth, startOfMonth, today } from "@/lib/dates";
+import { formatCurrency, formatDate, formatMonth } from "@/lib/format";
 import {
   amountOwedByCleaner,
+  groupRuns,
   knownCleaners,
   unpaidCleanings,
 } from "@/lib/selectors";
@@ -64,6 +67,12 @@ export default function CleaningPage() {
   const [payment, setPayment] = useState<CleaningPaymentStatus | "all">("all");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
+  // The list follows a month (arrows in its status line), so it's one month
+  // long instead of every cleaning ever. The tiles above stay "right now"
+  // figures. "Show all months" lifts the month; a From/To range replaces it.
+  const [monthCursor, setMonthCursor] = useState(() => startOfMonth(today()));
+  const [scope, setScope] = useState<"month" | "all">("month");
+  const monthScoped = scope === "month" && !from && !to;
 
   const bookingById = useMemo(
     () => new Map(bookings.map((b) => [b.id, b])),
@@ -77,6 +86,7 @@ export default function CleaningPage() {
   const filtered = useMemo(() => {
     return cleaning
       .filter((c) => {
+        if (monthScoped && !isSameMonth(c.date, monthCursor)) return false;
         const name = c.cleanerName.trim() || "Unassigned";
         if (cleaner !== "all" && name.toLowerCase() !== cleaner.toLowerCase()) return false;
         if (status !== "all" && c.status !== status) return false;
@@ -86,8 +96,14 @@ export default function CleaningPage() {
         return true;
       })
       .sort((a, b) => b.date.localeCompare(a.date));
-  }, [cleaning, cleaner, status, payment, from, to]);
-  const paging = usePagination(filtered, JSON.stringify([cleaner, status, payment, from, to]));
+  }, [cleaning, monthScoped, monthCursor, cleaner, status, payment, from, to]);
+  const paging = usePagination(
+    filtered,
+    JSON.stringify([monthScoped && monthCursor, cleaner, status, payment, from, to]),
+  );
+  const filteredTotal = filtered.reduce((s, c) => s + c.paymentAmount, 0);
+  // Day headings for the phone/tablet list (always newest first here).
+  const dayGroups = groupRuns(paging.pageItems, filtered, (c) => c.date, (c) => c.paymentAmount);
 
   const cleanerOptions = useMemo(() => {
     const names = knownCleaners(cleaning);
@@ -170,7 +186,8 @@ export default function CleaningPage() {
       </div>
 
       <div className="grid gap-5 2xl:grid-cols-[minmax(0,1fr)_22rem] 2xl:items-start">
-        <Card className="overflow-hidden">
+        {/* overflow-clip, not -hidden: hidden would stop the day headings sticking. */}
+        <Card className="overflow-clip">
           <FilterBar
             filtersActive={filtersActive}
             activeCount={[cleaner !== "all", status !== "all", payment !== "all", from, to].filter(Boolean).length}
@@ -221,10 +238,58 @@ export default function CleaningPage() {
               <DateRangeFilter from={from} to={to} onFromChange={setFrom} onToChange={setTo} />
             </FilterBar>
 
+          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b border-slate-100 px-4 py-1.5 text-xs text-slate-600 sm:px-5">
+            <span className="flex items-center gap-1">
+              {monthScoped ? (
+                <button
+                  type="button"
+                  aria-label="Previous month"
+                  onClick={() => setMonthCursor(addMonths(monthCursor, -1))}
+                  className="rounded-md p-1 text-slate-500 hover:bg-slate-100 pointer-coarse:p-2"
+                >
+                  <ChevronLeftIcon className="h-4 w-4" />
+                </button>
+              ) : null}
+              <span className="font-medium text-slate-900">
+                {from || to ? "Your From/To range" : monthScoped ? formatMonth(monthCursor) : "All months"}
+              </span>
+              {monthScoped ? (
+                <button
+                  type="button"
+                  aria-label="Next month"
+                  onClick={() => setMonthCursor(addMonths(monthCursor, 1))}
+                  className="rounded-md p-1 text-slate-500 hover:bg-slate-100 pointer-coarse:p-2"
+                >
+                  <ChevronRightIcon className="h-4 w-4" />
+                </button>
+              ) : null}
+              <span>
+                {" · "}
+                {filtered.length} cleaning{filtered.length === 1 ? "" : "s"} ·{" "}
+                <span className="font-semibold text-slate-900">{formatCurrency(filteredTotal)}</span>
+              </span>
+            </span>
+            {from || to ? null : (
+              <button
+                type="button"
+                onClick={() => setScope(monthScoped ? "all" : "month")}
+                className="font-medium text-brand-700 hover:underline pointer-coarse:py-2"
+              >
+                {monthScoped ? "Show all months" : `Only ${formatMonth(monthCursor)}`}
+              </button>
+            )}
+          </div>
+
           {filtered.length === 0 ? (
             <EmptyState
-              title="No cleaning records match"
-              message="Records are created automatically when you add a booking — or add one manually."
+              title={
+                monthScoped && !filtersActive ? `No cleanings in ${formatMonth(monthCursor)}` : "No cleaning records match"
+              }
+              message={
+                monthScoped
+                  ? "Use the arrows for another month, tap “Show all months”, or add a cleaning."
+                  : "Records are created automatically when you add a booking — or add one manually."
+              }
               action={
                 <Button variant="primary" onClick={openAdd}>
                   <PlusIcon className="h-4 w-4" />
@@ -235,7 +300,14 @@ export default function CleaningPage() {
           ) : (
             <>
               <CardList>
-                {paging.pageItems.map((c) => {
+                {dayGroups.map((g) => [
+                  <GroupHeading
+                    key={`day-${g.key}`}
+                    title={formatDate(g.key)}
+                    detail={`${g.count} cleaning${g.count === 1 ? "" : "s"}`}
+                    amount={formatCurrency(g.total)}
+                  />,
+                  ...g.items.map((c) => {
                   const booking = c.bookingId ? bookingById.get(c.bookingId) : undefined;
                   return (
                     <CompactRow
@@ -244,7 +316,7 @@ export default function CleaningPage() {
                       title={
                         c.cleanerName || <span className="font-normal text-slate-400">Unassigned</span>
                       }
-                      subtitle={`${formatDate(c.date)}${booking ? ` · ${booking.guestName}` : ""}`}
+                      subtitle={booking ? booking.guestName : "Not linked to a booking"}
                       amount={formatCurrency(c.paymentAmount)}
                       tags={
                         <>
@@ -255,7 +327,8 @@ export default function CleaningPage() {
                       action={c.paymentStatus === "unpaid" ? markPaidButton(c) : null}
                     />
                   );
-                })}
+                  }),
+                ])}
               </CardList>
 
               <TableWrap>

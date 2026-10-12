@@ -160,7 +160,8 @@ function BookingsPageContent() {
       </div>
 
       {view === "list" ? (
-        <Card className="overflow-hidden">
+        <Card className="overflow-clip">
+          {/* overflow-clip, not -hidden: hidden would stop the month headings sticking. */}
           <FilterBar
             filtersActive={filtersActive}
             activeCount={[source !== "all", payment !== "all", from, to, includePast].filter(Boolean).length}
