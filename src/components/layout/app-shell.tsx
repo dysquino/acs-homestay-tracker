@@ -108,7 +108,12 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
       </main>
 
-      {/* Mobile bottom tabs */}
+      {/* Mobile bottom tabs. Sized generously so tappability matches app nav
+          expectations — bumped from 11px text + 20px icons to 12px + 24px
+          after the home-screen icon felt undersized next to the rest of an
+          app-style layout. The grid-cols-5 + ~74px per cell still leaves
+          room for the longest label ("Cleaning", 8 chars) without wrap on
+          320px-wide screens. */}
       <nav className="no-print fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 rounded-t-3xl bg-white pb-[env(safe-area-inset-bottom)] shadow-[0_-4px_20px_rgba(15,23,42,0.08)] lg:hidden">
         {NAV.map((item) => {
           const active = isActive(pathname, item.href);
@@ -118,12 +123,12 @@ export function AppShell({ children }: { children: ReactNode }) {
               href={item.href}
               aria-current={active ? "page" : undefined}
               className={cn(
-                "flex flex-col items-center gap-0.5 py-2 text-[11px] font-medium",
+                "flex flex-col items-center gap-1 py-2.5 text-xs font-medium",
                 active ? "text-brand-700" : "text-slate-500",
               )}
             >
               <span className="relative">
-                <item.icon className="h-5 w-5" />
+                <item.icon className="h-6 w-6" />
                 {badge(item.href) ? (
                   <span className="absolute -top-1.5 -right-2.5">{badge(item.href)}</span>
                 ) : null}
