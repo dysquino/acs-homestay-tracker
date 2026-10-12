@@ -99,6 +99,18 @@ model Booking {
   /// Airbnb's reservation code (e.g. HM5M3MR8KQ), set only by the CSV import.
   /// Unique, so importing the same file twice can never create a duplicate.
   confirmationCode String?            @unique
+  /// Payment screenshot for direct bookings — copied from the BookingRequest
+  /// on approval (so the bytes belong to the reservation, not just the
+  /// request), and editable by the owner afterwards. Bytes are magic-byte
+  /// sniffed at write; capped at MAX_IMAGE_BYTES (2 MB). See
+  /// `src/lib/payment-screenshot.ts`.
+  paymentScreenshot     Bytes?
+  paymentScreenshotMime String?
+  /// ID photo for direct bookings — same shape and rules as the payment
+  /// screenshot. The guest-side form makes it required at submit time;
+  /// the server stays permissive (old /book clients stay compatible).
+  idPhoto     Bytes?
+  idPhotoMime String?
   cleanings        CleaningSchedule[]
   /// The guest's request this booking was approved from, if any.
   request          BookingRequest?

@@ -5,32 +5,37 @@ import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { IdCardIcon, TrashIcon, UploadIcon } from "@/components/ui/icons";
 import { Modal } from "@/components/ui/modal";
-import { compressImageInBrowser } from "@/lib/image-compress";
-import {
-  attachBookingRequestIdPhoto,
-  clearBookingRequestIdPhoto,
-  getBookingRequestIdPhoto,
-} from "@/lib/data/id-photo";
 import { cn } from "@/lib/cn";
+import { compressImageInBrowser } from "@/lib/image-compress";
+
+import { imageActions, type EntityKind } from "./image-actions";
 
 /**
- * The "ID photo" area on a pending booking request card — parallel to
- * `PaymentProof` for the payment screenshot. If an ID is on file it shows
- * thumbnail + view/replace/remove; if not, a single "Attach ID photo"
- * button opens the upload modal. Client-side compression matches the
- * guest-side flow so even an owner re-attach doesn't blow the storage
- * budget.
+ * The "ID photo" area — used on both the pending booking request card
+ * and the edit-booking modal. If an ID is on file: thumbnail + View /
+ * Replace / Remove. If not: a single "Attach ID photo" button. Same
+ * shared compression as the guest-side form (1600 px / JPEG 0.9) so an
+ * owner re-attach doesn't blow the storage budget either.
  */
 export function IdPhotoProof({
   requestId,
+  bookingId,
+  entityKind = "request",
   hasPhoto,
   onChanged,
 }: {
-  requestId: string;
+  /** Used when `entityKind === "request"` (the default). */
+  requestId?: string;
+  /** Used when `entityKind === "booking"`. */
+  bookingId?: string;
+  entityKind?: EntityKind;
   hasPhoto: boolean;
-  /** Called after attach/clear so the parent can re-fetch the requests list. */
+  /** Called after attach/clear so the parent can re-fetch the list. */
   onChanged: () => void;
 }) {
+  const entityId = entityKind === "booking" ? bookingId! : requestId!;
+  const actions = imageActions(entityKind, "idPhoto");
+
   const [viewerOpen, setViewerOpen] = useState(false);
   const [attachOpen, setAttachOpen] = useState(false);
   const [bytes, setBytes] = useState<Uint8Array | null>(null);
@@ -66,11 +71,11 @@ export function IdPhotoProof({
     setBusy(true);
     try {
       const { bytes: compressed } = await compressImageInBrowser(file);
-      setBytes(compressed);
       if (lastPreviewUrl.current) URL.revokeObjectURL(lastPreviewUrl.current);
       const url = URL.createObjectURL(new Blob([compressed as BlobPart], { type: "image/jpeg" }));
       lastPreviewUrl.current = url;
       setPreview(url);
+      setBytes(compressed);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Couldn't process that image.");
     } finally {
@@ -86,7 +91,7 @@ export function IdPhotoProof({
     setBusy(true);
     setError(null);
     try {
-      const result = await attachBookingRequestIdPhoto(requestId, bytes);
+      const result = await actions.attach(entityId, bytes);
       if ("error" in result) {
         setError(result.error);
         return;
@@ -121,7 +126,7 @@ export function IdPhotoProof({
             <UploadIcon className="h-3.5 w-3.5" />
             <span className="ml-1">Replace</span>
           </Button>
-          <RemoveButton requestId={requestId} onChanged={onChanged} />
+          <RemoveButton actions={actions} entityId={entityId} onChanged={onChanged} />
         </div>
       ) : (
         <Button
@@ -145,7 +150,9 @@ export function IdPhotoProof({
         description="Uploaded by the guest (or attached by an owner) for seamless check-in."
         wide
       >
-        {viewerOpen ? <IdPhotoViewerBody requestId={requestId} key={requestId} /> : null}
+        {viewerOpen ? (
+          <IdPhotoViewerBody actions={actions} entityId={entityId} key={entityId} />
+        ) : null}
       </Modal>
 
       <Modal
@@ -192,7 +199,9 @@ export function IdPhotoProof({
 
           {preview ? (
             <div className="space-y-2">
-              <p className="text-xs text-slate-500">{name} — will be attached to this request.</p>
+              <p className="text-xs text-slate-500">
+                {name} — will be attached to this {entityKind === "booking" ? "booking" : "request"}.
+              </p>
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={preview}
@@ -213,17 +222,25 @@ export function IdPhotoProof({
   );
 }
 
-function RemoveButton({ requestId, onChanged }: { requestId: string; onChanged: () => void }) {
+function RemoveButton({
+  actions,
+  entityId,
+  onChanged,
+}: {
+  actions: ReturnType<typeof imageActions>;
+  entityId: string;
+  onChanged: () => void;
+}) {
   const [busy, setBusy] = useState(false);
   return (
     <Button
       size="sm"
       variant="ghost"
       onClick={async () => {
-        if (!confirm("Remove the ID photo from this request?")) return;
+        if (!confirm("Remove the ID photo?")) return;
         setBusy(true);
         try {
-          await clearBookingRequestIdPhoto(requestId);
+          await actions.clear(entityId);
           onChanged();
         } finally {
           setBusy(false);
@@ -238,13 +255,20 @@ function RemoveButton({ requestId, onChanged }: { requestId: string; onChanged: 
   );
 }
 
-function IdPhotoViewerBody({ requestId }: { requestId: string }) {
+function IdPhotoViewerBody({
+  actions,
+  entityId,
+}: {
+  actions: ReturnType<typeof imageActions>;
+  entityId: string;
+}) {
   const [src, setSrc] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let alive = true;
-    getBookingRequestIdPhoto(requestId)
+    actions
+      .get(entityId)
       .then((data) => {
         if (!alive) return;
         if (!data) {
@@ -260,7 +284,7 @@ function IdPhotoViewerBody({ requestId }: { requestId: string }) {
     return () => {
       alive = false;
     };
-  }, [requestId]);
+  }, [actions, entityId]);
 
   useEffect(() => {
     if (!src) return;

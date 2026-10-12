@@ -24,10 +24,33 @@ export type Booking = {
   createdBy: string;
   /** Airbnb's reservation code — set only by the CSV import. */
   confirmationCode: string | null;
+  /**
+   * Whether a payment screenshot is on file — without dragging the bytes
+   * through every list query. The bytes are fetched on demand via
+   * `getBookingScreenshot(id)`. Copied from the BookingRequest on approval.
+   */
+  hasPaymentScreenshot: boolean;
+  paymentScreenshotMime: string | null;
+  /**
+   * Whether an ID photo is on file. Bytes fetched on demand via
+   * `getBookingIdPhoto(id)`. Copied from the BookingRequest on approval.
+   */
+  hasIdPhoto: boolean;
+  idPhotoMime: string | null;
 };
 
-/** What a client may submit — `confirmationCode` is only set by the import. */
-export type BookingInput = Omit<Booking, "id" | "confirmationCode">;
+/** What a client may submit — `confirmationCode` is only set by the import.
+ *  Photo fields are derived (set/cleared via their own server actions), so
+ *  they aren't part of the input shape. */
+export type BookingInput = Omit<
+  Booking,
+  | "id"
+  | "confirmationCode"
+  | "hasPaymentScreenshot"
+  | "paymentScreenshotMime"
+  | "hasIdPhoto"
+  | "idPhotoMime"
+>;
 
 export type ExpenseCategory =
   | "utility"

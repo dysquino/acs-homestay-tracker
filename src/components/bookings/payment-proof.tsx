@@ -5,44 +5,51 @@ import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { ImageIcon, TrashIcon, UploadIcon } from "@/components/ui/icons";
 import { Modal } from "@/components/ui/modal";
-import {
-  attachBookingRequestScreenshot,
-  clearBookingRequestScreenshot,
-  getBookingRequestScreenshot,
-} from "@/lib/data/payment-screenshot";
 import { cn } from "@/lib/cn";
-import { MAX_PAYMENT_SCREENSHOT_BYTES } from "@/lib/payment-screenshot";
+import { compressImageInBrowser } from "@/lib/image-compress";
+
+import { imageActions, type EntityKind } from "./image-actions";
 
 /**
- * The "Payment proof" area on a pending booking request card:
- * - If a screenshot is on file: shows a thumbnail and buttons to view full /
- *   replace / remove.
- * - If not: shows an "Attach payment screenshot" button that opens the
- *   upload modal.
+ * The "Payment proof" area — used on both the pending booking request card
+ * and the edit-booking modal. If a screenshot is on file: thumbnail + View /
+ * Replace / Remove. If not: a single "Attach payment screenshot" button.
  *
- * State (file + viewer URL) is lifted here so the modal's footer button can
- * submit without prop-drilling through the modal body.
+ * State (file + viewer URL) is lifted here so the modal's footer button
+ * can submit without prop-drilling through the modal body.
+ *
+ * Compression: same shared `compressImageInBrowser` (1600 px / JPEG 0.9)
+ * the guest-side form uses, so an owner re-attach from a phone photo
+ * doesn't blow the storage budget either.
  */
 export function PaymentProof({
   requestId,
+  bookingId,
+  entityKind = "request",
   hasScreenshot,
   onChanged,
 }: {
-  requestId: string;
+  /** Used when `entityKind === "request"` (the default). */
+  requestId?: string;
+  /** Used when `entityKind === "booking"`. */
+  bookingId?: string;
+  entityKind?: EntityKind;
   hasScreenshot: boolean;
-  /** Called after attach/clear so the parent can re-fetch the requests list. */
+  /** Called after attach/clear so the parent can re-fetch the list. */
   onChanged: () => void;
 }) {
+  const entityId = entityKind === "booking" ? bookingId! : requestId!;
+  const actions = imageActions(entityKind, "screenshot");
+
   const [viewerOpen, setViewerOpen] = useState(false);
   const [attachOpen, setAttachOpen] = useState(false);
   const [bytes, setBytes] = useState<Uint8Array | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
+  const [name, setName] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const lastPreviewUrl = useRef<string | null>(null);
 
-  // Revoke any blob URL we created when the picked file changes or the
-  // component unmounts.
   useEffect(() => {
     return () => {
       if (lastPreviewUrl.current) URL.revokeObjectURL(lastPreviewUrl.current);
@@ -51,6 +58,7 @@ export function PaymentProof({
 
   function clearPicked() {
     setBytes(null);
+    setName(null);
     if (lastPreviewUrl.current) URL.revokeObjectURL(lastPreviewUrl.current);
     lastPreviewUrl.current = null;
     setPreview(null);
@@ -64,20 +72,25 @@ export function PaymentProof({
 
   async function pickFile(file: File | null) {
     if (!file) return;
-    if (file.size > MAX_PAYMENT_SCREENSHOT_BYTES) {
-      setError(`That file is larger than ${MAX_PAYMENT_SCREENSHOT_BYTES / (1024 * 1024)} MB.`);
-      return;
-    }
     if (!file.type.startsWith("image/")) {
       setError("Please pick an image file (PNG, JPEG, or WebP).");
       return;
     }
     setError(null);
-    setBytes(new Uint8Array(await file.arrayBuffer()));
-    if (lastPreviewUrl.current) URL.revokeObjectURL(lastPreviewUrl.current);
-    const url = URL.createObjectURL(file);
-    lastPreviewUrl.current = url;
-    setPreview(url);
+    setName(file.name);
+    setBusy(true);
+    try {
+      const { bytes: compressed } = await compressImageInBrowser(file);
+      if (lastPreviewUrl.current) URL.revokeObjectURL(lastPreviewUrl.current);
+      const url = URL.createObjectURL(new Blob([compressed as BlobPart], { type: "image/jpeg" }));
+      lastPreviewUrl.current = url;
+      setPreview(url);
+      setBytes(compressed);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn't process that image.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function submitAttach() {
@@ -88,7 +101,7 @@ export function PaymentProof({
     setBusy(true);
     setError(null);
     try {
-      const result = await attachBookingRequestScreenshot(requestId, bytes);
+      const result = await actions.attach(entityId, bytes);
       if ("error" in result) {
         setError(result.error);
         return;
@@ -123,7 +136,7 @@ export function PaymentProof({
             <UploadIcon className="h-3.5 w-3.5" />
             <span className="ml-1">Replace</span>
           </Button>
-          <RemoveButton requestId={requestId} onChanged={onChanged} />
+          <RemoveButton actions={actions} entityId={entityId} onChanged={onChanged} />
         </div>
       ) : (
         <Button
@@ -144,11 +157,11 @@ export function PaymentProof({
         open={viewerOpen}
         onClose={() => setViewerOpen(false)}
         title="Payment screenshot"
-        description="Screenshot uploaded by the guest (or attached by an owner) with this booking request."
+        description="Screenshot uploaded by the guest (or attached by an owner) with this booking."
         wide
       >
         {viewerOpen ? (
-          <ScreenshotViewerBody requestId={requestId} key={requestId} />
+          <ScreenshotViewerBody actions={actions} entityId={entityId} key={entityId} />
         ) : null}
       </Modal>
 
@@ -159,7 +172,7 @@ export function PaymentProof({
           resetAttachModal();
         }}
         title="Attach payment screenshot"
-        description="PNG, JPEG, or WebP — up to 2 MB."
+        description="PNG, JPEG, or WebP — compressed automatically before upload."
         footer={
           <>
             <Button
@@ -180,21 +193,25 @@ export function PaymentProof({
           <label
             className={cn(
               "flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-slate-300 bg-white px-4 py-8 text-sm text-slate-600 transition-colors hover:border-brand-400 hover:bg-brand-50/40",
+              busy && "pointer-events-none opacity-60",
             )}
           >
             <UploadIcon className="h-4 w-4" />
-            <span>Tap to choose a screenshot</span>
+            <span>{busy ? "Compressing…" : "Tap to choose a screenshot"}</span>
             <input
               type="file"
-              accept="image/png,image/jpeg,image/webp"
+              accept="image/png,image/jpeg,image/webp,image/heic,image/heif"
               onChange={(e) => pickFile(e.target.files?.[0] ?? null)}
               className="sr-only"
+              disabled={busy}
             />
           </label>
 
           {preview ? (
             <div className="space-y-2">
-              <p className="text-xs text-slate-500">Will be attached to this booking request.</p>
+              <p className="text-xs text-slate-500">
+                {name} — will be attached to this {entityKind === "booking" ? "booking" : "request"}.
+              </p>
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={preview}
@@ -215,17 +232,25 @@ export function PaymentProof({
   );
 }
 
-function RemoveButton({ requestId, onChanged }: { requestId: string; onChanged: () => void }) {
+function RemoveButton({
+  actions,
+  entityId,
+  onChanged,
+}: {
+  actions: ReturnType<typeof imageActions>;
+  entityId: string;
+  onChanged: () => void;
+}) {
   const [busy, setBusy] = useState(false);
   return (
     <Button
       size="sm"
       variant="ghost"
       onClick={async () => {
-        if (!confirm("Remove the payment screenshot from this request?")) return;
+        if (!confirm("Remove the payment screenshot?")) return;
         setBusy(true);
         try {
-          await clearBookingRequestScreenshot(requestId);
+          await actions.clear(entityId);
           onChanged();
         } finally {
           setBusy(false);
@@ -240,16 +265,20 @@ function RemoveButton({ requestId, onChanged }: { requestId: string; onChanged: 
   );
 }
 
-/** Mounts fresh every time the viewer opens (gated by `key={requestId}` and
- * conditional render above) — its initial state is "loading", so the effect
- * only starts the fetch and updates from the .then. */
-function ScreenshotViewerBody({ requestId }: { requestId: string }) {
+function ScreenshotViewerBody({
+  actions,
+  entityId,
+}: {
+  actions: ReturnType<typeof imageActions>;
+  entityId: string;
+}) {
   const [src, setSrc] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let alive = true;
-    getBookingRequestScreenshot(requestId)
+    actions
+      .get(entityId)
       .then((data) => {
         if (!alive) return;
         if (!data) {
@@ -265,9 +294,8 @@ function ScreenshotViewerBody({ requestId }: { requestId: string }) {
     return () => {
       alive = false;
     };
-  }, [requestId]);
+  }, [actions, entityId]);
 
-  // Revoke the blob URL we created on unmount.
   useEffect(() => {
     if (!src) return;
     const url = src;
