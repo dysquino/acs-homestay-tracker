@@ -36,10 +36,13 @@ export type PaymentConfigData = {
   qrCodeBytes: Uint8Array | null;
   /// Per-night rate (peso). Informational — owner still sets totalPayout per
   /// booking. 0 means "no rate set yet"; /book hides the breakdown when this
-  /// is 0 *and* cleaningFee is also 0.
+  /// is 0 *and* both cleaning fees are 0.
   nightlyRate: number;
-  /// Flat cleaning fee added once per booking (peso).
+  /// Cleaning fee for short stays (< 5 nights).
   cleaningFee: number;
+  /// Cleaning fee for long stays (>= 5 nights). If 0, falls back to
+  /// `cleaningFee` when the stay would have used this tier.
+  cleaningFeeLong: number;
   updatedAt: string;
 };
 
@@ -51,6 +54,7 @@ function rowToConfig(row: {
   qrCode: Uint8Array | null;
   nightlyRate: Decimal;
   cleaningFee: Decimal;
+  cleaningFeeLong: Decimal;
   updatedAt: Date;
 }): PaymentConfigData {
   return {
@@ -61,6 +65,7 @@ function rowToConfig(row: {
     qrCodeBytes: row.qrCode ? new Uint8Array(row.qrCode) : null,
     nightlyRate: Number(row.nightlyRate),
     cleaningFee: Number(row.cleaningFee),
+    cleaningFeeLong: Number(row.cleaningFeeLong),
     updatedAt: row.updatedAt.toISOString(),
   };
 }
@@ -89,8 +94,10 @@ export type SetPaymentConfigInput = {
   qrCode?: { bytes: Uint8Array; mime: string } | null;
   /** Per-night rate (peso). */
   nightlyRate?: number;
-  /** Flat cleaning fee (peso). */
+  /** Cleaning fee for short stays (< 5 nights, peso). */
   cleaningFee?: number;
+  /** Cleaning fee for long stays (>= 5 nights, peso). */
+  cleaningFeeLong?: number;
 };
 
 /**
@@ -131,6 +138,15 @@ export async function setPaymentConfig(input: SetPaymentConfigInput): Promise<Pa
           return Math.round(n * 100) / 100;
         })()
       : undefined;
+  const cleaningFeeLong =
+    input.cleaningFeeLong !== undefined
+      ? (() => {
+          const n = Number(input.cleaningFeeLong);
+          if (!Number.isFinite(n) || n < 0)
+            throw new Error("Long-stay cleaning fee must be a non-negative number.");
+          return Math.round(n * 100) / 100;
+        })()
+      : undefined;
 
   // Build the patch; start from text-only fields, then apply QR + rates.
   const data: Record<string, unknown> = { bankName, accountName, accountNumber, updatedBy };
@@ -146,6 +162,7 @@ export async function setPaymentConfig(input: SetPaymentConfigInput): Promise<Pa
   }
   if (nightlyRate !== undefined) data.nightlyRate = nightlyRate;
   if (cleaningFee !== undefined) data.cleaningFee = cleaningFee;
+  if (cleaningFeeLong !== undefined) data.cleaningFeeLong = cleaningFeeLong;
 
   const row = await prisma.paymentConfig.upsert({
     where: { id: "singleton" },
@@ -157,6 +174,7 @@ export async function setPaymentConfig(input: SetPaymentConfigInput): Promise<Pa
       updatedBy,
       nightlyRate: nightlyRate ?? 0,
       cleaningFee: cleaningFee ?? 0,
+      cleaningFeeLong: cleaningFeeLong ?? 0,
       qrCode: input.qrCode && input.qrCode !== null ? Buffer.from(input.qrCode.bytes) : undefined,
       qrCodeMime:
         input.qrCode && input.qrCode !== null

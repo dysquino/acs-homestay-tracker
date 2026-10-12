@@ -38,6 +38,7 @@ export function PaymentSettingsForm({
   const [accountNumber, setAccountNumber] = useState(initial?.accountNumber ?? "");
   const [nightlyRate, setNightlyRate] = useState<number>(initial?.nightlyRate ?? 0);
   const [cleaningFee, setCleaningFee] = useState<number>(initial?.cleaningFee ?? 0);
+  const [cleaningFeeLong, setCleaningFeeLong] = useState<number>(initial?.cleaningFeeLong ?? 0);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -129,6 +130,7 @@ export function PaymentSettingsForm({
           qrCode,
           nightlyRate,
           cleaningFee,
+          cleaningFeeLong,
         });
         setSaved(true);
         // The server is now the source of truth; staged changes are baked in.
@@ -154,7 +156,7 @@ export function PaymentSettingsForm({
             />
           )}
         </Field>
-        <Field label="Cleaning fee" hint="Flat fee added once per booking.">
+        <Field label="Cleaning fee (short stay)" hint="Flat fee added once per booking. Used for stays shorter than 5 nights.">
           {(id) => (
             <CurrencyInput
               id={id}
@@ -162,6 +164,18 @@ export function PaymentSettingsForm({
               step="0.01"
               value={cleaningFee || ""}
               onChange={(e) => setCleaningFee(e.target.value === "" ? 0 : Number(e.target.value))}
+              placeholder="0"
+            />
+          )}
+        </Field>
+        <Field label="Cleaning fee (long stay)" hint="Used for stays of 5 nights or more. Leave 0 to keep using the short-stay fee.">
+          {(id) => (
+            <CurrencyInput
+              id={id}
+              min={0}
+              step="0.01"
+              value={cleaningFeeLong || ""}
+              onChange={(e) => setCleaningFeeLong(e.target.value === "" ? 0 : Number(e.target.value))}
               placeholder="0"
             />
           )}

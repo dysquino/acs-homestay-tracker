@@ -36,6 +36,7 @@ export default async function BookPage({
   const pricing: PricingConfig = {
     nightlyRate: config?.nightlyRate ?? 0,
     cleaningFee: config?.cleaningFee ?? 0,
+    cleaningFeeLong: config?.cleaningFeeLong ?? 0,
   };
 
   return (
