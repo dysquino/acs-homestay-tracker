@@ -7,6 +7,7 @@ import { Card, CardHeader } from "@/components/ui/card";
 import { Field, Input } from "@/components/ui/field";
 import { CalendarIcon, WarningIcon } from "@/components/ui/icons";
 import { ConfirmDialog, Modal } from "@/components/ui/modal";
+import { PaymentProof } from "@/components/bookings/payment-proof";
 import { getBookingLinkPath } from "@/lib/data/booking-requests";
 import { nightCount } from "@/lib/dates";
 import { formatDateRange } from "@/lib/format";
@@ -24,7 +25,7 @@ const sentAt = new Intl.DateTimeFormat("en-PH", { month: "short", day: "numeric"
  * filled in. Hidden when there's nothing waiting.
  */
 export function BookingRequests({ onApproved }: { onApproved: (booking: Booking) => void }) {
-  const { bookingRequests, bookings, airbnbBlocks, approveRequest, declineRequest } = useStore();
+  const { bookingRequests, bookings, airbnbBlocks, approveRequest, declineRequest, resync } = useStore();
   // Requests become direct bookings, so unimported Airbnb reservations count too.
   const taken = [...bookings, ...airbnbBlocks.map(blockAsBooking)];
   const [busy, setBusy] = useState<string | null>(null);
@@ -78,6 +79,11 @@ export function BookingRequests({ onApproved }: { onApproved: (booking: Booking)
                       {r.message}
                     </p>
                   ) : null}
+                  <PaymentProof
+                    requestId={r.id}
+                    hasScreenshot={r.hasPaymentScreenshot}
+                    onChanged={resync}
+                  />
                   <p className="mt-1.5 text-xs text-slate-400">Sent {sentAt.format(new Date(r.createdAt))}</p>
                 </div>
                 <div className="flex shrink-0 gap-2">

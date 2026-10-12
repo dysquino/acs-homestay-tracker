@@ -2,6 +2,9 @@
 
 import { useMemo, useState, useTransition } from "react";
 
+import { PaymentInfo } from "@/components/payment/payment-info";
+import { PriceBreakdown, type PricingConfig } from "@/components/payment/price-breakdown";
+import { ScreenshotUpload } from "@/components/payment/screenshot-upload";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Textarea } from "@/components/ui/field";
 import { ChevronLeftIcon, ChevronRightIcon } from "@/components/ui/icons";
@@ -38,10 +41,12 @@ export function BookingRequestForm({
   linkKey,
   booked,
   today,
+  pricing,
 }: {
   linkKey: string;
   booked: BookedRange[];
   today: string;
+  pricing: PricingConfig;
 }) {
   const takenNights = useMemo(
     () => new Set(booked.flatMap((b) => occupiedNights(b.checkIn, b.checkOut))),
@@ -57,6 +62,7 @@ export function BookingRequestForm({
   const [guestsCount, setGuestsCount] = useState("2");
   const [message, setMessage] = useState("");
   const [website, setWebsite] = useState(""); // honeypot
+  const [screenshot, setScreenshot] = useState<Uint8Array | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [sent, setSent] = useState(false);
@@ -109,6 +115,7 @@ export function BookingRequestForm({
           guestsCount: guests,
           message,
           website,
+          paymentScreenshot: screenshot,
         });
         if (result.ok) setSent(true);
         else setSubmitError(result.error);
@@ -232,6 +239,11 @@ export function BookingRequestForm({
         </div>
       </section>
 
+      {/* Price breakdown — only renders when at least one rate is set;
+          sits between the calendar and the form so the guest sees what
+          they're about to commit to before filling out the fields. */}
+      <PriceBreakdown pricing={pricing} nights={nights} />
+
       {/* Details */}
       <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
         <Field label="Your name" required error={errors.guestName}>
@@ -282,6 +294,8 @@ export function BookingRequestForm({
           )}
         </Field>
 
+        <ScreenshotUpload onChange={setScreenshot} />
+
         {/* Honeypot: hidden from people, irresistible to bots. */}
         <div aria-hidden="true" className="absolute -left-[9999px] h-px w-px overflow-hidden">
           <label>
@@ -295,14 +309,23 @@ export function BookingRequestForm({
             {submitError}
           </p>
         ) : null}
-
-        <Button type="submit" variant="primary" className="w-full" disabled={pending}>
-          {pending ? "Sending…" : "Send booking request"}
-        </Button>
-        <p className="text-center text-xs text-slate-500">
-          This is a request, not a confirmed booking — we&apos;ll get back to you.
-        </p>
       </section>
+
+      {/* InstaPay instructions — at the bottom, after the guest has committed
+          to filling out the booking request. The screenshot upload above is
+          already optional; the bank details here are for guests who want to
+          pay before sending the request. PaymentInfo renders null until the
+          owner configures bank details. */}
+      <PaymentInfo />
+
+      {/* Submit lives at the very bottom of the form so guests see the bank
+          details before they finalize the request. */}
+      <Button type="submit" variant="primary" className="w-full" disabled={pending}>
+        {pending ? "Sending…" : "Send booking request"}
+      </Button>
+      <p className="text-center text-xs text-slate-500">
+        This is a request, not a confirmed booking — we&apos;ll get back to you.
+      </p>
     </form>
   );
 }

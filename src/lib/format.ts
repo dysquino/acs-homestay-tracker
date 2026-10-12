@@ -96,3 +96,14 @@ export function formatDateRange(from: ISODate, to: ISODate): string {
     ? `${formatShortDate(from)} – ${formatDate(to)}`
     : `${formatDate(from)} – ${formatDate(to)}`;
 }
+
+/**
+ * Bank account number, with the digits grouped in fours for readability
+ * (`109420670200` -> `1094 2067 0200`). Storage stays digits-only so
+ * queries / lookups don't have to deal with a mix of formats; the view
+ * layer is the right place to make it pretty.
+ */
+export function formatAccountNumber(value: string): string {
+  const digits = value.replace(/\D/g, "");
+  return digits.replace(/(.{4})/g, "$1 ").trim();
+}

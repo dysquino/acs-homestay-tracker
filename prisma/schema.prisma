@@ -171,9 +171,48 @@ model BookingRequest {
   booking     Booking?             @relation(fields: [bookingId], references: [id], onDelete: SetNull)
   decidedBy   String?
   decidedAt   DateTime?
+  /// Optional InstaPay proof the guest (or an owner, on their behalf)
+  /// uploaded. Bytes are magic-byte-sniffed at write; see
+  /// `src/lib/payment-screenshot.ts`. Capped at MAX_PAYMENT_SCREENSHOT_BYTES.
+  paymentScreenshot     Bytes?
+  paymentScreenshotMime String?
   createdAt   DateTime             @default(now())
 
   @@index([status, createdAt])
+}
+
+/// The bank details shown on /book so guests can pay via InstaPay. One row
+/// (singleton by id) — edited from /payment-settings, read by the public
+/// booking page. The QR is uploaded here (bytes + sniffed MIME); if unset,
+/// the public page falls back to the static asset at /public/qr-code.JPG.
+///
+/// Also holds the per-night + cleaning-fee rates so /book can show a price
+/// breakdown before the guest sends a request. Both default to 0 — when
+/// both are zero, the booking page hides the breakdown (no estimate to
+/// give).
+model PaymentConfig {
+  id            String   @id @default("singleton")
+  bankName      String
+  accountName   String
+  accountNumber String
+  /// Optional QR override uploaded from Settings. Same magic-byte + size
+  /// rules as a payment screenshot (src/lib/payment-screenshot.ts). When
+  /// null, /book falls back to /public/qr-code.JPG so the static file
+  /// works as a built-in default.
+  qrCode        Bytes?
+  qrCodeMime    String?
+  /// Per-night rate shown on /book. Informational only — the owner still
+  /// fills totalPayout per booking (CSV-imported or hand-entered); this is
+  /// the breakdown the guest sees *before* they send the request.
+  nightlyRate   Decimal  @default(0) @db.Decimal(10, 2)
+  /// Cleaning fee added for short-term bookings (< 5 nights). Used on the
+  /// /book breakdown when the stay is shorter than the long-stay cutoff.
+  cleaningFee   Decimal  @default(0) @db.Decimal(10, 2)
+  /// Cleaning fee for long-term bookings (>= 5 nights). If 0, falls back to
+  /// `cleaningFee` for stays that would have used this tier.
+  cleaningFeeLong Decimal @default(0) @db.Decimal(10, 2)
+  updatedAt     DateTime @updatedAt
+  updatedBy     String
 }
 
 /// The last good copy of the Airbnb calendar feed (AIRBNB_ICAL_URL), so its

@@ -272,6 +272,11 @@ export function bookingRequestFromDb(row: DbBookingRequest): BookingRequest {
     status: row.status.toLowerCase() as BookingRequest["status"],
     bookingId: row.bookingId,
     decidedBy: row.decidedBy,
+    // The bytes live on the row; we don't pull them through this mapper — the
+    // list query doesn't even select them. The owner fetches via
+    // getBookingRequestScreenshot when they actually want to look at one.
+    hasPaymentScreenshot: row.paymentScreenshot !== null,
+    paymentScreenshotMime: row.paymentScreenshotMime,
     createdAt: row.createdAt.toISOString(),
   };
 }

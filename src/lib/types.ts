@@ -110,6 +110,13 @@ export type BookingRequest = {
   /** The booking it became, once approved. */
   bookingId: string | null;
   decidedBy: string | null;
+  /**
+   * Whether a payment screenshot is on file — without dragging the bytes
+   * through every list query. The bytes are fetched on demand via
+   * `getBookingRequestScreenshot(id)` when the owner clicks "View".
+   */
+  hasPaymentScreenshot: boolean;
+  paymentScreenshotMime: string | null;
   /** When the guest sent it (ISO timestamp). */
   createdAt: string;
 };
