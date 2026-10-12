@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 
 import { Button } from "@/components/ui/button";
-import { Field, Input } from "@/components/ui/field";
+import { CurrencyInput, Field, Input } from "@/components/ui/field";
 import { ImageIcon, TrashIcon, UploadIcon } from "@/components/ui/icons";
 import { setPaymentConfig } from "@/lib/data/payment-config";
 import type { PaymentConfigData } from "@/lib/data/payment-config";
@@ -36,6 +36,8 @@ export function PaymentSettingsForm({
   // Stored as digits only; rendered with spaces (formatAccountNumber) so the
   // input shows "1094 2067 0200" instead of a raw digit blob.
   const [accountNumber, setAccountNumber] = useState(initial?.accountNumber ?? "");
+  const [nightlyRate, setNightlyRate] = useState<number>(initial?.nightlyRate ?? 0);
+  const [cleaningFee, setCleaningFee] = useState<number>(initial?.cleaningFee ?? 0);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -125,6 +127,8 @@ export function PaymentSettingsForm({
           accountNumber,
           updatedBy: user.name,
           qrCode,
+          nightlyRate,
+          cleaningFee,
         });
         setSaved(true);
         // The server is now the source of truth; staged changes are baked in.
@@ -138,6 +142,30 @@ export function PaymentSettingsForm({
   return (
     <form onSubmit={submit} className="space-y-5 p-0">
       <div className="p-4 sm:p-5 space-y-4">
+        <Field label="Price per night" hint="Shown on the booking page as a price breakdown.">
+          {(id) => (
+            <CurrencyInput
+              id={id}
+              min={0}
+              step="0.01"
+              value={nightlyRate || ""}
+              onChange={(e) => setNightlyRate(e.target.value === "" ? 0 : Number(e.target.value))}
+              placeholder="0"
+            />
+          )}
+        </Field>
+        <Field label="Cleaning fee" hint="Flat fee added once per booking.">
+          {(id) => (
+            <CurrencyInput
+              id={id}
+              min={0}
+              step="0.01"
+              value={cleaningFee || ""}
+              onChange={(e) => setCleaningFee(e.target.value === "" ? 0 : Number(e.target.value))}
+              placeholder="0"
+            />
+          )}
+        </Field>
         <Field label="Bank name" required>
           {(id) => (
             <Input id={id} value={bankName} onChange={(e) => setBankName(e.target.value)} maxLength={100} required />

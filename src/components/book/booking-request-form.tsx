@@ -3,6 +3,7 @@
 import { useMemo, useState, useTransition } from "react";
 
 import { PaymentInfo } from "@/components/payment/payment-info";
+import { PriceBreakdown, type PricingConfig } from "@/components/payment/price-breakdown";
 import { ScreenshotUpload } from "@/components/payment/screenshot-upload";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Textarea } from "@/components/ui/field";
@@ -40,10 +41,12 @@ export function BookingRequestForm({
   linkKey,
   booked,
   today,
+  pricing,
 }: {
   linkKey: string;
   booked: BookedRange[];
   today: string;
+  pricing: PricingConfig;
 }) {
   const takenNights = useMemo(
     () => new Set(booked.flatMap((b) => occupiedNights(b.checkIn, b.checkOut))),
@@ -235,6 +238,11 @@ export function BookingRequestForm({
           {errors.dates ? <p className="mt-1 text-xs text-red-600">{errors.dates}</p> : null}
         </div>
       </section>
+
+      {/* Price breakdown — only renders when at least one rate is set;
+          sits between the calendar and the form so the guest sees what
+          they're about to commit to before filling out the fields. */}
+      <PriceBreakdown pricing={pricing} nights={nights} />
 
       {/* Details */}
       <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">

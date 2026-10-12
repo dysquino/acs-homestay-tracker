@@ -185,6 +185,11 @@ model BookingRequest {
 /// (singleton by id) — edited from /payment-settings, read by the public
 /// booking page. The QR is uploaded here (bytes + sniffed MIME); if unset,
 /// the public page falls back to the static asset at /public/qr-code.JPG.
+///
+/// Also holds the per-night + cleaning-fee rates so /book can show a price
+/// breakdown before the guest sends a request. Both default to 0 — when
+/// both are zero, the booking page hides the breakdown (no estimate to
+/// give).
 model PaymentConfig {
   id            String   @id @default("singleton")
   bankName      String
@@ -196,6 +201,12 @@ model PaymentConfig {
   /// works as a built-in default.
   qrCode        Bytes?
   qrCodeMime    String?
+  /// Per-night rate shown on /book. Informational only — the owner still
+  /// fills totalPayout per booking (CSV-imported or hand-entered); this is
+  /// the breakdown the guest sees *before* they send the request.
+  nightlyRate   Decimal  @default(0) @db.Decimal(10, 2)
+  /// Cleaning fee added once per booking on the /book breakdown.
+  cleaningFee   Decimal  @default(0) @db.Decimal(10, 2)
   updatedAt     DateTime @updatedAt
   updatedBy     String
 }

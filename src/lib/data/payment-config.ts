@@ -2,6 +2,8 @@
 
 import "server-only";
 
+import type { Decimal } from "@prisma/client/runtime/library";
+
 import { prisma } from "@/lib/prisma";
 import { validatePaymentScreenshot } from "@/lib/payment-screenshot";
 
@@ -14,6 +16,9 @@ import { requireSiteAccess } from "./access";
  * The QR is also stored here (override uploaded from Settings). If the
  * QR is null, the public page falls back to /public/qr-code.JPG so the
  * static file works as a built-in default.
+ *
+ * Also holds the per-night + cleaning-fee rates so /book can show a
+ * price breakdown before the guest sends a request.
  *
  * - `getPublicPaymentConfig()` — no gate, returns the row (or null when
  *   not set up). Read by the public booking page; bank details are
@@ -29,6 +34,12 @@ export type PaymentConfigData = {
   qrCodeMime: string | null;
   /** Bytes of the QR override, or null when falling back to /qr-code.JPG. */
   qrCodeBytes: Uint8Array | null;
+  /// Per-night rate (peso). Informational — owner still sets totalPayout per
+  /// booking. 0 means "no rate set yet"; /book hides the breakdown when this
+  /// is 0 *and* cleaningFee is also 0.
+  nightlyRate: number;
+  /// Flat cleaning fee added once per booking (peso).
+  cleaningFee: number;
   updatedAt: string;
 };
 
@@ -38,6 +49,8 @@ function rowToConfig(row: {
   accountNumber: string;
   qrCodeMime: string | null;
   qrCode: Uint8Array | null;
+  nightlyRate: Decimal;
+  cleaningFee: Decimal;
   updatedAt: Date;
 }): PaymentConfigData {
   return {
@@ -46,6 +59,8 @@ function rowToConfig(row: {
     accountNumber: row.accountNumber,
     qrCodeMime: row.qrCodeMime,
     qrCodeBytes: row.qrCode ? new Uint8Array(row.qrCode) : null,
+    nightlyRate: Number(row.nightlyRate),
+    cleaningFee: Number(row.cleaningFee),
     updatedAt: row.updatedAt.toISOString(),
   };
 }
@@ -72,12 +87,16 @@ export type SetPaymentConfigInput = {
    * - null → clear the QR (fall back to /public/qr-code.JPG)
    */
   qrCode?: { bytes: Uint8Array; mime: string } | null;
+  /** Per-night rate (peso). */
+  nightlyRate?: number;
+  /** Flat cleaning fee (peso). */
+  cleaningFee?: number;
 };
 
 /**
  * The "passthrough" semantics let the Settings page submit unchanged fields
- * without erasing the QR. The form is responsible for deciding what `qrCode`
- * to send based on what the user touched.
+ * without erasing the QR or rates. The form is responsible for deciding
+ * what to send based on what the user touched.
  */
 export async function setPaymentConfig(input: SetPaymentConfigInput): Promise<PaymentConfigData> {
   await requireSiteAccess();
@@ -94,20 +113,39 @@ export async function setPaymentConfig(input: SetPaymentConfigInput): Promise<Pa
   if (!accountName) throw new Error("Account name is required.");
   if (!accountNumber) throw new Error("Account number is required.");
 
-  // Build the patch; start from text-only fields, then apply the QR rule.
+  // Money fields — coerced through Number; reject negatives to keep the
+  // Decimal(10, 2) range safe. 0 is fine (means "not set yet").
+  const nightlyRate =
+    input.nightlyRate !== undefined
+      ? (() => {
+          const n = Number(input.nightlyRate);
+          if (!Number.isFinite(n) || n < 0) throw new Error("Nightly rate must be a non-negative number.");
+          return Math.round(n * 100) / 100;
+        })()
+      : undefined;
+  const cleaningFee =
+    input.cleaningFee !== undefined
+      ? (() => {
+          const n = Number(input.cleaningFee);
+          if (!Number.isFinite(n) || n < 0) throw new Error("Cleaning fee must be a non-negative number.");
+          return Math.round(n * 100) / 100;
+        })()
+      : undefined;
+
+  // Build the patch; start from text-only fields, then apply QR + rates.
   const data: Record<string, unknown> = { bankName, accountName, accountNumber, updatedBy };
 
   if (input.qrCode === null) {
-    // Explicit remove.
     data.qrCode = null;
     data.qrCodeMime = null;
   } else if (input.qrCode !== undefined) {
-    // Replace — validate before touching the row.
     const validation = validatePaymentScreenshot(input.qrCode.bytes);
     if (!validation.ok) throw new Error(validation.error);
     data.qrCode = Buffer.from(input.qrCode.bytes);
-    data.qrCodeMime = validation.mime; // sniffed MIME, ignore whatever client sent
+    data.qrCodeMime = validation.mime;
   }
+  if (nightlyRate !== undefined) data.nightlyRate = nightlyRate;
+  if (cleaningFee !== undefined) data.cleaningFee = cleaningFee;
 
   const row = await prisma.paymentConfig.upsert({
     where: { id: "singleton" },
@@ -117,8 +155,8 @@ export async function setPaymentConfig(input: SetPaymentConfigInput): Promise<Pa
       accountName,
       accountNumber,
       updatedBy,
-      // First-time create: if a QR was provided, include it; otherwise null
-      // (the static fallback covers that case).
+      nightlyRate: nightlyRate ?? 0,
+      cleaningFee: cleaningFee ?? 0,
       qrCode: input.qrCode && input.qrCode !== null ? Buffer.from(input.qrCode.bytes) : undefined,
       qrCodeMime:
         input.qrCode && input.qrCode !== null

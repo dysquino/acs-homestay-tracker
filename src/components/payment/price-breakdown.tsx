@@ -1,0 +1,86 @@
+"use client";
+
+import { formatCurrency, formatWhole } from "@/lib/format";
+
+export type PricingConfig = {
+  /** Per-night rate (peso). 0 means "not configured". */
+  nightlyRate: number;
+  /** Flat cleaning fee added once per booking (peso). 0 means "not set". */
+  cleaningFee: number;
+};
+
+/**
+ * The price estimate shown between the calendar and the form on /book.
+ * Two states:
+ * - Dates not picked yet: shows the static rates ("From ₱1,500 per night +
+ *   ₱500 cleaning fee") so the guest sees the pricing shape.
+ * - Both dates picked: full breakdown — per-night rate × nights subtotal,
+ *   cleaning fee, total — with the explicit total at the bottom.
+ *
+ * Hidden entirely when no rates are configured (both fields are 0).
+ *
+ * The totals here are informational; the owner still sets totalPayout on the
+ * actual Booking after approving the request, and may differ if the stay is
+ * custom-priced.
+ */
+export function PriceBreakdown({
+  pricing,
+  nights,
+}: {
+  pricing: PricingConfig;
+  nights: number;
+}) {
+  const { nightlyRate, cleaningFee } = pricing;
+  const configured = nightlyRate > 0 || cleaningFee > 0;
+  if (!configured) return null;
+
+  // Dates not picked yet — show the static per-night + cleaning rates.
+  if (nights === 0) {
+    return (
+      <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+        <h2 className="text-sm font-semibold text-slate-900">Price</h2>
+        <p className="mt-1 text-sm text-slate-600">
+          From <strong className="text-slate-900">{formatCurrency(nightlyRate)}</strong> per night
+          {cleaningFee > 0 ? (
+            <>
+              {" "}
+              + <strong className="text-slate-900">{formatCurrency(cleaningFee)}</strong> cleaning fee
+            </>
+          ) : null}
+          . Pick your dates to see the total.
+        </p>
+      </section>
+    );
+  }
+
+  // Dates picked — full breakdown.
+  const subtotal = nightlyRate * nights;
+  const total = subtotal + cleaningFee;
+
+  return (
+    <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+      <h2 className="text-sm font-semibold text-slate-900">Price breakdown</h2>
+      <dl className="mt-3 space-y-1.5 text-sm">
+        <div className="flex items-baseline justify-between gap-3">
+          <dt className="text-slate-600">
+            {formatCurrency(nightlyRate)} × {nights} night{nights === 1 ? "" : "s"}
+          </dt>
+          <dd className="font-medium text-slate-900 tabular-nums">{formatWhole(subtotal)}</dd>
+        </div>
+        {cleaningFee > 0 ? (
+          <div className="flex items-baseline justify-between gap-3">
+            <dt className="text-slate-600">Cleaning fee</dt>
+            <dd className="font-medium text-slate-900 tabular-nums">{formatWhole(cleaningFee)}</dd>
+          </div>
+        ) : null}
+      </dl>
+      <div className="mt-3 flex items-baseline justify-between border-t border-slate-100 pt-3">
+        <span className="text-sm font-medium text-slate-700">Total</span>
+        <span className="text-base font-semibold text-slate-900 tabular-nums">{formatCurrency(total)}</span>
+      </div>
+      <p className="mt-2 text-xs text-slate-500">
+        We&apos;ll confirm the final amount when we reply — this is an estimate.
+      </p>
+    </section>
+  );
+}
