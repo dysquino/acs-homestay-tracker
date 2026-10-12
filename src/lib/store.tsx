@@ -80,6 +80,8 @@ type Data = {
   bookingRequests: BookingRequest[];
   /** Airbnb reservations not in the app yet — they block direct bookings. */
   airbnbBlocks: AirbnbReservation[];
+  /** Airbnb stays that ended but were never imported (payout missing). */
+  airbnbFinished: AirbnbReservation[];
   airbnbStatus: AirbnbSyncStatus;
 };
 
@@ -131,6 +133,7 @@ const EMPTY: Data = {
   cleaning: [],
   bookingRequests: [],
   airbnbBlocks: [],
+  airbnbFinished: [],
   airbnbStatus: { enabled: false, fetchedAt: null, error: null },
 };
 
@@ -172,6 +175,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       cleaning,
       bookingRequests,
       airbnbBlocks: airbnb.blocks,
+      airbnbFinished: airbnb.finished,
       airbnbStatus: airbnb.status,
     });
     return true;

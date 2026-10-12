@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { Suspense, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 
 import { PageHeader } from "@/components/layout/app-shell";
 import { ExpenseForm } from "@/components/expenses/expense-form";
@@ -41,6 +42,7 @@ import { usePagination } from "@/lib/use-pagination";
 import {
   EXPENSE_CATEGORIES,
   EXPENSE_REFUND_STATUSES,
+  PAID_BY,
   labelFor,
   type Expense,
   type ExpenseCategory,
@@ -49,7 +51,20 @@ import {
 
 type SortKey = "date" | "amount" | "category";
 
+/**
+ * Accepts ?refund=owed&paidBy=<name> (the dashboard's "Refund <name>" action)
+ * as the starting filters. Reading the URL needs a Suspense boundary here.
+ */
 export default function ExpensesPage() {
+  return (
+    <Suspense fallback={null}>
+      <ExpensesPageContent />
+    </Suspense>
+  );
+}
+
+function ExpensesPageContent() {
+  const params = useSearchParams();
   const { expenses, bookings, deleteExpense, updateExpense } = useStore();
 
   const [formOpen, setFormOpen] = useState(false);
@@ -61,7 +76,11 @@ export default function ExpensesPage() {
   const setSelected = (e: Expense | null) => setSelectedId(e?.id ?? null);
 
   const [category, setCategory] = useState<ExpenseCategory | "all">("all");
-  const [refund, setRefund] = useState<ExpenseRefundStatus | "all">("all");
+  const [refund, setRefund] = useState<ExpenseRefundStatus | "all">(() => {
+    const r = params.get("refund");
+    return r === "owed" || r === "refunded" ? r : "all";
+  });
+  const [paidBy, setPaidBy] = useState(() => params.get("paidBy") ?? "all");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [sort, setSort] = useState<{ key: SortKey; dir: "asc" | "desc" }>({
@@ -82,11 +101,12 @@ export default function ExpensesPage() {
     return expenses.filter((e) => {
       if (category !== "all" && e.category !== category) return false;
       if (refund !== "all" && e.refundStatus !== refund) return false;
+      if (paidBy !== "all" && e.paidBy.trim() !== paidBy) return false;
       if (from && e.date < from) return false;
       if (to && e.date > to) return false;
       return true;
     });
-  }, [expenses, category, refund, from, to]);
+  }, [expenses, category, refund, paidBy, from, to]);
 
   const sorted = useMemo(() => {
     const factor = sort.dir === "asc" ? 1 : -1;
@@ -97,11 +117,16 @@ export default function ExpensesPage() {
       return a.date.localeCompare(b.date) * factor;
     });
   }, [filtered, sort]);
-  const paging = usePagination(sorted, JSON.stringify([category, refund, from, to, sort]));
+  const paging = usePagination(sorted, JSON.stringify([category, refund, paidBy, from, to, sort]));
 
   const filteredTotal = filtered.reduce((s, e) => s + e.amount, 0);
   const byMonth = useMemo(() => expensesByMonth(expenses), [expenses]);
-  const filtersActive = category !== "all" || refund !== "all" || from !== "" || to !== "";
+  const filtersActive = category !== "all" || refund !== "all" || paidBy !== "all" || from !== "" || to !== "";
+  // The fixed roster, plus any older name still on an expense.
+  const payers = useMemo(
+    () => [...new Set([...PAID_BY.map((p) => p.value), ...expenses.map((e) => e.paidBy.trim()).filter(Boolean)])],
+    [expenses],
+  );
 
   function openAdd() {
     setEditing(null);
@@ -224,6 +249,7 @@ export default function ExpensesPage() {
             onClear={() => {
               setCategory("all");
               setRefund("all");
+              setPaidBy("all");
               setFrom("");
               setTo("");
             }}
@@ -247,6 +273,18 @@ export default function ExpensesPage() {
                     {EXPENSE_REFUND_STATUSES.map((o) => (
                       <option key={o.value} value={o.value}>
                         {o.label}
+                      </option>
+                    ))}
+                  </Select>
+                )}
+              </Field>
+              <Field label="Paid by" className="min-w-36 flex-1">
+                {(id) => (
+                  <Select id={id} value={paidBy} onChange={(e) => setPaidBy(e.target.value)}>
+                    <option value="all">Anyone</option>
+                    {payers.map((p) => (
+                      <option key={p} value={p}>
+                        {p}
                       </option>
                     ))}
                   </Select>

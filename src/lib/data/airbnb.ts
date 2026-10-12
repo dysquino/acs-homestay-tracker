@@ -7,13 +7,17 @@ import { airbnbBlocks, type AirbnbSyncStatus } from "./airbnb-calendar";
 
 /** Owner-side view of the Airbnb calendar sync (behind the access code). */
 
-export async function listAirbnbBlocks(): Promise<{ blocks: AirbnbReservation[]; status: AirbnbSyncStatus }> {
+export async function listAirbnbBlocks(): Promise<{
+  blocks: AirbnbReservation[];
+  finished: AirbnbReservation[];
+  status: AirbnbSyncStatus;
+}> {
   await requireSiteAccess();
   try {
     return await airbnbBlocks();
   } catch {
     // Never let the sync stop the app from loading its own data.
-    return { blocks: [], status: { enabled: Boolean(process.env.AIRBNB_ICAL_URL), fetchedAt: null, error: "Couldn't check the Airbnb calendar" } };
+    return { blocks: [], finished: [], status: { enabled: Boolean(process.env.AIRBNB_ICAL_URL), fetchedAt: null, error: "Couldn't check the Airbnb calendar" } };
   }
 }
 

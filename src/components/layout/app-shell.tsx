@@ -8,6 +8,7 @@ import { useRef, type ComponentType, type ReactNode, type SVGProps } from "react
 import { cn } from "@/lib/cn";
 import { ACCOUNTS, useIdentity } from "@/lib/identity";
 import { useStore } from "@/lib/store";
+import { useActionItems } from "@/lib/use-action-items";
 import {
   CalendarIcon,
   DownloadIcon,
@@ -41,15 +42,21 @@ function isActive(pathname: string, href: string): boolean {
 
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  // Guests' booking requests waiting for a reply — shown on the Bookings tab.
+  // Guests' booking requests waiting for a reply — shown on the Bookings tab;
+  // overdue action items — shown on the Dashboard / Home tab.
   const requests = useStore().bookingRequests.length;
+  const overdue = useActionItems().filter((i) => i.urgency === "overdue").length;
+  const counts: Record<string, { n: number; label: string }> = {
+    "/": { n: overdue, label: `${overdue} overdue action item${overdue === 1 ? "" : "s"}` },
+    "/bookings": { n: requests, label: `${requests} new booking request${requests === 1 ? "" : "s"}` },
+  };
   const badge = (href: string) =>
-    href === "/bookings" && requests > 0 ? (
+    counts[href]?.n ? (
       <span
-        aria-label={`${requests} new booking request${requests === 1 ? "" : "s"}`}
+        aria-label={counts[href].label}
         className="ml-auto min-w-5 rounded-full bg-red-600 px-1.5 text-center text-[11px] leading-5 font-semibold text-white"
       >
-        {requests}
+        {counts[href].n}
       </span>
     ) : null;
 

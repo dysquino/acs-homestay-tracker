@@ -33,27 +33,43 @@ export function parseAirbnbIcal(text: string): AirbnbReservation[] {
   return out.sort((a, b) => a.checkIn.localeCompare(b.checkIn));
 }
 
+type MatchableBooking = Pick<Booking, "source" | "checkIn" | "checkOut" | "confirmationCode">;
+
 /**
- * Airbnb reservations that aren't in the app yet — the ones that should
- * block direct bookings and show on the calendar. A reservation counts as
- * already in the app when a booking has its code, or is an Airbnb booking
- * with exactly its dates (bookings entered by hand don't carry the code).
- * Past stays are dropped.
+ * Whether an Airbnb reservation is already in the app: a booking has its
+ * code (the CSV import), or an Airbnb booking has exactly its dates
+ * (bookings entered by hand don't carry the code).
+ */
+const inApp = (r: AirbnbReservation, bookings: MatchableBooking[]) =>
+  bookings.some(
+    (b) =>
+      (r.code !== null && b.confirmationCode === r.code) ||
+      (b.source === "airbnb" && b.checkIn === r.checkIn && b.checkOut === r.checkOut),
+  );
+
+/**
+ * Airbnb reservations that aren't in the app yet and haven't ended — the
+ * ones that block direct bookings and show on the calendar.
  */
 export function unmatchedReservations(
   reservations: AirbnbReservation[],
-  bookings: Pick<Booking, "source" | "checkIn" | "checkOut" | "confirmationCode">[],
+  bookings: MatchableBooking[],
   today: ISODate,
 ): AirbnbReservation[] {
-  return reservations.filter(
-    (r) =>
-      r.checkOut > today &&
-      !bookings.some(
-        (b) =>
-          (r.code !== null && b.confirmationCode === r.code) ||
-          (b.source === "airbnb" && b.checkIn === r.checkIn && b.checkOut === r.checkOut),
-      ),
-  );
+  return reservations.filter((r) => r.checkOut > today && !inApp(r, bookings));
+}
+
+/**
+ * Airbnb stays that have ended but were never imported — their payout is
+ * missing from the app's numbers (the dashboard's "Import finished Airbnb
+ * stays" action item). `bookings` must reach back far enough to cover them.
+ */
+export function finishedUnimported(
+  reservations: AirbnbReservation[],
+  bookings: MatchableBooking[],
+  today: ISODate,
+): AirbnbReservation[] {
+  return reservations.filter((r) => r.checkOut <= today && !inApp(r, bookings));
 }
 
 /** Calendar feed (iCal) of direct bookings, for Airbnb's "Import calendar". */

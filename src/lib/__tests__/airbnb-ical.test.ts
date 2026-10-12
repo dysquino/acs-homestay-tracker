@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { directBookingsIcal, parseAirbnbIcal, unmatchedReservations } from "../airbnb-ical";
+import { directBookingsIcal, finishedUnimported, parseAirbnbIcal, unmatchedReservations } from "../airbnb-ical";
 
 // Synthetic — same shape as Airbnb's export: CRLF, folded lines, two kinds of events.
 const feed = [
@@ -82,6 +82,22 @@ describe("unmatchedReservations", () => {
 
   it("drops stays that are over", () => {
     expect(unmatchedReservations(reservations, [], "2026-10-15").map((r) => r.code)).toEqual(["HMBBBBBBB2"]);
+  });
+});
+
+describe("finishedUnimported", () => {
+  const reservations = parseAirbnbIcal(feed); // Oct 10–12 and Oct 21–23
+
+  it("lists stays that have ended and aren't in the app", () => {
+    expect(finishedUnimported(reservations, [], "2026-10-15").map((r) => r.code)).toEqual(["HMAAAAAAA1"]);
+    expect(finishedUnimported(reservations, [], "2026-10-12").map((r) => r.code)).toEqual(["HMAAAAAAA1"]); // check-out day
+  });
+
+  it("leaves out stays already in the app (by code, or same dates for an Airbnb booking)", () => {
+    expect(finishedUnimported(reservations, [booking({ checkIn: "2026-10-10", checkOut: "2026-10-12" })], "2026-10-30")).toEqual([
+      { code: "HMBBBBBBB2", checkIn: "2026-10-21", checkOut: "2026-10-23" },
+    ]);
+    expect(finishedUnimported(reservations, [booking({ checkIn: "2026-01-01", checkOut: "2026-01-02", confirmationCode: "HMBBBBBBB2" }), booking({ checkIn: "2026-10-10", checkOut: "2026-10-12" })], "2026-10-30")).toEqual([]);
   });
 });
 
