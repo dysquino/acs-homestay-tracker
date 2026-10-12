@@ -301,13 +301,6 @@ export function BookingRequestForm({
             {submitError}
           </p>
         ) : null}
-
-        <Button type="submit" variant="primary" className="w-full" disabled={pending}>
-          {pending ? "Sending…" : "Send booking request"}
-        </Button>
-        <p className="text-center text-xs text-slate-500">
-          This is a request, not a confirmed booking — we&apos;ll get back to you.
-        </p>
       </section>
 
       {/* InstaPay instructions — at the bottom, after the guest has committed
@@ -316,6 +309,15 @@ export function BookingRequestForm({
           pay before sending the request. PaymentInfo renders null until the
           owner configures bank details. */}
       <PaymentInfo />
+
+      {/* Submit lives at the very bottom of the form so guests see the bank
+          details before they finalize the request. */}
+      <Button type="submit" variant="primary" className="w-full" disabled={pending}>
+        {pending ? "Sending…" : "Send booking request"}
+      </Button>
+      <p className="text-center text-xs text-slate-500">
+        This is a request, not a confirmed booking — we&apos;ll get back to you.
+      </p>
     </form>
   );
 }
