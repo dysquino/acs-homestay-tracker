@@ -43,16 +43,24 @@ export function proxy(request: NextRequest) {
 
 export const config = {
   // Left open on purpose: the gate page itself, Next's static files, and the
-  // two public brand images. The logo is fetched by the image optimizer (which
-  // is exempt), but the optimizer then requests the file itself — gating it
-  // would hand the optimizer the login page and break the logo on the gate.
+  // brand assets that the public surfaces need to render. The logo is fetched
+  // by the image optimizer (which is exempt), but the optimizer then requests
+  // the file itself — gating it would hand the optimizer the login page and
+  // break the logo on the gate.
   //
   // `book$` is the guests' booking page — exactly /book, not /bookings. It
   // checks its own link key, and every server action checks access itself
   // (src/lib/data/access.ts), so opening the page exposes no data.
+  // `qr-code.JPG` is the static InstaPay QR fallback that /book uses when
+  // the owner hasn't uploaded an override; without excluding it here, an
+  // anonymous guest's browser would get a /gate redirect for the image
+  // (breaking the Pay via InstaPay section). The PWA assets
+  // (`apple-icon.png`, `/manifest.webmanifest`, `/icons/...`) are needed for
+  // the iPhone "Add to Home Screen" flow, which runs against the deployed
+  // origin without any gate cookie.
   // `api/calendar/` is the direct-bookings feed Airbnb imports; Airbnb can't
   // log in, so it checks the secret key in its own URL instead.
   matcher: [
-    "/((?!gate|book$|api/calendar/|_next/static|_next/image|favicon.ico|icon.jpg|acshomestay_logo.jpg).*)",
+    "/((?!gate|book$|api/calendar/|_next/static|_next/image|favicon.ico|icon.jpg|apple-icon.png|manifest.webmanifest|icons/|acshomestay_logo.jpg|qr-code.JPG).*)",
   ],
 };
