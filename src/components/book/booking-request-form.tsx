@@ -76,16 +76,22 @@ export function BookingRequestForm({
   function pick(day: string) {
     setHint(null);
     if (checkIn && !checkOut && day > checkIn) {
-      if (!rangeIsFree(checkIn, day)) {
-        setHint("Some nights in between are already booked — choose an earlier check-out, or a new check-in.");
+      const tooLong = nightCount(checkIn, day) > MAX_REQUEST_NIGHTS;
+      if (rangeIsFree(checkIn, day) && !tooLong) {
+        setCheckOut(day);
         return;
       }
-      if (nightCount(checkIn, day) > MAX_REQUEST_NIGHTS) {
-        setHint(`Stays can be at most ${MAX_REQUEST_NIGHTS} nights — message us for longer stays.`);
+      // Can't reach this day from the current check-in: start over from it
+      // (like any other calendar), rather than leave the tap with no effect.
+      if (!takenNights.has(day)) {
+        setCheckIn(day);
+        setHint(
+          tooLong
+            ? `Stays can be at most ${MAX_REQUEST_NIGHTS} nights, so this is your new check-in — message us for longer stays.`
+            : "Some nights in between were already booked, so this is your new check-in.",
+        );
         return;
       }
-      setCheckOut(day);
-      return;
     }
     if (takenNights.has(day)) {
       setHint("That night is already booked.");
@@ -196,6 +202,13 @@ export function BookingRequestForm({
             const isEnd = day === checkOut; // may be a taken night (turnover day)
             const disabled = !inMonth || past || (taken && !canCheckOutHere && !isEnd);
             const inRange = checkIn && checkOut && day > checkIn && day < checkOut;
+            // Free, but not a possible check-out from the chosen check-in —
+            // dimmed so the guest sees where their stay can end. Still
+            // tappable: it starts a new check-in.
+            const unreachable = Boolean(
+              checkIn && !checkOut && day > checkIn && !taken &&
+                (!canCheckOutHere || nightCount(checkIn, day) > MAX_REQUEST_NIGHTS),
+            );
             return (
               <button
                 key={day}
@@ -209,7 +222,8 @@ export function BookingRequestForm({
                   !inMonth && "invisible",
                   past && "text-slate-300",
                   taken && !past && !isEnd && "text-slate-400 line-through decoration-slate-400",
-                  !disabled && !isStart && !isEnd && !inRange && "text-slate-900 hover:bg-brand-50",
+                  !disabled && !isStart && !isEnd && !inRange && !unreachable && "text-slate-900 hover:bg-brand-50",
+                  unreachable && "text-slate-300 hover:bg-slate-50",
                   inRange && "bg-brand-100 text-brand-900",
                   (isStart || isEnd) && "bg-brand-700 font-semibold text-white",
                 )}
