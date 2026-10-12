@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { Suspense, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 
 import { PageHeader } from "@/components/layout/app-shell";
 import { AirbnbImportModal } from "@/components/bookings/airbnb-import";
@@ -34,12 +35,26 @@ import {
 
 type View = "list" | "calendar";
 
+/**
+ * Accepts ?import=1 (the dashboard's "Import finished Airbnb stays" action)
+ * to open the Airbnb CSV import straight away. Reading the URL needs a
+ * Suspense boundary here.
+ */
 export default function BookingsPage() {
+  return (
+    <Suspense fallback={null}>
+      <BookingsPageContent />
+    </Suspense>
+  );
+}
+
+function BookingsPageContent() {
+  const params = useSearchParams();
   const { bookings, cleaning, airbnbBlocks, deleteBooking } = useStore();
 
   const [view, setView] = useState<View>("calendar");
   const [formOpen, setFormOpen] = useState(false);
-  const [importOpen, setImportOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(() => params.get("import") === "1");
   const [editing, setEditing] = useState<Booking | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Booking | null>(null);
   const [alsoDeleteCleanings, setAlsoDeleteCleanings] = useState(false);
@@ -145,8 +160,13 @@ export default function BookingsPage() {
       </div>
 
       {view === "list" ? (
-        <Card className="overflow-hidden">
-          <FilterBar filtersActive={filtersActive} onClear={clearFilters}>
+        <Card className="overflow-clip">
+          {/* overflow-clip, not -hidden: hidden would stop the month headings sticking. */}
+          <FilterBar
+            filtersActive={filtersActive}
+            activeCount={[source !== "all", payment !== "all", from, to, includePast].filter(Boolean).length}
+            onClear={clearFilters}
+          >
               <Field label="Source" className="min-w-36 flex-1">
                 {(id) => (
                   <Select id={id} value={source} onChange={(e) => setSource(e.target.value as BookingSource | "all")}>

@@ -5,6 +5,7 @@ import { useState, type ReactNode } from "react";
 import { PaymentBadge, SourceBadge } from "@/components/ui/badge";
 import {
   CardList,
+  GroupHeading,
   CompactRow,
   EmptyState,
   RowActions,
@@ -21,8 +22,8 @@ import { Pagination } from "@/components/ui/pagination";
 import { IdPhotoProof } from "@/components/bookings/id-photo";
 import { PaymentProof } from "@/components/bookings/payment-proof";
 import { nightCount } from "@/lib/dates";
-import { formatCurrency, formatDate, formatShortDate } from "@/lib/format";
-import { bookingNetIncome } from "@/lib/selectors";
+import { formatCurrency, formatDate, formatMonth, formatShortDate } from "@/lib/format";
+import { bookingNetIncome, groupRuns } from "@/lib/selectors";
 import { useStore } from "@/lib/store";
 import type { Booking } from "@/lib/types";
 import { usePagination } from "@/lib/use-pagination";
@@ -117,11 +118,25 @@ export function BookingTable({
   const netTotal = bookings.reduce((s, b) => s + bookingNetIncome(b), 0);
   const nightsTotal = bookings.reduce((s, b) => s + nightCount(b.checkIn, b.checkOut), 0);
   const count = `${bookings.length} booking${bookings.length === 1 ? "" : "s"}`;
+  // Month headings for the phone/tablet list, when it's in check-in order.
+  const monthGroups =
+    sort.key === "checkIn"
+      ? groupRuns(paging.pageItems, bookings, (b) => b.checkIn.slice(0, 7), bookingNetIncome)
+      : null;
 
   return (
     <>
       <CardList>
-        {paging.pageItems.map((b) => (
+        {(monthGroups ?? [{ key: "", items: paging.pageItems, count: 0, total: 0 }]).map((g) => [
+          monthGroups ? (
+            <GroupHeading
+              key={`month-${g.key}`}
+              title={formatMonth(`${g.key}-01`)}
+              detail={`${g.count} booking${g.count === 1 ? "" : "s"}`}
+              amount={formatCurrency(g.total)}
+            />
+          ) : null,
+          ...g.items.map((b) => (
           <CompactRow
             key={b.id}
             onOpen={() => setSelected(b)}
@@ -130,7 +145,8 @@ export function BookingTable({
             amount={formatCurrency(bookingNetIncome(b))}
             tags={<PaymentBadge status={b.paymentStatus} />}
           />
-        ))}
+          )),
+        ])}
         <li className="flex items-baseline justify-between gap-3 bg-slate-50 px-4 py-2.5 text-sm">
           <span className="font-medium text-slate-700">{count}</span>
           <span className="font-semibold text-slate-900">{formatCurrency(netTotal)}</span>

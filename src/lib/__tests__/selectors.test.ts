@@ -5,6 +5,8 @@ import {
   amountOwedByCleaner,
   bookingNetIncome,
   cleaningsKeptOnDelete,
+  groupByDay,
+  groupRuns,
   knownCleaners,
   moneyInBank,
   monthSeries,
@@ -248,5 +250,36 @@ describe("cleanings kept when a booking is deleted", () => {
       cleaning({ id: "other", bookingId: "b2", status: "completed", paymentStatus: "paid" }),
     ];
     expect(cleaningsKeptOnDelete(records, "b1").map((c) => c.id)).toEqual(["imported", "assigned", "noted"]);
+  });
+});
+
+describe("groupByDay", () => {
+  const e = (id: string, date: string, amount: number) => expense({ id, date, amount });
+  const all = [e("1", "2026-10-10", 100), e("2", "2026-10-10", 50), e("3", "2026-10-09", 20), e("4", "2026-10-09", 5)];
+
+  it("groups consecutive rows of the same day, with each day's count and total", () => {
+    expect(groupByDay(all).map((g) => [g.date, g.items.map((x) => x.id), g.count, g.total])).toEqual([
+      ["2026-10-10", ["1", "2"], 2, 150],
+      ["2026-10-09", ["3", "4"], 2, 25],
+    ]);
+  });
+
+  it("uses the full list for totals when a day is split across pages", () => {
+    const page2 = [all[3]]; // only one of Oct 9's two expenses is on this page
+    expect(groupByDay(page2, all)).toEqual([{ date: "2026-10-09", items: [all[3]], count: 2, total: 25 }]);
+  });
+});
+
+describe("groupRuns", () => {
+  it("groups by any key with any amount — e.g. bookings by check-in month, totalling payouts", () => {
+    const rows = [
+      { id: "a", checkIn: "2026-10-03", pay: 1000 },
+      { id: "b", checkIn: "2026-10-20", pay: 500 },
+      { id: "c", checkIn: "2026-11-01", pay: 700 },
+    ];
+    expect(groupRuns(rows, rows, (r) => r.checkIn.slice(0, 7), (r) => r.pay).map((g) => [g.key, g.count, g.total])).toEqual([
+      ["2026-10", 2, 1500],
+      ["2026-11", 1, 700],
+    ]);
   });
 });

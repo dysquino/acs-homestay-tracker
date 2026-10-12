@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { Suspense, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 
 import { PageHeader } from "@/components/layout/app-shell";
 import { ExpenseForm } from "@/components/expenses/expense-form";
@@ -24,6 +25,7 @@ import {
   CardList,
   CompactRow,
   EmptyState,
+  GroupHeading,
   RowActions,
   RowTitle,
   Table,
@@ -33,14 +35,15 @@ import {
   Thead,
   Tr,
 } from "@/components/ui/table";
-import { addMonths, startOfMonth, today } from "@/lib/dates";
+import { addMonths, isSameMonth, startOfMonth, today } from "@/lib/dates";
 import { formatCurrency, formatDate, formatMonth, formatWhole } from "@/lib/format";
-import { expensesByMonth, monthSummary } from "@/lib/selectors";
+import { expensesByMonth, groupByDay, monthSummary } from "@/lib/selectors";
 import { useStore } from "@/lib/store";
 import { usePagination } from "@/lib/use-pagination";
 import {
   EXPENSE_CATEGORIES,
   EXPENSE_REFUND_STATUSES,
+  PAID_BY,
   labelFor,
   type Expense,
   type ExpenseCategory,
@@ -49,7 +52,20 @@ import {
 
 type SortKey = "date" | "amount" | "category";
 
+/**
+ * Accepts ?refund=owed&paidBy=<name> (the dashboard's "Refund <name>" action)
+ * as the starting filters. Reading the URL needs a Suspense boundary here.
+ */
 export default function ExpensesPage() {
+  return (
+    <Suspense fallback={null}>
+      <ExpensesPageContent />
+    </Suspense>
+  );
+}
+
+function ExpensesPageContent() {
+  const params = useSearchParams();
   const { expenses, bookings, deleteExpense, updateExpense } = useStore();
 
   const [formOpen, setFormOpen] = useState(false);
@@ -61,7 +77,11 @@ export default function ExpensesPage() {
   const setSelected = (e: Expense | null) => setSelectedId(e?.id ?? null);
 
   const [category, setCategory] = useState<ExpenseCategory | "all">("all");
-  const [refund, setRefund] = useState<ExpenseRefundStatus | "all">("all");
+  const [refund, setRefund] = useState<ExpenseRefundStatus | "all">(() => {
+    const r = params.get("refund");
+    return r === "owed" || r === "refunded" ? r : "all";
+  });
+  const [paidBy, setPaidBy] = useState(() => params.get("paidBy") ?? "all");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [sort, setSort] = useState<{ key: SortKey; dir: "asc" | "desc" }>({
@@ -72,6 +92,14 @@ export default function ExpensesPage() {
   const t = today();
   const [monthCursor, setMonthCursor] = useState(() => startOfMonth(t));
   const isCurrentMonth = monthCursor === startOfMonth(t);
+  // The list follows the month selector above (like the tiles), so it's one
+  // month long instead of every expense ever. "Show all months" lifts that;
+  // a From/To range replaces it; arriving from the dashboard's "Refund <name>"
+  // starts on all months, since unrefunded items can be older.
+  const [scope, setScope] = useState<"month" | "all">(() =>
+    params.get("refund") || params.get("paidBy") ? "all" : "month",
+  );
+  const monthScoped = scope === "month" && !from && !to;
 
   const summary = useMemo(
     () => monthSummary(bookings, expenses, monthCursor),
@@ -80,13 +108,15 @@ export default function ExpensesPage() {
 
   const filtered = useMemo(() => {
     return expenses.filter((e) => {
+      if (monthScoped && !isSameMonth(e.date, monthCursor)) return false;
       if (category !== "all" && e.category !== category) return false;
       if (refund !== "all" && e.refundStatus !== refund) return false;
+      if (paidBy !== "all" && e.paidBy.trim() !== paidBy) return false;
       if (from && e.date < from) return false;
       if (to && e.date > to) return false;
       return true;
     });
-  }, [expenses, category, refund, from, to]);
+  }, [expenses, monthScoped, monthCursor, category, refund, paidBy, from, to]);
 
   const sorted = useMemo(() => {
     const factor = sort.dir === "asc" ? 1 : -1;
@@ -97,11 +127,21 @@ export default function ExpensesPage() {
       return a.date.localeCompare(b.date) * factor;
     });
   }, [filtered, sort]);
-  const paging = usePagination(sorted, JSON.stringify([category, refund, from, to, sort]));
+  const paging = usePagination(
+    sorted,
+    JSON.stringify([monthScoped && monthCursor, category, refund, paidBy, from, to, sort]),
+  );
+  // Day headings (phones/tablets) only make sense when the list is in date order.
+  const dayGroups = sort.key === "date" ? groupByDay(paging.pageItems, sorted) : null;
 
   const filteredTotal = filtered.reduce((s, e) => s + e.amount, 0);
   const byMonth = useMemo(() => expensesByMonth(expenses), [expenses]);
-  const filtersActive = category !== "all" || refund !== "all" || from !== "" || to !== "";
+  const filtersActive = category !== "all" || refund !== "all" || paidBy !== "all" || from !== "" || to !== "";
+  // The fixed roster, plus any older name still on an expense.
+  const payers = useMemo(
+    () => [...new Set([...PAID_BY.map((p) => p.value), ...expenses.map((e) => e.paidBy.trim()).filter(Boolean)])],
+    [expenses],
+  );
 
   function openAdd() {
     setEditing(null);
@@ -198,19 +238,24 @@ export default function ExpensesPage() {
         </h2>
       </div>
 
-      <div className="mb-5 grid gap-3 sm:grid-cols-3">
+      {/* One row even on a phone (compact tiles); the month is in the selector
+          right above, so phones drop it from the labels. */}
+      <div className="mb-5 grid grid-cols-3 gap-2 sm:gap-3">
         <StatTile
-          label={`Income — ${formatMonth(summary.month)}`}
+          compact
+          label={<>Income<span className="hidden sm:inline"> — {formatMonth(summary.month)}</span></>}
           value={formatWhole(summary.income)}
           hint="Booking payouts, split by nights per month"
           tone="brand"
         />
         <StatTile
-          label={`Expenses — ${formatMonth(summary.month)}`}
+          compact
+          label={<>Expenses<span className="hidden sm:inline"> — {formatMonth(summary.month)}</span></>}
           value={formatWhole(summary.expenses)}
         />
         <StatTile
-          label={`Profit — ${formatMonth(summary.month)}`}
+          compact
+          label={<>Profit<span className="hidden sm:inline"> — {formatMonth(summary.month)}</span></>}
           value={formatWhole(summary.net)}
           tone={summary.net >= 0 ? "positive" : "negative"}
           hint={summary.net >= 0 ? "In the black" : "Spending exceeds income"}
@@ -218,12 +263,15 @@ export default function ExpensesPage() {
       </div>
 
       <div className="grid gap-5 2xl:grid-cols-[minmax(0,1fr)_22rem] 2xl:items-start">
-        <Card className="overflow-hidden">
+        {/* overflow-clip, not -hidden: hidden would stop the day headings sticking. */}
+        <Card className="overflow-clip">
           <FilterBar
             filtersActive={filtersActive}
+            activeCount={[category !== "all", refund !== "all", paidBy !== "all", from, to].filter(Boolean).length}
             onClear={() => {
               setCategory("all");
               setRefund("all");
+              setPaidBy("all");
               setFrom("");
               setTo("");
             }}
@@ -252,13 +300,49 @@ export default function ExpensesPage() {
                   </Select>
                 )}
               </Field>
+              <Field label="Paid by" className="min-w-36 flex-1">
+                {(id) => (
+                  <Select id={id} value={paidBy} onChange={(e) => setPaidBy(e.target.value)}>
+                    <option value="all">Anyone</option>
+                    {payers.map((p) => (
+                      <option key={p} value={p}>
+                        {p}
+                      </option>
+                    ))}
+                  </Select>
+                )}
+              </Field>
               <DateRangeFilter from={from} to={to} onFromChange={setFrom} onToChange={setTo} />
             </FilterBar>
 
+          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b border-slate-100 px-4 py-2 text-xs text-slate-600 sm:px-5">
+            <span>
+              <span className="font-medium text-slate-900">
+                {from || to ? "Your From/To range" : monthScoped ? formatMonth(monthCursor) : "All months"}
+              </span>
+              {" · "}
+              {filtered.length} expense{filtered.length === 1 ? "" : "s"} ·{" "}
+              <span className="font-semibold text-slate-900">{formatCurrency(filteredTotal)}</span>
+            </span>
+            {from || to ? null : (
+              <button
+                type="button"
+                onClick={() => setScope(monthScoped ? "all" : "month")}
+                className="font-medium text-brand-700 hover:underline pointer-coarse:py-2"
+              >
+                {monthScoped ? "Show all months" : `Only ${formatMonth(monthCursor)}`}
+              </button>
+            )}
+          </div>
+
           {sorted.length === 0 ? (
             <EmptyState
-              title="No expenses match"
-              message="Try clearing the filters, or record the first expense."
+              title={monthScoped && !filtersActive ? `No expenses in ${formatMonth(monthCursor)}` : "No expenses match"}
+              message={
+                monthScoped
+                  ? "Pick another month above, tap “Show all months”, or record an expense."
+                  : "Try clearing the filters, or record the first expense."
+              }
               action={
                 <Button variant="primary" onClick={openAdd}>
                   <PlusIcon className="h-4 w-4" />
@@ -269,12 +353,25 @@ export default function ExpensesPage() {
           ) : (
             <>
               <CardList>
-                {paging.pageItems.map((e) => (
+                {(dayGroups ?? [{ date: "", items: paging.pageItems, count: 0, total: 0 }]).map((g) => [
+                  dayGroups ? (
+                    <GroupHeading
+                      key={`day-${g.date}`}
+                      title={formatDate(g.date)}
+                      detail={`${g.count} expense${g.count === 1 ? "" : "s"}`}
+                      amount={formatCurrency(g.total)}
+                    />
+                  ) : null,
+                  ...g.items.map((e) => (
                   <CompactRow
                     key={e.id}
                     onOpen={() => setSelected(e)}
                     title={e.description}
-                    subtitle={`${formatDate(e.date)} · ${labelFor(EXPENSE_CATEGORIES, e.category)}`}
+                    subtitle={
+                      dayGroups
+                        ? labelFor(EXPENSE_CATEGORIES, e.category)
+                        : `${formatDate(e.date)} · ${labelFor(EXPENSE_CATEGORIES, e.category)}`
+                    }
                     amount={formatCurrency(e.amount)}
                     tags={
                       e.cleaningId ? (
@@ -287,7 +384,8 @@ export default function ExpensesPage() {
                       !e.cleaningId && e.refundStatus === "owed" ? markRefundedButton(e) : null
                     }
                   />
-                ))}
+                  )),
+                ])}
                 <li className="flex items-baseline justify-between gap-3 bg-slate-50 px-4 py-2.5 text-sm">
                   <span className="font-medium text-slate-700">
                     {filtered.length} shown

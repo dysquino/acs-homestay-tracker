@@ -1,6 +1,6 @@
 import "server-only";
 
-import { parseAirbnbIcal, unmatchedReservations, type AirbnbReservation } from "@/lib/airbnb-ical";
+import { finishedUnimported, parseAirbnbIcal, unmatchedReservations, type AirbnbReservation } from "@/lib/airbnb-ical";
 import { homestayToday } from "@/lib/booking-link";
 import { prisma } from "@/lib/prisma";
 import { ValidationError } from "@/lib/validation";
@@ -77,13 +77,28 @@ export async function readAirbnbCalendar(): Promise<{ reservations: AirbnbReserv
   }
 }
 
-/** Airbnb reservations not in the app yet (see unmatchedReservations), plus the sync status. */
-export async function airbnbBlocks(): Promise<{ blocks: AirbnbReservation[]; status: AirbnbSyncStatus }> {
+/**
+ * Airbnb reservations not in the app yet: `blocks` (upcoming — they block
+ * direct bookings) and `finished` (ended but never imported), plus the sync
+ * status. Bookings are read back a year, which covers anything Airbnb's feed
+ * still lists as past.
+ */
+export async function airbnbBlocks(): Promise<{
+  blocks: AirbnbReservation[];
+  finished: AirbnbReservation[];
+  status: AirbnbSyncStatus;
+}> {
   const { reservations, status } = await readAirbnbCalendar();
-  if (reservations.length === 0) return { blocks: [], status };
+  if (reservations.length === 0) return { blocks: [], finished: [], status };
   const today = homestayToday();
-  const rows = await prisma.booking.findMany({ where: { checkOut: { gt: isoToDate(today) } } });
-  return { blocks: unmatchedReservations(reservations, rows.map(bookingFromDb), today), status };
+  const since = isoToDate(today);
+  since.setUTCFullYear(since.getUTCFullYear() - 1);
+  const bookings = (await prisma.booking.findMany({ where: { checkOut: { gt: since } } })).map(bookingFromDb);
+  return {
+    blocks: unmatchedReservations(reservations, bookings, today),
+    finished: finishedUnimported(reservations, bookings, today),
+    status,
+  };
 }
 
 /**
