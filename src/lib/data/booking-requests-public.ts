@@ -2,6 +2,7 @@
 
 import { homestayToday, isValidBookingKey } from "@/lib/booking-link";
 import { prisma } from "@/lib/prisma";
+import { validatePaymentScreenshot } from "@/lib/payment-screenshot";
 import type { BookingRequestInput } from "@/lib/types";
 import { ValidationError, validateBookingRequest } from "@/lib/validation";
 
@@ -29,7 +30,7 @@ const normalizeContact = (s: string) => s.toLowerCase().replace(/[\s\-()+.]/g, "
 
 export async function submitBookingRequest(
   key: string,
-  input: BookingRequestInput & { website?: string },
+  input: BookingRequestInput & { website?: string; paymentScreenshot?: Uint8Array | null },
 ): Promise<SubmitResult> {
   if (!isValidBookingKey(key)) {
     return { ok: false, error: "This booking link isn't valid anymore. Please ask us for a new one." };
@@ -50,6 +51,16 @@ export async function submitBookingRequest(
   } catch (e) {
     if (e instanceof ValidationError) return { ok: false, error: e.message };
     throw e;
+  }
+
+  // Optional screenshot — magic-byte sniff before we touch the DB. The
+  // client's `Content-Type` is ignored; the bytes are the truth.
+  let screenshot: { bytes: Uint8Array; mime: string } | null = null;
+  const raw = input?.paymentScreenshot;
+  if (raw && raw.length > 0) {
+    const validation = validatePaymentScreenshot(raw);
+    if (!validation.ok) return { ok: false, error: validation.error };
+    screenshot = { bytes: raw, mime: validation.mime };
   }
 
   const checkIn = isoToDate(request.checkIn);
@@ -76,7 +87,13 @@ export async function submitBookingRequest(
   }
 
   await prisma.bookingRequest.create({
-    data: { ...request, checkIn, checkOut },
+    data: {
+      ...request,
+      checkIn,
+      checkOut,
+      paymentScreenshot: screenshot ? Buffer.from(screenshot.bytes) : undefined,
+      paymentScreenshotMime: screenshot?.mime ?? null,
+    },
   });
   return { ok: true };
 }

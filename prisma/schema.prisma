@@ -171,9 +171,27 @@ model BookingRequest {
   booking     Booking?             @relation(fields: [bookingId], references: [id], onDelete: SetNull)
   decidedBy   String?
   decidedAt   DateTime?
+  /// Optional InstaPay proof the guest (or an owner, on their behalf)
+  /// uploaded. Bytes are magic-byte-sniffed at write; see
+  /// `src/lib/payment-screenshot.ts`. Capped at MAX_PAYMENT_SCREENSHOT_BYTES.
+  paymentScreenshot     Bytes?
+  paymentScreenshotMime String?
   createdAt   DateTime             @default(now())
 
   @@index([status, createdAt])
+}
+
+/// The bank details shown on /book so guests can pay via InstaPay. One row
+/// (singleton by id) — edited from /payment-settings, read by the public
+/// booking page. The QR image itself lives as a static asset at
+/// /public/qr-code.JPG (no upload UI to keep Settings minimal).
+model PaymentConfig {
+  id            String   @id @default("singleton")
+  bankName      String
+  accountName   String
+  accountNumber String
+  updatedAt     DateTime @updatedAt
+  updatedBy     String
 }
 
 /// The last good copy of the Airbnb calendar feed (AIRBNB_ICAL_URL), so its

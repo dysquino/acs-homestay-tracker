@@ -13,6 +13,7 @@ import {
   DownloadIcon,
   HomeIcon,
   ReceiptIcon,
+  SettingsIcon,
   SparklesIcon,
 } from "@/components/ui/icons";
 import packageJson from "../../../package.json";
@@ -31,6 +32,7 @@ const NAV: NavItem[] = [
   { href: "/bookings", label: "Bookings", short: "Bookings", icon: CalendarIcon },
   { href: "/expenses", label: "Expenses", short: "Expenses", icon: ReceiptIcon },
   { href: "/cleaning", label: "Cleaning", short: "Cleaning", icon: SparklesIcon },
+  { href: "/payment-settings", label: "Settings", short: "Settings", icon: SettingsIcon },
 ];
 
 function isActive(pathname: string, href: string): boolean {
@@ -107,7 +109,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       </main>
 
       {/* Mobile bottom tabs */}
-      <nav className="no-print fixed inset-x-0 bottom-0 z-40 grid grid-cols-4 rounded-t-3xl bg-white pb-[env(safe-area-inset-bottom)] shadow-[0_-4px_20px_rgba(15,23,42,0.08)] lg:hidden">
+      <nav className="no-print fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 rounded-t-3xl bg-white pb-[env(safe-area-inset-bottom)] shadow-[0_-4px_20px_rgba(15,23,42,0.08)] lg:hidden">
         {NAV.map((item) => {
           const active = isActive(pathname, item.href);
           return (

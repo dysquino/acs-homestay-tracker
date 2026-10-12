@@ -2,6 +2,8 @@
 
 import { useMemo, useState, useTransition } from "react";
 
+import { PaymentInfo } from "@/components/payment/payment-info";
+import { ScreenshotUpload } from "@/components/payment/screenshot-upload";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Textarea } from "@/components/ui/field";
 import { ChevronLeftIcon, ChevronRightIcon } from "@/components/ui/icons";
@@ -57,6 +59,7 @@ export function BookingRequestForm({
   const [guestsCount, setGuestsCount] = useState("2");
   const [message, setMessage] = useState("");
   const [website, setWebsite] = useState(""); // honeypot
+  const [screenshot, setScreenshot] = useState<Uint8Array | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [sent, setSent] = useState(false);
@@ -109,6 +112,7 @@ export function BookingRequestForm({
           guestsCount: guests,
           message,
           website,
+          paymentScreenshot: screenshot,
         });
         if (result.ok) setSent(true);
         else setSubmitError(result.error);
@@ -138,6 +142,12 @@ export function BookingRequestForm({
 
   return (
     <form onSubmit={submit} className="space-y-5" noValidate>
+      {/* InstaPay instructions + screenshot — pre-form, so the guest sees them
+          before they commit to filling out the booking request. The
+          screenshot is optional; PaymentInfo renders null until the owner
+          configures bank details. */}
+      <PaymentInfo />
+
       {/* Calendar */}
       <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
         <div className="mb-3 flex items-center justify-between gap-2">
@@ -281,6 +291,8 @@ export function BookingRequestForm({
             />
           )}
         </Field>
+
+        <ScreenshotUpload onChange={setScreenshot} />
 
         {/* Honeypot: hidden from people, irresistible to bots. */}
         <div aria-hidden="true" className="absolute -left-[9999px] h-px w-px overflow-hidden">
