@@ -136,6 +136,13 @@ export function bookingFromDb(row: DbBooking): Booking {
     notes: row.notes,
     createdBy: row.createdBy,
     confirmationCode: row.confirmationCode,
+    // Photo bytes live on the row; the list query selects these flag fields
+    // but not the bytes themselves — owners fetch via getBookingScreenshot
+    // / getBookingIdPhoto when they actually open the modal.
+    hasPaymentScreenshot: row.paymentScreenshot !== null,
+    paymentScreenshotMime: row.paymentScreenshotMime,
+    hasIdPhoto: row.idPhoto !== null,
+    idPhotoMime: row.idPhotoMime,
   };
 }
 
@@ -277,6 +284,8 @@ export function bookingRequestFromDb(row: DbBookingRequest): BookingRequest {
     // getBookingRequestScreenshot when they actually want to look at one.
     hasPaymentScreenshot: row.paymentScreenshot !== null,
     paymentScreenshotMime: row.paymentScreenshotMime,
+    hasIdPhoto: row.idPhoto !== null,
+    idPhotoMime: row.idPhotoMime,
     createdAt: row.createdAt.toISOString(),
   };
 }

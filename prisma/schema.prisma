@@ -99,6 +99,18 @@ model Booking {
   /// Airbnb's reservation code (e.g. HM5M3MR8KQ), set only by the CSV import.
   /// Unique, so importing the same file twice can never create a duplicate.
   confirmationCode String?            @unique
+  /// Payment screenshot for direct bookings — copied from the BookingRequest
+  /// on approval (so the bytes belong to the reservation, not just the
+  /// request), and editable by the owner afterwards. Bytes are magic-byte
+  /// sniffed at write; capped at MAX_IMAGE_BYTES (2 MB). See
+  /// `src/lib/payment-screenshot.ts`.
+  paymentScreenshot     Bytes?
+  paymentScreenshotMime String?
+  /// ID photo for direct bookings — same shape and rules as the payment
+  /// screenshot. The guest-side form makes it required at submit time;
+  /// the server stays permissive (old /book clients stay compatible).
+  idPhoto     Bytes?
+  idPhotoMime String?
   cleanings        CleaningSchedule[]
   /// The guest's request this booking was approved from, if any.
   request          BookingRequest?
@@ -176,6 +188,12 @@ model BookingRequest {
   /// `src/lib/payment-screenshot.ts`. Capped at MAX_PAYMENT_SCREENSHOT_BYTES.
   paymentScreenshot     Bytes?
   paymentScreenshotMime String?
+  /// ID photo uploaded by the guest for seamless check-in. Same magic-byte
+  /// + size rules as the payment screenshot. The guest-side form requires
+  /// it; the server doesn't (old clients stay compatible) — but the form is
+  /// the only realistic path guests use.
+  idPhoto     Bytes?
+  idPhotoMime String?
   createdAt   DateTime             @default(now())
 
   @@index([status, createdAt])
@@ -211,6 +229,20 @@ model PaymentConfig {
   /// Cleaning fee for long-term bookings (>= 5 nights). If 0, falls back to
   /// `cleaningFee` for stays that would have used this tier.
   cleaningFeeLong Decimal @default(0) @db.Decimal(10, 2)
+  /// The number of nights at which a stay flips from "short" to "long" and
+  /// starts using `cleaningFeeLong` instead of `cleaningFee`. Owner-tunable
+  /// from Payment Settings — defaults to 5 to preserve the original
+  /// behavior. Capped at 60 since 60+ nights is already in "long-term"
+  /// territory; lower bound is 2 (a 1-night stay can't be "long").
+  longStayThresholdNights Int @default(5)
+  /// Whether the ID photo is required on the public /book form. When false,
+  /// the field is shown as optional and the form doesn't block submission
+  /// for it. The server stays permissive regardless (old /book versions
+  /// keep working).
+  idPhotoRequired          Boolean  @default(true)
+  /// Whether the payment screenshot is required on the public /book form.
+  /// When true, the form blocks submission until a screenshot is attached.
+  paymentScreenshotRequired Boolean  @default(false)
   updatedAt     DateTime @updatedAt
   updatedBy     String
 }

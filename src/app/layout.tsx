@@ -20,12 +20,25 @@ export const metadata: Metadata = {
   title: "ACs Homestay Tracker",
   description:
     "Bookings, expenses, and cleaning schedules for ACs Homestay — in one place.",
+  applicationName: "ACs Homestay",
+  appleWebApp: {
+    capable: true,
+    title: "ACs Homestay",
+    statusBarStyle: "default",
+  },
+  // Next.js serves the apple-touch-icon from src/app/apple-icon.png and
+  // injects the matching <link rel="apple-touch-icon" ...> tag. Sizing
+  // hints keep iOS from picking the wrong asset.
+  icons: {
+    apple: [{ url: "/apple-icon.png", sizes: "180x180", type: "image/png" }],
+  },
 };
 
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  themeColor: "#b45309", // brand-700 — see globals.css
+  // brand-700 — also drives the home-screen address-bar tint on iOS.
+  themeColor: "#b45309",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

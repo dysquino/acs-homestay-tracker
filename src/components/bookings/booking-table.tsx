@@ -18,9 +18,12 @@ import {
 } from "@/components/ui/table";
 import { DetailSheet } from "@/components/ui/detail-sheet";
 import { Pagination } from "@/components/ui/pagination";
+import { IdPhotoProof } from "@/components/bookings/id-photo";
+import { PaymentProof } from "@/components/bookings/payment-proof";
 import { nightCount } from "@/lib/dates";
 import { formatCurrency, formatDate, formatShortDate } from "@/lib/format";
 import { bookingNetIncome } from "@/lib/selectors";
+import { useStore } from "@/lib/store";
 import type { Booking } from "@/lib/types";
 import { usePagination } from "@/lib/use-pagination";
 
@@ -86,6 +89,8 @@ export function BookingTable({
 }) {
   // Totals below cover every filtered booking; only the rows are paged.
   const paging = usePagination(bookings, resetKey);
+  // For re-fetching after the photo viewers attach/remove.
+  const { resync } = useStore();
   // The booking whose details are open; looked up fresh so an edit shows.
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const selected = bookings.find((b) => b.id === selectedId) ?? null;
@@ -248,6 +253,30 @@ export function BookingTable({
                 { label: "Notes", value: selected.notes || <span className="text-slate-400">—</span> },
               ]
             : []
+        }
+        body={
+          selected ? (
+            <div className="space-y-2 rounded-lg border border-slate-100 bg-slate-50/60 p-3">
+              <div className="flex flex-wrap items-baseline gap-2 text-sm">
+                <span className="shrink-0 text-slate-500">ID photo:</span>
+                <IdPhotoProof
+                  bookingId={selected.id}
+                  entityKind="booking"
+                  hasPhoto={selected.hasIdPhoto}
+                  onChanged={resync}
+                />
+              </div>
+              <div className="flex flex-wrap items-baseline gap-2 text-sm">
+                <span className="shrink-0 text-slate-500">Payment screenshot:</span>
+                <PaymentProof
+                  bookingId={selected.id}
+                  entityKind="booking"
+                  hasScreenshot={selected.hasPaymentScreenshot}
+                  onChanged={resync}
+                />
+              </div>
+            </div>
+          ) : null
         }
         onEdit={() => {
           if (!selected) return;

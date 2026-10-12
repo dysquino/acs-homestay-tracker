@@ -55,6 +55,19 @@ export async function approveBookingRequest(id: string, actor: string): Promise<
         notes: req.message,
         createdBy: who,
       });
+      // Carry the guest's photos (payment screenshot + ID photo) onto the
+      // new Booking, so the edit-booking modal and the list view can show
+      // them after the request is approved. Same bytes, same MIMEs — the
+      // guest already submitted them and we trust the original validation.
+      await tx.booking.update({
+        where: { id: created.id },
+        data: {
+          paymentScreenshot: req.paymentScreenshot ?? null,
+          paymentScreenshotMime: req.paymentScreenshotMime ?? null,
+          idPhoto: req.idPhoto ?? null,
+          idPhotoMime: req.idPhotoMime ?? null,
+        },
+      });
       await tx.bookingRequest.update({
         where: { id },
         data: { status: "APPROVED", bookingId: created.id, decidedBy: who, decidedAt: new Date() },

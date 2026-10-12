@@ -20,6 +20,7 @@ export function DetailSheet({
   title,
   tags,
   fields,
+  body,
   note,
   actions,
   onEdit,
@@ -30,6 +31,13 @@ export function DetailSheet({
   title: string;
   tags?: ReactNode;
   fields: DetailField[];
+  /**
+   * Free-form content rendered between the fields list and the optional
+   * note. Used by the booking list to show photos with attach/view/remove
+   * modals — bit-heavy to fit a DetailField value, so it lives in its own
+   * slot.
+   */
+  body?: ReactNode;
   note?: ReactNode;
   /** Extra record-specific buttons (e.g. "Mark paid"), shown before Edit. */
   actions?: ReactNode;
@@ -73,6 +81,7 @@ export function DetailSheet({
           </div>
         ))}
       </dl>
+      {body ? <div className="mt-3">{body}</div> : null}
       {note ? <p className="mt-3 rounded-lg bg-slate-50 p-3 text-xs text-slate-600">{note}</p> : null}
     </Modal>
   );

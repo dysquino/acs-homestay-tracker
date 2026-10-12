@@ -2,6 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 
+import { IdPhotoUpload } from "@/components/payment/id-photo-upload";
 import { PaymentInfo } from "@/components/payment/payment-info";
 import { PriceBreakdown, type PricingConfig } from "@/components/payment/price-breakdown";
 import { ScreenshotUpload } from "@/components/payment/screenshot-upload";
@@ -63,6 +64,7 @@ export function BookingRequestForm({
   const [message, setMessage] = useState("");
   const [website, setWebsite] = useState(""); // honeypot
   const [screenshot, setScreenshot] = useState<Uint8Array | null>(null);
+  const [idPhoto, setIdPhoto] = useState<Uint8Array | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [sent, setSent] = useState(false);
@@ -101,6 +103,10 @@ export function BookingRequestForm({
     if (!contactInfo.trim()) next.contactInfo = "Please enter a phone number or email so we can reach you.";
     const guests = Number(guestsCount);
     if (!Number.isInteger(guests) || guests < 1 || guests > 20) next.guestsCount = "Enter between 1 and 20 guests.";
+    if (pricing.idPhotoRequired && !idPhoto)
+      next.idPhoto = "An ID photo is required for check-in — please upload one above.";
+    if (pricing.paymentScreenshotRequired && !screenshot)
+      next.paymentScreenshot = "A payment screenshot is required — please upload one above.";
     setErrors(next);
     if (Object.keys(next).length > 0 || !checkIn || !checkOut) return;
 
@@ -116,6 +122,7 @@ export function BookingRequestForm({
           message,
           website,
           paymentScreenshot: screenshot,
+          idPhoto,
         });
         if (result.ok) setSent(true);
         else setSubmitError(result.error);
@@ -294,7 +301,13 @@ export function BookingRequestForm({
           )}
         </Field>
 
-        <ScreenshotUpload onChange={setScreenshot} />
+        <IdPhotoUpload onChange={setIdPhoto} required={pricing.idPhotoRequired} />
+        {errors.idPhoto ? <p className="text-xs text-red-600">{errors.idPhoto}</p> : null}
+
+        <ScreenshotUpload onChange={setScreenshot} required={pricing.paymentScreenshotRequired} />
+        {errors.paymentScreenshot ? (
+          <p className="text-xs text-red-600">{errors.paymentScreenshot}</p>
+        ) : null}
 
         {/* Honeypot: hidden from people, irresistible to bots. */}
         <div aria-hidden="true" className="absolute -left-[9999px] h-px w-px overflow-hidden">

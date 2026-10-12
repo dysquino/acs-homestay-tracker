@@ -39,6 +39,18 @@ export function PaymentSettingsForm({
   const [nightlyRate, setNightlyRate] = useState<number>(initial?.nightlyRate ?? 0);
   const [cleaningFee, setCleaningFee] = useState<number>(initial?.cleaningFee ?? 0);
   const [cleaningFeeLong, setCleaningFeeLong] = useState<number>(initial?.cleaningFeeLong ?? 0);
+  // Owner-tunable long-stay threshold. The server accepts 2..60; default 5
+  // preserves the original behavior. We clamp client-side to keep the input
+  // from drifting into invalid values as the user types.
+  const [longStayThresholdNights, setLongStayThresholdNights] = useState<number>(
+    initial?.longStayThresholdNights ?? 5,
+  );
+  // Default to the schema defaults so the very first save (which `create`s
+  // the row) still works without the user touching these.
+  const [idPhotoRequired, setIdPhotoRequired] = useState<boolean>(initial?.idPhotoRequired ?? true);
+  const [paymentScreenshotRequired, setPaymentScreenshotRequired] = useState<boolean>(
+    initial?.paymentScreenshotRequired ?? false,
+  );
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -131,6 +143,9 @@ export function PaymentSettingsForm({
           nightlyRate,
           cleaningFee,
           cleaningFeeLong,
+          longStayThresholdNights,
+          idPhotoRequired,
+          paymentScreenshotRequired,
         });
         setSaved(true);
         // The server is now the source of truth; staged changes are baked in.
@@ -168,7 +183,7 @@ export function PaymentSettingsForm({
             />
           )}
         </Field>
-        <Field label="Cleaning fee (long stay)" hint="Used for stays of 5 nights or more. Leave 0 to keep using the short-stay fee.">
+        <Field label="Cleaning fee (long stay)" hint="Used for stays of the threshold or more. Leave 0 to keep using the short-stay fee.">
           {(id) => (
             <CurrencyInput
               id={id}
@@ -177,6 +192,25 @@ export function PaymentSettingsForm({
               value={cleaningFeeLong || ""}
               onChange={(e) => setCleaningFeeLong(e.target.value === "" ? 0 : Number(e.target.value))}
               placeholder="0"
+            />
+          )}
+        </Field>
+        <Field
+          label="Long-stay threshold (nights)"
+          hint="Stays of this length or more use the long-stay cleaning fee. Range 2-60."
+        >
+          {(id) => (
+            <Input
+              id={id}
+              type="number"
+              min={2}
+              max={60}
+              step={1}
+              value={longStayThresholdNights || ""}
+              onChange={(e) => {
+                const v = e.target.value === "" ? 5 : Number(e.target.value);
+                if (Number.isFinite(v)) setLongStayThresholdNights(Math.max(2, Math.min(60, Math.trunc(v))));
+              }}
             />
           )}
         </Field>
@@ -207,6 +241,42 @@ export function PaymentSettingsForm({
             />
           )}
         </Field>
+      </div>
+
+      <div className="border-t border-slate-100 p-4 sm:p-5 space-y-3">
+        <div className="text-xs font-medium text-slate-800">Required fields on /book</div>
+        <p className="text-xs text-slate-500">
+          When a field is required, the form blocks submission until the guest attaches one. The
+          server stays permissive either way (old versions of the booking page keep working).
+        </p>
+        <label className="flex items-start gap-2.5 text-sm text-slate-700">
+          <input
+            type="checkbox"
+            checked={idPhotoRequired}
+            onChange={(e) => setIdPhotoRequired(e.target.checked)}
+            className="mt-0.5 h-4 w-4 shrink-0 rounded border-slate-300 text-brand-700 focus:ring-brand-600"
+          />
+          <span>
+            <span className="font-medium text-slate-900">ID photo required</span>
+            <span className="block text-xs text-slate-500">
+              For seamless check-in. Uncheck to let guests submit without an ID.
+            </span>
+          </span>
+        </label>
+        <label className="flex items-start gap-2.5 text-sm text-slate-700">
+          <input
+            type="checkbox"
+            checked={paymentScreenshotRequired}
+            onChange={(e) => setPaymentScreenshotRequired(e.target.checked)}
+            className="mt-0.5 h-4 w-4 shrink-0 rounded border-slate-300 text-brand-700 focus:ring-brand-600"
+          />
+          <span>
+            <span className="font-medium text-slate-900">Payment screenshot required</span>
+            <span className="block text-xs text-slate-500">
+              Guests must attach an InstaPay receipt before submitting. Uncheck to make it optional.
+            </span>
+          </span>
+        </label>
       </div>
 
       <div className="border-t border-slate-100 p-4 sm:p-5 space-y-3">

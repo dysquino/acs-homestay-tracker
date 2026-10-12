@@ -12,6 +12,8 @@ import {
 } from "@/components/ui/field";
 import { WarningIcon } from "@/components/ui/icons";
 import { Modal } from "@/components/ui/modal";
+import { IdPhotoProof } from "@/components/bookings/id-photo";
+import { PaymentProof } from "@/components/bookings/payment-proof";
 import { useIdentity } from "@/lib/identity";
 import { addDays, nightCount, today } from "@/lib/dates";
 import { formatDateRange } from "@/lib/format";
@@ -123,7 +125,7 @@ function BookingFields({
   submit: Submit;
   onBlockedChange: (blocked: boolean) => void;
 }) {
-  const { bookings, airbnbBlocks, addBooking, updateBooking } = useStore();
+  const { bookings, airbnbBlocks, addBooking, updateBooking, resync } = useStore();
   const { user } = useIdentity();
   const [form, setForm] = useState<FormState>(() => initialState(booking));
   const [errors, setErrors] = useState<Partial<Record<keyof FormState, string>>>(
@@ -376,6 +378,35 @@ function BookingFields({
           )}
         </Field>
       </div>
+
+      {/* Photos — only meaningful for an existing booking (the add form has
+          no booking id to attach them to yet). The same widgets the request
+          card uses, just pointed at a Booking instead of a BookingRequest. */}
+      {booking ? (
+        <div className="space-y-3 border-t border-slate-100 pt-4">
+          <h3 className="text-sm font-medium text-slate-700">Photos</h3>
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-baseline gap-2 text-sm">
+              <span className="shrink-0 text-slate-500">ID photo:</span>
+              <IdPhotoProof
+                bookingId={booking.id}
+                entityKind="booking"
+                hasPhoto={booking.hasIdPhoto}
+                onChanged={resync}
+              />
+            </div>
+            <div className="flex flex-wrap items-baseline gap-2 text-sm">
+              <span className="shrink-0 text-slate-500">Payment screenshot:</span>
+              <PaymentProof
+                bookingId={booking.id}
+                entityKind="booking"
+                hasScreenshot={booking.hasPaymentScreenshot}
+                onChanged={resync}
+              />
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {submitError ? (
         <p className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700">

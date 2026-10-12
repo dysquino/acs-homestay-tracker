@@ -107,6 +107,13 @@ export function blockAsBooking(r: AirbnbReservation): Booking {
     paymentStatus: "pending",
     contactInfo: "",
     notes: "",
+    // No photos on an Airbnb block — it's a stand-in for a reservation we
+    // don't have in the DB yet. Photos only get set when a real booking is
+    // created (from the owner's form or from an approved BookingRequest).
+    hasPaymentScreenshot: false,
+    paymentScreenshotMime: null,
+    hasIdPhoto: false,
+    idPhotoMime: null,
     createdBy: "",
     confirmationCode: r.code,
   };

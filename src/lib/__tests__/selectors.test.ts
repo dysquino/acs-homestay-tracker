@@ -31,6 +31,10 @@ const booking = (o: Partial<Booking>): Booking => ({
   notes: "",
   createdBy: "t",
   confirmationCode: null,
+  hasPaymentScreenshot: false,
+  paymentScreenshotMime: null,
+  hasIdPhoto: false,
+  idPhotoMime: null,
   ...o,
 });
 

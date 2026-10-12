@@ -221,6 +221,11 @@ export function planImport(rows: ImportRow[], existing: Booking[]): PlannedRow[]
       notes: "",
       createdBy: "",
       confirmationCode: row.confirmationCode,
+      // CSV-imported Airbnb rows have no payment screenshot or ID photo.
+      hasPaymentScreenshot: false,
+      paymentScreenshotMime: null,
+      hasIdPhoto: false,
+      idPhotoMime: null,
     });
     return { row, action: "create", conflicts: [] };
   });
