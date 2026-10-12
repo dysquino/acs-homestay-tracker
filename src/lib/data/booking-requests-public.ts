@@ -2,7 +2,7 @@
 
 import { homestayToday, isValidBookingKey } from "@/lib/booking-link";
 import { prisma } from "@/lib/prisma";
-import { validatePaymentScreenshot } from "@/lib/payment-screenshot";
+import { validateIdPhoto, validatePaymentScreenshot } from "@/lib/payment-screenshot";
 import type { BookingRequestInput } from "@/lib/types";
 import { ValidationError, validateBookingRequest } from "@/lib/validation";
 
@@ -30,7 +30,11 @@ const normalizeContact = (s: string) => s.toLowerCase().replace(/[\s\-()+.]/g, "
 
 export async function submitBookingRequest(
   key: string,
-  input: BookingRequestInput & { website?: string; paymentScreenshot?: Uint8Array | null },
+  input: BookingRequestInput & {
+    website?: string;
+    paymentScreenshot?: Uint8Array | null;
+    idPhoto?: Uint8Array | null;
+  },
 ): Promise<SubmitResult> {
   if (!isValidBookingKey(key)) {
     return { ok: false, error: "This booking link isn't valid anymore. Please ask us for a new one." };
@@ -63,6 +67,16 @@ export async function submitBookingRequest(
     screenshot = { bytes: raw, mime: validation.mime };
   }
 
+  // ID photo — required at the form level, but the server stays permissive
+  // for old clients. Same magic-byte sniff; bytes are the truth.
+  let idPhoto: { bytes: Uint8Array; mime: string } | null = null;
+  const rawId = input?.idPhoto;
+  if (rawId && rawId.length > 0) {
+    const validation = validateIdPhoto(rawId);
+    if (!validation.ok) return { ok: false, error: validation.error };
+    idPhoto = { bytes: rawId, mime: validation.mime };
+  }
+
   const checkIn = isoToDate(request.checkIn);
   const checkOut = isoToDate(request.checkOut);
   const taken = await prisma.booking.count({
@@ -93,6 +107,8 @@ export async function submitBookingRequest(
       checkOut,
       paymentScreenshot: screenshot ? Buffer.from(screenshot.bytes) : undefined,
       paymentScreenshotMime: screenshot?.mime ?? null,
+      idPhoto: idPhoto ? Buffer.from(idPhoto.bytes) : undefined,
+      idPhotoMime: idPhoto?.mime ?? null,
     },
   });
   return { ok: true };

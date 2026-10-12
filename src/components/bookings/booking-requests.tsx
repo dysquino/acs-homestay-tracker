@@ -7,6 +7,7 @@ import { Card, CardHeader } from "@/components/ui/card";
 import { Field, Input } from "@/components/ui/field";
 import { CalendarIcon, WarningIcon } from "@/components/ui/icons";
 import { ConfirmDialog, Modal } from "@/components/ui/modal";
+import { IdPhotoProof } from "@/components/bookings/id-photo";
 import { PaymentProof } from "@/components/bookings/payment-proof";
 import { getBookingLinkPath } from "@/lib/data/booking-requests";
 import { nightCount } from "@/lib/dates";
@@ -79,6 +80,11 @@ export function BookingRequests({ onApproved }: { onApproved: (booking: Booking)
                       {r.message}
                     </p>
                   ) : null}
+                  <IdPhotoProof
+                    requestId={r.id}
+                    hasPhoto={r.hasIdPhoto}
+                    onChanged={resync}
+                  />
                   <PaymentProof
                     requestId={r.id}
                     hasScreenshot={r.hasPaymentScreenshot}

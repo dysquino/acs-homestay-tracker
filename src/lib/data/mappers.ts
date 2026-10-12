@@ -277,6 +277,8 @@ export function bookingRequestFromDb(row: DbBookingRequest): BookingRequest {
     // getBookingRequestScreenshot when they actually want to look at one.
     hasPaymentScreenshot: row.paymentScreenshot !== null,
     paymentScreenshotMime: row.paymentScreenshotMime,
+    hasIdPhoto: row.idPhoto !== null,
+    idPhotoMime: row.idPhotoMime,
     createdAt: row.createdAt.toISOString(),
   };
 }
