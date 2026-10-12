@@ -45,11 +45,16 @@ export type BookingSortKey =
 
 export type Sort = { key: BookingSortKey; dir: "asc" | "desc" };
 
-/** Pending → partial → paid: the order a payment actually progresses. */
+/**
+ * Pending → partial → paid is the order a payment actually progresses. Overpaid
+ * sorts last: it's past "paid", and the owner's next action on it is a refund
+ * rather than chasing the remainder.
+ */
 const PAYMENT_RANK: Record<Booking["paymentStatus"], number> = {
   pending: 0,
   partial: 1,
   paid: 2,
+  overpaid: 3,
 };
 
 export function sortBookings(bookings: Booking[], sort: Sort): Booking[] {

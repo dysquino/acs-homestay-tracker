@@ -3,15 +3,21 @@ import "server-only";
 import type {
   Booking as DbBooking,
   DateBlock as DbDateBlock,
+  BookingPayment as DbBookingPayment,
+  BookingPaymentMethod as DbBookingPaymentMethod,
+  BookingPaymentStatus as DbBookingPaymentStatus,
   BookingRequest as DbBookingRequest,
   CleaningSchedule as DbCleaning,
   Expense as DbExpense,
+  ExpenseSettlement as DbExpenseSettlement,
+  ExpenseSettlementStatus as DbExpenseSettlementStatus,
   BookingSource as DbBookingSource,
   PaymentStatus as DbPaymentStatus,
   ExpenseCategory as DbExpenseCategory,
   CleaningStatus as DbCleaningStatus,
   CleaningPaymentStatus as DbCleaningPaymentStatus,
   ExpenseRefundStatus as DbExpenseRefundStatus,
+  SettlementType as DbSettlementType,
 } from "@prisma/client";
 import type { Decimal } from "@prisma/client/runtime/library";
 
@@ -19,6 +25,10 @@ import type {
   Booking,
   DateBlock,
   BookingInput,
+  BookingPayment,
+  BookingPaymentInput,
+  BookingPaymentMethod,
+  BookingPaymentStatus,
   BookingRequest,
   CleaningPaymentStatus,
   CleaningRecord,
@@ -27,8 +37,12 @@ import type {
   ExpenseCategory,
   ExpenseInput,
   ExpenseRefundStatus,
+  ExpenseSettlement,
+  ExpenseSettlementInput,
+  ExpenseSettlementStatus,
   ISODate,
   PaymentStatus,
+  SettlementType,
   BookingSource,
 } from "@/lib/types";
 
@@ -66,11 +80,61 @@ const PAYMENT_STATUS_TO_DB: Record<PaymentStatus, DbPaymentStatus> = {
   paid: "PAID",
   pending: "PENDING",
   partial: "PARTIAL",
+  overpaid: "OVERPAID",
 };
 const PAYMENT_STATUS_FROM_DB: Record<DbPaymentStatus, PaymentStatus> = {
   PAID: "paid",
   PENDING: "pending",
   PARTIAL: "partial",
+  OVERPAID: "overpaid",
+};
+
+// No *_STATUS_TO_DB map for BookingPayment or ExpenseSettlement, unlike the
+// other enums here: status is server-owned (only the void actions write it),
+// so a client can never supply a value that needs translating.
+
+const BOOKING_PAYMENT_STATUS_FROM_DB: Record<DbBookingPaymentStatus, BookingPaymentStatus> = {
+  ACTIVE: "active",
+  VOIDED: "voided",
+  REFUNDED: "refunded",
+};
+
+const BOOKING_PAYMENT_METHOD_TO_DB: Record<BookingPaymentMethod, DbBookingPaymentMethod> = {
+  airbnb_payout: "AIRBNB_PAYOUT",
+  bank_transfer: "BANK_TRANSFER",
+  instapay: "INSTAPAY",
+  cash_deposit: "CASH_DEPOSIT",
+  other: "OTHER",
+};
+const BOOKING_PAYMENT_METHOD_FROM_DB: Record<DbBookingPaymentMethod, BookingPaymentMethod> = {
+  AIRBNB_PAYOUT: "airbnb_payout",
+  BANK_TRANSFER: "bank_transfer",
+  INSTAPAY: "instapay",
+  CASH_DEPOSIT: "cash_deposit",
+  OTHER: "other",
+};
+
+const SETTLEMENT_TYPE_TO_DB: Record<SettlementType, DbSettlementType> = {
+  direct_vendor_payment: "DIRECT_VENDOR_PAYMENT",
+  owner_reimbursement: "OWNER_REIMBURSEMENT",
+  cleaner_payment: "CLEANER_PAYMENT",
+  guest_refund: "GUEST_REFUND",
+  other: "OTHER",
+};
+const SETTLEMENT_TYPE_FROM_DB: Record<DbSettlementType, SettlementType> = {
+  DIRECT_VENDOR_PAYMENT: "direct_vendor_payment",
+  OWNER_REIMBURSEMENT: "owner_reimbursement",
+  CLEANER_PAYMENT: "cleaner_payment",
+  GUEST_REFUND: "guest_refund",
+  OTHER: "other",
+};
+
+const EXPENSE_SETTLEMENT_STATUS_FROM_DB: Record<
+  DbExpenseSettlementStatus,
+  ExpenseSettlementStatus
+> = {
+  ACTIVE: "active",
+  VOIDED: "voided",
 };
 
 const EXPENSE_CATEGORY_TO_DB: Record<ExpenseCategory, DbExpenseCategory> = {
@@ -300,4 +364,110 @@ export function dateBlockFromDb(row: DbDateBlock): DateBlock {
     reason: row.reason,
     createdBy: row.createdBy,
   };
+}
+
+/* ------------------------------------------------------------------ */
+/* BookingPayment — one actual receipt of money against a booking.      */
+/* ------------------------------------------------------------------ */
+
+export function bookingPaymentFromDb(row: DbBookingPayment): BookingPayment {
+  return {
+    id: row.id,
+    bookingId: row.bookingId,
+    amount: decimalToNumber(row.amount),
+    receivedDate: dateToISO(row.receivedDate),
+    method: BOOKING_PAYMENT_METHOD_FROM_DB[row.method],
+    reference: row.reference,
+    notes: row.notes,
+    status: BOOKING_PAYMENT_STATUS_FROM_DB[row.status],
+    createdBy: row.createdBy,
+    createdAt: row.createdAt.toISOString(),
+    voidedAt: row.voidedAt?.toISOString() ?? null,
+    voidedBy: row.voidedBy,
+  };
+}
+
+/** Never writes `status` or the void fields — those are server-owned (§7.13). */
+export function bookingPaymentToDb(input: BookingPaymentInput) {
+  return {
+    bookingId: input.bookingId,
+    amount: input.amount,
+    receivedDate: isoToDate(input.receivedDate),
+    method: BOOKING_PAYMENT_METHOD_TO_DB[input.method],
+    reference: input.reference,
+    notes: input.notes,
+    createdBy: input.createdBy,
+  };
+}
+
+export function bookingPaymentPatchToDb(patch: Partial<BookingPaymentInput>) {
+  const out: Record<string, unknown> = {};
+  if (patch.bookingId !== undefined) out.bookingId = patch.bookingId;
+  if (patch.amount !== undefined) out.amount = patch.amount;
+  if (patch.receivedDate !== undefined) out.receivedDate = isoToDate(patch.receivedDate);
+  if (patch.method !== undefined) out.method = BOOKING_PAYMENT_METHOD_TO_DB[patch.method];
+  if (patch.reference !== undefined) out.reference = patch.reference;
+  if (patch.notes !== undefined) out.notes = patch.notes;
+  if (patch.createdBy !== undefined) out.createdBy = patch.createdBy;
+  return out;
+}
+
+/* ------------------------------------------------------------------ */
+/* ExpenseSettlement — one actual outflow against an expense or refund. */
+/* ------------------------------------------------------------------ */
+
+export function expenseSettlementFromDb(row: DbExpenseSettlement): ExpenseSettlement {
+  return {
+    id: row.id,
+    expenseId: row.expenseId,
+    refundForBookingId: row.refundForBookingId,
+    amount: decimalToNumber(row.amount),
+    paidDate: dateToISO(row.paidDate),
+    settlementType: SETTLEMENT_TYPE_FROM_DB[row.settlementType],
+    reimbursedTo: row.reimbursedTo,
+    reference: row.reference,
+    notes: row.notes,
+    status: EXPENSE_SETTLEMENT_STATUS_FROM_DB[row.status],
+    createdBy: row.createdBy,
+    createdAt: row.createdAt.toISOString(),
+    voidedAt: row.voidedAt?.toISOString() ?? null,
+    voidedBy: row.voidedBy,
+  };
+}
+
+/**
+ * Never writes `status` or the void fields. Which of `expenseId` /
+ * `refundForBookingId` lands is decided by the write action from
+ * `settlementType`, so a client can't attach a guest refund to an unrelated
+ * expense.
+ */
+export function expenseSettlementToDb(input: ExpenseSettlementInput) {
+  const isRefund = input.settlementType === "guest_refund";
+  return {
+    expenseId: isRefund ? null : (input.expenseId ?? null),
+    refundForBookingId: isRefund ? (input.refundForBookingId ?? null) : null,
+    amount: input.amount,
+    paidDate: isoToDate(input.paidDate),
+    settlementType: SETTLEMENT_TYPE_TO_DB[input.settlementType],
+    reimbursedTo: input.reimbursedTo,
+    reference: input.reference,
+    notes: input.notes,
+    createdBy: input.createdBy,
+  };
+}
+
+export function expenseSettlementPatchToDb(patch: Partial<ExpenseSettlementInput>) {
+  const out: Record<string, unknown> = {};
+  if (patch.amount !== undefined) out.amount = patch.amount;
+  if (patch.paidDate !== undefined) out.paidDate = isoToDate(patch.paidDate);
+  if (patch.settlementType !== undefined)
+    out.settlementType = SETTLEMENT_TYPE_TO_DB[patch.settlementType];
+  if (patch.reimbursedTo !== undefined) out.reimbursedTo = patch.reimbursedTo;
+  if (patch.reference !== undefined) out.reference = patch.reference;
+  if (patch.notes !== undefined) out.notes = patch.notes;
+  if (patch.createdBy !== undefined) out.createdBy = patch.createdBy;
+  // Deliberately no expenseId / refundForBookingId: retargeting a settlement
+  // at a different source record would rewrite which cost it settles. Void and
+  // re-create instead.
+  return out;
 }

@@ -42,7 +42,7 @@ The following decisions are considered requirements unless this specification is
 - Reopening a finalized month must require an explicit reason and must be recorded in the audit trail.
 - Currency is Philippine peso (PHP).
 - Financial calculations must use integer centavos or an exact decimal type. JavaScript floating-point values must not be used as the authoritative persisted calculation.
-- All money in the reconciliation domain is persisted as `Decimal(12, 2)` at the database layer. Sum, difference, and running-balance arithmetic must be performed in integer centavos (bigint) using helpers in `src/lib/finance.ts`; the application code must not use JavaScript `number` math for any financial aggregate.
+- All money in the reconciliation domain is persisted as `Decimal(10, 2)` at the database layer, matching the existing money columns and `MAX_MONEY` in `validation.ts`. Sum, difference, and running-balance arithmetic must be performed in integer centavos (bigint) using helpers in `src/lib/finance.ts`; the application code must not use JavaScript `number` math for any financial aggregate.
 
 ---
 

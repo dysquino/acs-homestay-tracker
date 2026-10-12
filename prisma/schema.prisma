@@ -35,10 +35,15 @@ enum BookingSource {
   DIRECT
 }
 
+/// Cached on the booking for list rendering; always recomputed from
+/// BookingPayment rows before it is trusted (see RECONCILIATION_SPEC §12.1).
+/// OVERPAID is not an error state — the guest sent more than the payout, which
+/// is reconciled by refunding the excess or explaining it with an adjustment.
 enum PaymentStatus {
   PAID
   PENDING
   PARTIAL
+  OVERPAID
 }
 
 enum ExpenseCategory {
@@ -84,21 +89,21 @@ model User {
 }
 
 model Booking {
-  id               String             @id @default(cuid())
-  guestName        String
-  source           BookingSource
-  checkIn          DateTime
-  checkOut         DateTime
-  guestsCount      Int
-  totalPayout      Decimal            @db.Decimal(10, 2)
-  platformFee      Decimal            @default(0) @db.Decimal(10, 2)
-  paymentStatus    PaymentStatus
-  contactInfo      String             @default("")
-  notes            String             @default("")
-  createdBy        String
+  id                    String              @id @default(cuid())
+  guestName             String
+  source                BookingSource
+  checkIn               DateTime
+  checkOut              DateTime
+  guestsCount           Int
+  totalPayout           Decimal             @db.Decimal(10, 2)
+  platformFee           Decimal             @default(0) @db.Decimal(10, 2)
+  paymentStatus         PaymentStatus
+  contactInfo           String              @default("")
+  notes                 String              @default("")
+  createdBy             String
   /// Airbnb's reservation code (e.g. HM5M3MR8KQ), set only by the CSV import.
   /// Unique, so importing the same file twice can never create a duplicate.
-  confirmationCode String?            @unique
+  confirmationCode      String?             @unique
   /// Payment screenshot for direct bookings — copied from the BookingRequest
   /// on approval (so the bytes belong to the reservation, not just the
   /// request), and editable by the owner afterwards. Bytes are magic-byte
@@ -109,13 +114,20 @@ model Booking {
   /// ID photo for direct bookings — same shape and rules as the payment
   /// screenshot. The guest-side form makes it required at submit time;
   /// the server stays permissive (old /book clients stay compatible).
-  idPhoto     Bytes?
-  idPhotoMime String?
-  cleanings        CleaningSchedule[]
+  idPhoto               Bytes?
+  idPhotoMime           String?
+  cleanings             CleaningSchedule[]
   /// The guest's request this booking was approved from, if any.
-  request          BookingRequest?
-  createdAt        DateTime           @default(now())
-  updatedAt        DateTime           @updatedAt
+  request               BookingRequest?
+  /// One row per actual receipt of money. Zero = nothing received yet, so a
+  /// booking can be unpaid, part-paid (deposit + balance), or paid in full.
+  /// Reconciliation reads these rows, never the cached `paymentStatus`.
+  payments              BookingPayment[]
+  /// Guest refunds paid back out of the bank. Reachable from the booking so
+  /// the owner can see a stay's receipts and refunds side by side.
+  refunds               ExpenseSettlement[] @relation("BookingRefunds")
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
 
   @@index([checkIn, checkOut])
 }
@@ -137,6 +149,123 @@ model DateBlock {
   @@index([startDate, endDate])
 }
 
+/// Void, don't delete — a payment that reached the bank is a financial fact,
+/// and §7.13 requires the audit trail to keep it either way.
+enum BookingPaymentStatus {
+  ACTIVE
+  VOIDED
+  /// The whole amount was reversed by the homestay. Partial refunds are NOT
+  /// modelled here: they are an ExpenseSettlement of type GUEST_REFUND, which
+  /// keeps one amount in one place and lets the receipt stay ACTIVE.
+  REFUNDED
+}
+
+enum BookingPaymentMethod {
+  AIRBNB_PAYOUT
+  BANK_TRANSFER
+  INSTAPAY
+  CASH_DEPOSIT
+  OTHER
+}
+
+/// One actual receipt of money against a booking — a deposit, an installment,
+/// an Airbnb payout, a final balance. `amount` is a positive value; direction is
+/// implied by the row type, never by a sign. Sums are computed in integer
+/// centavos (src/lib/finance.ts) so a table's rows always add to its total.
+model BookingPayment {
+  id           String               @id @default(cuid())
+  bookingId    String
+  booking      Booking              @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  amount       Decimal              @db.Decimal(10, 2)
+  /// When the money actually arrived (a stay in July paid in June is a June
+  /// receipt). Stored UTC-midnight from a `YYYY-MM-DD` local date — see the
+  /// mappers.
+  receivedDate DateTime
+  method       BookingPaymentMethod @default(OTHER)
+  /// Bank reference / Airbnb confirmation code when known. Free text, but
+  /// searching it is how the reconciliation workspace finds candidates.
+  reference    String               @default("")
+  notes        String               @default("")
+  status       BookingPaymentStatus @default(ACTIVE)
+  /// Display label from the identity picker, matching `createdBy` on Booking.
+  /// Deliberately not a User FK — see the User model comment.
+  createdBy    String
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+  voidedAt     DateTime?
+  voidedBy     String?
+
+  @@index([bookingId])
+  /// The outstanding-inflows list is "active payments, newest first, for a
+  /// given receive date" — this covers it without a table scan.
+  @@index([status, receivedDate])
+}
+
+/// Void, don't delete — same reason as BookingPayment.
+enum ExpenseSettlementStatus {
+  ACTIVE
+  VOIDED
+}
+
+/// What moved the money. See RECONCILIATION_SPEC §4.5 and §11.2 for why
+/// GUEST_REFUND lives here rather than in the adjustment categories.
+enum SettlementType {
+  /// Homestay paid the vendor directly.
+  DIRECT_VENDOR_PAYMENT
+  /// Homestay paid back whoever in `paidBy` fronted the cost. This is the
+  /// moment an owner-fronted expense becomes a bank outflow (§4.1).
+  OWNER_REIMBURSEMENT
+  /// Settlement for the expense the app created for a paid cleaning.
+  CLEANER_PAYMENT
+  /// Money returned to a guest. Modelled as an outflow against the booking,
+  /// never as a negative payment on the receipt (§4.2).
+  GUEST_REFUND
+  OTHER
+}
+
+/// One actual movement of money out of the homestay bank against an expense.
+/// The expense itself records the cost and its purpose; the settlement records
+/// when the money actually left. An expense paid out of pocket by an owner has
+/// no settlement until they're reimbursed.
+model ExpenseSettlement {
+  id                 String                  @id @default(cuid())
+  /// Set for every type except GUEST_REFUND, which settles against a booking.
+  /// Exactly one of `expenseId` / `refundForBookingId` must be set —
+  /// enforced in the write action (see expense-settlements.ts), since Prisma
+  /// has no portable CHECK constraint across both the presence and
+  /// exclusivity rules.
+  expenseId          String?
+  expense            Expense?                @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  /// Set only for settlementType GUEST_REFUND — the booking the money went
+  /// back to. Cascade matches BookingPayment's, so removing the booking removes
+  /// its refunds too.
+  refundForBookingId String?
+  refundForBooking   Booking?                @relation("BookingRefunds", fields: [refundForBookingId], references: [id], onDelete: Cascade)
+  amount             Decimal                 @db.Decimal(10, 2)
+  /// When the money left the bank — the reimbursement date, not the expense
+  /// date. A July cleaning paid in August is an August outflow (§4.1).
+  paidDate           DateTime
+  settlementType     SettlementType
+  /// Who was reimbursed, for OWNER_REIMBURSEMENT. Free text so it matches the
+  /// `paidBy` value on the expense without a join.
+  reimbursedTo       String                  @default("")
+  reference          String                  @default("")
+  notes              String                  @default("")
+  status             ExpenseSettlementStatus @default(ACTIVE)
+  /// The identity-picker label, same convention as BookingPayment.createdBy.
+  createdBy          String
+  createdAt          DateTime                @default(now())
+  updatedAt          DateTime                @updatedAt
+  voidedAt           DateTime?
+  voidedBy           String?
+
+  @@index([expenseId])
+  /// Outstanding-outflows list, same shape as BookingPayment's second index.
+  @@index([status, paidDate])
+  /// Refunds are looked up per booking, not per expense.
+  @@index([refundForBookingId])
+}
+
 model Expense {
   id           String              @id @default(cuid())
   date         DateTime
@@ -152,6 +281,9 @@ model Expense {
   /// Cascade: deleting the cleaning record deletes its expense too.
   cleaningId   String?             @unique
   cleaning     CleaningSchedule?   @relation(fields: [cleaningId], references: [id], onDelete: Cascade)
+  /// One row per time money actually left the bank for this expense. Empty
+  /// for an owner-fronted expense until they're reimbursed (§4.5).
+  settlements  ExpenseSettlement[]
   createdAt    DateTime            @default(now())
   updatedAt    DateTime            @updatedAt
 
@@ -186,20 +318,20 @@ enum BookingRequestStatus {
 /// Requests don't block the calendar — only approving one creates a real
 /// (Direct, payment pending) Booking, which is linked back here.
 model BookingRequest {
-  id          String               @id @default(cuid())
-  guestName   String
-  contactInfo String
-  checkIn     DateTime
-  checkOut    DateTime
-  guestsCount Int
-  message     String               @default("")
-  status      BookingRequestStatus @default(PENDING)
+  id                    String               @id @default(cuid())
+  guestName             String
+  contactInfo           String
+  checkIn               DateTime
+  checkOut              DateTime
+  guestsCount           Int
+  message               String               @default("")
+  status                BookingRequestStatus @default(PENDING)
   /// Set when approved. SetNull: deleting the booking later keeps the
   /// request as a record of what was asked for.
-  bookingId   String?              @unique
-  booking     Booking?             @relation(fields: [bookingId], references: [id], onDelete: SetNull)
-  decidedBy   String?
-  decidedAt   DateTime?
+  bookingId             String?              @unique
+  booking               Booking?             @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+  decidedBy             String?
+  decidedAt             DateTime?
   /// Optional InstaPay proof the guest (or an owner, on their behalf)
   /// uploaded. Bytes are magic-byte-sniffed at write; see
   /// `src/lib/payment-screenshot.ts`. Capped at MAX_PAYMENT_SCREENSHOT_BYTES.
@@ -209,9 +341,9 @@ model BookingRequest {
   /// + size rules as the payment screenshot. The guest-side form requires
   /// it; the server doesn't (old clients stay compatible) — but the form is
   /// the only realistic path guests use.
-  idPhoto     Bytes?
-  idPhotoMime String?
-  createdAt   DateTime             @default(now())
+  idPhoto               Bytes?
+  idPhotoMime           String?
+  createdAt             DateTime             @default(now())
 
   @@index([status, createdAt])
 }
@@ -226,42 +358,42 @@ model BookingRequest {
 /// both are zero, the booking page hides the breakdown (no estimate to
 /// give).
 model PaymentConfig {
-  id            String   @id @default("singleton")
-  bankName      String
-  accountName   String
-  accountNumber String
+  id                        String   @id @default("singleton")
+  bankName                  String
+  accountName               String
+  accountNumber             String
   /// Optional QR override uploaded from Settings. Same magic-byte + size
   /// rules as a payment screenshot (src/lib/payment-screenshot.ts). When
   /// null, /book falls back to /public/qr-code.JPG so the static file
   /// works as a built-in default.
-  qrCode        Bytes?
-  qrCodeMime    String?
+  qrCode                    Bytes?
+  qrCodeMime                String?
   /// Per-night rate shown on /book. Informational only — the owner still
   /// fills totalPayout per booking (CSV-imported or hand-entered); this is
   /// the breakdown the guest sees *before* they send the request.
-  nightlyRate   Decimal  @default(0) @db.Decimal(10, 2)
+  nightlyRate               Decimal  @default(0) @db.Decimal(10, 2)
   /// Cleaning fee added for short-term bookings (< 5 nights). Used on the
   /// /book breakdown when the stay is shorter than the long-stay cutoff.
-  cleaningFee   Decimal  @default(0) @db.Decimal(10, 2)
+  cleaningFee               Decimal  @default(0) @db.Decimal(10, 2)
   /// Cleaning fee for long-term bookings (>= 5 nights). If 0, falls back to
   /// `cleaningFee` for stays that would have used this tier.
-  cleaningFeeLong Decimal @default(0) @db.Decimal(10, 2)
+  cleaningFeeLong           Decimal  @default(0) @db.Decimal(10, 2)
   /// The number of nights at which a stay flips from "short" to "long" and
   /// starts using `cleaningFeeLong` instead of `cleaningFee`. Owner-tunable
   /// from Payment Settings — defaults to 5 to preserve the original
   /// behavior. Capped at 60 since 60+ nights is already in "long-term"
   /// territory; lower bound is 2 (a 1-night stay can't be "long").
-  longStayThresholdNights Int @default(5)
+  longStayThresholdNights   Int      @default(5)
   /// Whether the ID photo is required on the public /book form. When false,
   /// the field is shown as optional and the form doesn't block submission
   /// for it. The server stays permissive regardless (old /book versions
   /// keep working).
-  idPhotoRequired          Boolean  @default(true)
+  idPhotoRequired           Boolean  @default(true)
   /// Whether the payment screenshot is required on the public /book form.
   /// When true, the form blocks submission until a screenshot is attached.
   paymentScreenshotRequired Boolean  @default(false)
-  updatedAt     DateTime @updatedAt
-  updatedBy     String
+  updatedAt                 DateTime @updatedAt
+  updatedBy                 String
 }
 
 /// The last good copy of the Airbnb calendar feed (AIRBNB_ICAL_URL), so its
