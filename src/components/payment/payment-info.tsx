@@ -7,6 +7,7 @@ import { CheckIcon, CopyIcon } from "@/components/ui/icons";
 import { getPublicPaymentConfig } from "@/lib/data/payment-config";
 
 import type { PaymentConfigData } from "@/lib/data/payment-config";
+import { formatAccountNumber } from "@/lib/format";
 
 const FALLBACK_QR_PATH = "/qr-code.JPG";
 
@@ -93,7 +94,7 @@ export function PaymentInfo() {
 
           <dt className="text-slate-500">Account number</dt>
           <dd className="flex items-center gap-2">
-            <span className="font-mono font-medium text-slate-900">{config.accountNumber}</span>
+            <span className="font-mono font-medium text-slate-900">{formatAccountNumber(config.accountNumber)}</span>
             <CopyButton value={config.accountNumber} />
           </dd>
         </dl>

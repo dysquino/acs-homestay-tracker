@@ -7,6 +7,7 @@ import { Field, Input } from "@/components/ui/field";
 import { ImageIcon, TrashIcon, UploadIcon } from "@/components/ui/icons";
 import { setPaymentConfig } from "@/lib/data/payment-config";
 import type { PaymentConfigData } from "@/lib/data/payment-config";
+import { formatAccountNumber } from "@/lib/format";
 import { useIdentity } from "@/lib/identity";
 import { MAX_PAYMENT_SCREENSHOT_BYTES } from "@/lib/payment-screenshot";
 import { cn } from "@/lib/cn";
@@ -32,6 +33,8 @@ export function PaymentSettingsForm({
   const { user } = useIdentity();
   const [bankName, setBankName] = useState(initial?.bankName ?? "");
   const [accountName, setAccountName] = useState(initial?.accountName ?? "");
+  // Stored as digits only; rendered with spaces (formatAccountNumber) so the
+  // input shows "1094 2067 0200" instead of a raw digit blob.
   const [accountNumber, setAccountNumber] = useState(initial?.accountNumber ?? "");
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -155,11 +158,10 @@ export function PaymentSettingsForm({
           {(id) => (
             <Input
               id={id}
-              value={accountNumber}
-              onChange={(e) => setAccountNumber(e.target.value)}
+              value={formatAccountNumber(accountNumber)}
+              onChange={(e) => setAccountNumber(e.target.value.replace(/\D/g, ""))}
               maxLength={50}
               required
-              inputMode="numeric"
             />
           )}
         </Field>

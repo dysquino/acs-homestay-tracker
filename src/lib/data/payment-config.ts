@@ -83,7 +83,12 @@ export async function setPaymentConfig(input: SetPaymentConfigInput): Promise<Pa
   await requireSiteAccess();
   const bankName = String(input.bankName ?? "").trim().slice(0, 100);
   const accountName = String(input.accountName ?? "").trim().slice(0, 100);
-  const accountNumber = String(input.accountNumber ?? "").trim().slice(0, 50);
+  // Strip everything but digits so we store a canonical form; the view layer
+  // re-inserts spaces for readability. max 50 chars covers up to a 50-digit
+  // account number, well above any real bank format.
+  const accountNumber = String(input.accountNumber ?? "")
+    .replace(/\D/g, "")
+    .slice(0, 50);
   const updatedBy = String(input.updatedBy ?? "").trim().slice(0, 100) || "Unknown";
   if (!bankName) throw new Error("Bank name is required.");
   if (!accountName) throw new Error("Account name is required.");
