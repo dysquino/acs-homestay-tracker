@@ -6,6 +6,7 @@ import { PageHeader } from "@/components/layout/app-shell";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { AdjustmentForm } from "@/components/reconciliation/adjustment-form";
+import { AuditWizard } from "@/components/reconciliation/audit-wizard";
 import { MatchPanel, type SheetState } from "@/components/reconciliation/match-panel";
 import {
   centsToDigits,
@@ -96,6 +97,8 @@ export default function ReconciliationPage() {
    */
   const [sheetState, setSheetState] = useState<SheetState>("collapsed");
   const [filter, setFilter] = useState<PoolFilter>("AUTO");
+  /** The Monthly Audit wizard (§6.3) runs inside this route, full screen. */
+  const [auditing, setAuditing] = useState(false);
   const { user } = useIdentity();
 
   /** Running totals for the selection bar (§7.11). Exact, in centavos. */
@@ -296,11 +299,26 @@ export default function ReconciliationPage() {
     );
   }
 
+  if (auditing) {
+    return (
+      <AuditWizard
+        month={month}
+        onClose={() => setAuditing(false)}
+        onLeaveReview={() => setAuditing(false)}
+      />
+    );
+  }
+
   return (
     <>
       <PageHeader
         title="Reconciliation"
         description="Recorded money waiting to be matched to your bank account."
+        action={
+          <Button variant="primary" onClick={() => setAuditing(true)} className="w-full sm:w-auto">
+            Monthly Audit
+          </Button>
+        }
       />
 
       <div className="mb-5 flex items-center gap-2">
