@@ -1,10 +1,19 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import { PageHeader } from "@/components/layout/app-shell";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { MatchPanel } from "@/components/reconciliation/match-panel";
+import {
+  centsToDigits,
+  EMPTY_ENTRY,
+  entryToAmount,
+  type AmountEntry,
+} from "@/lib/amount-entry";
+import { createMatch, reverseMatch } from "@/lib/data/reconciliation-matches";
+import { cn } from "@/lib/cn";
 import { ChevronLeftIcon, ChevronRightIcon } from "@/components/ui/icons";
 import { StatTile } from "@/components/ui/stat";
 import {
@@ -14,6 +23,7 @@ import {
 } from "@/lib/data/reconciliation";
 import { addMonths, startOfMonth, today } from "@/lib/dates";
 import { formatCurrency, formatMonth, formatShortDate } from "@/lib/format";
+import { useIdentity } from "@/lib/identity";
 import { useStore } from "@/lib/store";
 
 /**
@@ -39,6 +49,84 @@ export default function ReconciliationPage() {
     setMonth(startOfMonth(addMonths(`${month}-01`, delta)).slice(0, 7));
   const [data, setData] = useState<WorkspaceMonth | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /** The pool item the owner is matching right now, if any. */
+  const [selected, setSelected] = useState<PoolItem | null>(null);
+  const [undoing, setUndoing] = useState<string | null>(null);
+  const [entry, setEntry] = useState<AmountEntry>(EMPTY_ENTRY);
+  const [bankDate, setBankDate] = useState(today());
+  const [busy, setBusy] = useState(false);
+  const [matchError, setMatchError] = useState<string | null>(null);
+  const { user } = useIdentity();
+
+  /**
+   * Choosing a pool item pre-fills its amount. Clicking the transaction IS the
+   * statement line in the common case, so this saves retyping the figure.
+   */
+  const pick = useCallback((item: PoolItem) => {
+    setSelected(item);
+    setEntry({ digits: centsToDigits(item.amount), negative: false });
+    setMatchError(null);
+  }, []);
+
+  function clearMatch() {
+    setEntry(EMPTY_ENTRY);
+    setSelected(null);
+    setMatchError(null);
+  }
+
+  async function confirmMatch() {
+    if (!selected) return;
+    const amount = entryToAmount(entry);
+    if (amount === null) return;
+    setBusy(true);
+    setMatchError(null);
+    try {
+      await createMatch({
+        sourceType:
+          selected.sourceType === "booking_payment" ? "BOOKING_PAYMENT" : "EXPENSE_SETTLEMENT",
+        sourceId: selected.sourceId,
+        amount: Math.abs(amount),
+        bankPostedDate: bankDate,
+        matchedBy: user?.name ?? "Unknown",
+      });
+      setEntry(EMPTY_ENTRY);
+      setSelected(null);
+      await reload();
+    } catch (e) {
+      setMatchError(e instanceof Error ? e.message : "Couldn't record that match.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /** Re-read the month after a write. Declared after `load` is defined. */
+  const reload = useCallback(async () => {
+    try {
+      setData(await getWorkspaceMonth(month));
+    } catch {
+      setError("Couldn't refresh after that change.");
+    }
+  }, [month]);
+
+  /**
+   * Undo a match, putting the transaction back in the pool (§7.13).
+   * Reversal, never deletion — the match stays in the audit trail.
+   */
+  const undo = useCallback(
+    async (matchId: string) => {
+      setUndoing(matchId);
+      try {
+        await reverseMatch(matchId, user?.name ?? "Unknown");
+        await reload();
+      } catch {
+        setError("Couldn't undo that match.");
+      } finally {
+        setUndoing(null);
+      }
+    },
+    [reload, user],
+  );
+
 
   useEffect(() => {
     // Guard against a slow earlier month overwriting a faster later one when
@@ -140,21 +228,42 @@ export default function ReconciliationPage() {
       {data === null ? (
         <p className="text-sm text-slate-500">Loading…</p>
       ) : (
-        <div className="grid gap-5 xl:grid-cols-2">
-          <Pool
-            title="Money in"
-            subtitle="Recorded receipts that haven't been matched to a deposit yet."
-            items={data.inflows}
-            empty="Every receipt recorded this month has been matched."
-            tone="in"
+        <div className="grid gap-5 xl:grid-cols-[22rem_minmax(0,1fr)]">
+          <MatchPanel
+            entry={entry}
+            onEntryChange={setEntry}
+            bankDate={bankDate}
+            onBankDateChange={setBankDate}
+            inflows={data.inflows}
+            outflows={data.outflows}
+            selected={selected}
+            onSelect={pick}
+            onClear={clearMatch}
+            onConfirm={confirmMatch}
+            busy={busy}
+            error={matchError}
+            monthLabel={formatMonth(`${month}-01`)}
           />
-          <Pool
-            title="Money out"
-            subtitle="Recorded payouts that haven't been matched to a debit yet."
-            items={data.outflows}
-            empty="Every payout recorded this month has been matched."
-            tone="out"
-          />
+          <div className="grid gap-5">
+            <Pool
+              title="Money in"
+              subtitle="Recorded receipts that haven't been matched to a deposit yet."
+              items={data.inflows}
+              empty="Every receipt recorded this month has been matched."
+              tone="in"
+              selectedKey={selected?.key ?? null}
+              onSelect={pick}
+            />
+            <Pool
+              title="Money out"
+              subtitle="Recorded payouts that haven't been matched to a debit yet."
+              items={data.outflows}
+              empty="Every payout recorded this month has been matched."
+              tone="out"
+              selectedKey={selected?.key ?? null}
+              onSelect={pick}
+            />
+          </div>
         </div>
       )}
 
@@ -167,7 +276,7 @@ export default function ReconciliationPage() {
         </div>
         {data === null ? null : data.history.length === 0 ? (
           <p className="px-4 py-6 text-sm text-slate-500 sm:px-5">
-            Nothing matched yet. Matching comes with the next pass.
+            Nothing matched yet. Pick a transaction and match it, or type its amount on the left.
           </p>
         ) : (
           <ul className="divide-y divide-slate-100">
@@ -180,13 +289,23 @@ export default function ReconciliationPage() {
                     {h.detail ? ` · ${h.detail}` : ""} · {h.matchedBy}
                   </p>
                 </div>
-                <p
-                  className={`whitespace-nowrap font-medium tabular-nums ${
-                    h.sourceType === "booking_payment" ? "text-emerald-700" : "text-rose-700"
-                  }`}
-                >
-                  {formatCurrency(h.amount)}
-                </p>
+                <div className="flex shrink-0 items-center gap-2">
+                  <p
+                    className={`whitespace-nowrap font-medium tabular-nums ${
+                      h.sourceType === "booking_payment" ? "text-emerald-700" : "text-rose-700"
+                    }`}
+                  >
+                    {formatCurrency(h.amount)}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => undo(h.key)}
+                    disabled={undoing === h.key}
+                    className="rounded-md px-2 py-1 text-xs font-medium text-slate-500 hover:bg-slate-100 hover:text-slate-800 disabled:opacity-50"
+                  >
+                    {undoing === h.key ? "Undoing…" : "Undo"}
+                  </button>
+                </div>
               </li>
             ))}
           </ul>
@@ -202,12 +321,16 @@ function Pool({
   items,
   empty,
   tone,
+  selectedKey,
+  onSelect,
 }: {
   title: string;
   subtitle: string;
   items: PoolItem[];
   empty: string;
   tone: "in" | "out";
+  selectedKey: string | null;
+  onSelect: (item: PoolItem) => void;
 }) {
   return (
     <Card className="h-fit">
@@ -223,24 +346,38 @@ function Pool({
       ) : (
         <ul className="divide-y divide-slate-100">
           {items.map((item) => (
-            <li key={item.key} className="flex items-start justify-between gap-3 px-4 py-2.5 text-sm sm:px-5">
-              <div className="min-w-0">
-                <p className="font-medium text-slate-900">{item.label}</p>
-                <p className="text-xs text-slate-500">
-                  {formatShortDate(item.date)} · {item.detail}
-                  {item.reference ? ` · ${item.reference}` : ""}
-                </p>
-                {item.older ? (
-                  <p className="text-xs text-amber-700">Carried over from an earlier month</p>
-                ) : null}
-              </div>
-              <p
-                className={`whitespace-nowrap font-medium tabular-nums ${
-                  tone === "in" ? "text-emerald-700" : "text-rose-700"
-                }`}
+            <li key={item.key}>
+              <button
+                type="button"
+                onClick={() => onSelect(item)}
+                aria-pressed={selectedKey === item.key}
+                className={cn(
+                  "flex w-full items-start justify-between gap-3 px-4 py-2.5 text-left text-sm transition-colors sm:px-5",
+                  selectedKey === item.key
+                    ? "bg-brand-50 ring-1 ring-inset ring-brand-600"
+                    : "hover:bg-slate-50",
+                )}
               >
-                {formatCurrency(item.amount)}
-              </p>
+                <span className="min-w-0">
+                  <span className="block font-medium text-slate-900">{item.label}</span>
+                  <span className="block text-xs text-slate-500">
+                    {formatShortDate(item.date)} · {item.detail}
+                    {item.reference ? ` · ${item.reference}` : ""}
+                  </span>
+                  {item.older ? (
+                    <span className="block text-xs text-amber-700">
+                      Carried over from an earlier month
+                    </span>
+                  ) : null}
+                </span>
+                <span
+                  className={`whitespace-nowrap font-medium tabular-nums ${
+                    tone === "in" ? "text-emerald-700" : "text-rose-700"
+                  }`}
+                >
+                  {formatCurrency(item.amount)}
+                </span>
+              </button>
             </li>
           ))}
         </ul>
