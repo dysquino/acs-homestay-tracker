@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation";
 
 import { PageHeader } from "@/components/layout/app-shell";
 import { ExpenseForm } from "@/components/expenses/expense-form";
+import { ExpenseSettlements } from "@/components/expenses/expense-settlements";
 import { Badge, RefundBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader } from "@/components/ui/card";
@@ -66,7 +67,7 @@ export default function ExpensesPage() {
 
 function ExpensesPageContent() {
   const params = useSearchParams();
-  const { expenses, bookings, deleteExpense, updateExpense } = useStore();
+  const { expenses, bookings, deleteExpense, updateExpense, resync, reconciliationEnabled } = useStore();
 
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Expense | null>(null);
@@ -495,6 +496,11 @@ function ExpensesPageContent() {
                 { label: "Added by", value: selected.createdBy },
               ]
             : []
+        }
+        body={
+          selected && reconciliationEnabled ? (
+            <ExpenseSettlements expense={selected} onChanged={resync} />
+          ) : null
         }
         note={
           selected?.cleaningId ? (

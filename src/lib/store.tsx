@@ -45,6 +45,7 @@ import {
   updateExpense as updateExpenseAction,
 } from "./data/expenses";
 import { importAirbnbBookings, type ImportInstruction, type ImportResult } from "./data/import";
+import { getReconciliationStatus } from "./data/reconciliation-status";
 import { useIdentity } from "./identity";
 import type {
   Booking,
@@ -93,6 +94,13 @@ type Data = {
   airbnbStatus: AirbnbSyncStatus;
   /** Dates the owners closed with no guest (maintenance, own use). */
   dateBlocks: DateBlock[];
+  /**
+   * Whether the reconciliation feature is switched on. Driven by the toggle in
+   * Payment Settings (or the RECONCILIATION_ENABLED override). When false the
+   * booking-payment and expense-settlement panels aren't rendered at all,
+   * rather than being shown and then rejecting the write.
+   */
+  reconciliationEnabled: boolean;
 };
 
 type StoreValue = Data & {
@@ -149,6 +157,7 @@ const EMPTY: Data = {
   airbnbFinished: [],
   airbnbStatus: { enabled: false, fetchedAt: null, error: null },
   dateBlocks: [],
+  reconciliationEnabled: false,
 };
 
 export function StoreProvider({ children }: { children: ReactNode }) {
@@ -184,6 +193,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }
     if (request !== latest.current) return false;
     const [bookings, expenses, cleaning, bookingRequests, airbnb, dateBlocks] = lists;
+    // Read separately from the lists above: if this call were to fail the whole
+    // load would fail, and losing the entire app over a toggle read would be a
+    // poor trade. Fall back to "off", which hides the panels — the safe
+    // direction, since their writes would be refused anyway.
+    let reconciliationEnabled = false;
+    try {
+      ({ enabled: reconciliationEnabled } = await getReconciliationStatus());
+    } catch {
+      reconciliationEnabled = false;
+    }
     setData({
       bookings,
       expenses,
@@ -193,6 +212,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       airbnbFinished: airbnb.finished,
       airbnbStatus: airbnb.status,
       dateBlocks,
+      reconciliationEnabled,
     });
     return true;
   }, []);
