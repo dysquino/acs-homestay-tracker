@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
+  envReconciliationOverride,
   isReconciliationEnabled,
   reconciliationEnabledForClient,
-  requireReconciliationEnabled,
 } from "../reconciliation-flag";
 
 const original = process.env.RECONCILIATION_ENABLED;
@@ -17,57 +17,67 @@ afterEach(() => {
   else process.env.RECONCILIATION_ENABLED = original;
 });
 
-describe("isReconciliationEnabled", () => {
-  it("is off when the variable is absent", () => {
-    // Fail closed: an audit feature must not be reachable by accident just
-    // because an env var went missing.
-    expect(isReconciliationEnabled()).toBe(false);
+describe("envReconciliationOverride", () => {
+  it("is null when the variable is absent, so the DB row decides", () => {
+    expect(envReconciliationOverride()).toBeNull();
   });
 
-  it("is on only for an explicit true", () => {
+  it("reports an explicit env value in either direction", () => {
     process.env.RECONCILIATION_ENABLED = "true";
-    expect(isReconciliationEnabled()).toBe(true);
+    expect(envReconciliationOverride()).toBe(true);
+    process.env.RECONCILIATION_ENABLED = "false";
+    expect(envReconciliationOverride()).toBe(false);
+  });
+});
+
+describe("isReconciliationEnabled", () => {
+  it("follows the stored row when the env var is unset", () => {
+    expect(isReconciliationEnabled(true)).toBe(true);
+    expect(isReconciliationEnabled(false)).toBe(false);
   });
 
-  it("tolerates case and surrounding whitespace", () => {
-    process.env.RECONCILIATION_ENABLED = " TRUE ";
-    expect(isReconciliationEnabled()).toBe(true);
+  it("is off when there is no stored row yet", () => {
+    // A missing config row must not leave an audit feature reachable.
+    expect(isReconciliationEnabled(null)).toBe(false);
+    expect(isReconciliationEnabled(undefined)).toBe(false);
   });
 
-  it("treats anything else as off", () => {
-    // "false", "1", "yes" and typos must not switch an audit feature on.
-    for (const value of ["false", "0", "1", "yes", "on", "enabled", "tru", ""]) {
+  it("lets the env var force it off, overriding a stored on", () => {
+    // The panic button: no deploy, no database edit, feature off everywhere.
+    process.env.RECONCILIATION_ENABLED = "false";
+    expect(isReconciliationEnabled(true)).toBe(false);
+  });
+
+  it("lets the env var force it on, overriding a stored off", () => {
+    process.env.RECONCILIATION_ENABLED = "true";
+    expect(isReconciliationEnabled(false)).toBe(true);
+  });
+
+  it("treats any non-'true' env value as off, never as truthy", () => {
+    for (const value of ["0", "1", "yes", "on", "enabled", "tru", ""]) {
       process.env.RECONCILIATION_ENABLED = value;
-      expect(isReconciliationEnabled(), value).toBe(false);
+      expect(isReconciliationEnabled(true), value).toBe(false);
     }
+  });
+
+  it("tolerates case and whitespace in the env value", () => {
+    process.env.RECONCILIATION_ENABLED = " TRUE ";
+    expect(isReconciliationEnabled(false)).toBe(true);
   });
 
   it("re-reads the variable each call, so a toggle takes effect without restart", () => {
     process.env.RECONCILIATION_ENABLED = "false";
-    expect(isReconciliationEnabled()).toBe(false);
+    expect(isReconciliationEnabled(true)).toBe(false);
     process.env.RECONCILIATION_ENABLED = "true";
-    expect(isReconciliationEnabled()).toBe(true);
-  });
-});
-
-describe("requireReconciliationEnabled", () => {
-  it("passes when the feature is on", () => {
-    process.env.RECONCILIATION_ENABLED = "true";
-    expect(() => requireReconciliationEnabled()).not.toThrow();
-  });
-
-  it("throws when the feature is off, so no write can land", () => {
-    expect(() => requireReconciliationEnabled()).toThrow(/disabled/i);
-    process.env.RECONCILIATION_ENABLED = "false";
-    expect(() => requireReconciliationEnabled()).toThrow(/disabled/i);
+    expect(isReconciliationEnabled(false)).toBe(true);
   });
 });
 
 describe("reconciliationEnabledForClient", () => {
-  it("mirrors the server value as a plain boolean", () => {
-    process.env.RECONCILIATION_ENABLED = "true";
-    expect(reconciliationEnabledForClient()).toBe(true);
+  it("mirrors the server's resolution as a plain boolean", () => {
+    expect(reconciliationEnabledForClient(true)).toBe(true);
+    expect(reconciliationEnabledForClient(false)).toBe(false);
     process.env.RECONCILIATION_ENABLED = "false";
-    expect(reconciliationEnabledForClient()).toBe(false);
+    expect(reconciliationEnabledForClient(true)).toBe(false);
   });
 });

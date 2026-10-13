@@ -392,6 +392,16 @@ model PaymentConfig {
   /// Whether the payment screenshot is required on the public /book form.
   /// When true, the form blocks submission until a screenshot is attached.
   paymentScreenshotRequired Boolean  @default(false)
+  /// Master switch for the reconciliation feature (the booking-payment and
+  /// expense-settlement panels and their server actions). Owner-toggleable
+  /// from Payment Settings so it can be switched off between reconciles
+  /// without a deploy. Defaults to false: the feature stays out of the way
+  /// until someone deliberately turns it on.
+  ///
+  /// RECONCILIATION_ENABLED, when set, wins over this — see
+  /// src/lib/reconciliation-flag.ts. That keeps an operator able to force the
+  /// feature off for every deployment at once, even if this row says on.
+  reconciliationEnabled    Boolean  @default(false)
   updatedAt                 DateTime @updatedAt
   updatedBy                 String
 }

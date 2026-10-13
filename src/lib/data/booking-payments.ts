@@ -2,7 +2,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { derivePaymentStatus } from "@/lib/payment-status";
-import { requireReconciliationEnabled } from "@/lib/reconciliation-flag";
+import { requireReconciliationEnabled } from "./reconciliation-status";
 import type { BookingPayment, BookingPaymentInput } from "@/lib/types";
 import { ValidationError, validateBookingPayment } from "@/lib/validation";
 
@@ -29,7 +29,7 @@ import {
 /** Receipts for one booking, newest receipt first. */
 export async function listBookingPayments(bookingId: string): Promise<BookingPayment[]> {
   await requireSiteAccess();
-  requireReconciliationEnabled();
+  await requireReconciliationEnabled();
   const rows = await prisma.bookingPayment.findMany({
     where: { bookingId },
     orderBy: { receivedDate: "desc" },
@@ -40,7 +40,7 @@ export async function listBookingPayments(bookingId: string): Promise<BookingPay
 /** Every receipt across all bookings — the future workspace's inflow pool. */
 export async function listAllBookingPayments(): Promise<BookingPayment[]> {
   await requireSiteAccess();
-  requireReconciliationEnabled();
+  await requireReconciliationEnabled();
   const rows = await prisma.bookingPayment.findMany({
     orderBy: { receivedDate: "desc" },
   });
@@ -49,7 +49,7 @@ export async function listAllBookingPayments(): Promise<BookingPayment[]> {
 
 export async function createBookingPayment(input: BookingPaymentInput): Promise<BookingPayment> {
   await requireSiteAccess();
-  requireReconciliationEnabled();
+  await requireReconciliationEnabled();
   validateBookingPayment(input);
   const row = await prisma.$transaction(async (tx) => {
     const booking = await tx.booking.findUniqueOrThrow({ where: { id: input.bookingId } });
@@ -70,7 +70,7 @@ export async function updateBookingPayment(
   patch: Partial<BookingPaymentInput>,
 ): Promise<void> {
   await requireSiteAccess();
-  requireReconciliationEnabled();
+  await requireReconciliationEnabled();
   await prisma.$transaction(async (tx) => {
     const existing = await tx.bookingPayment.findUniqueOrThrow({ where: { id } });
     // `bookingPaymentFromDb` adds id/status/timestamps, which are all valid
@@ -99,7 +99,7 @@ export async function updateBookingPayment(
  */
 export async function voidBookingPayment(id: string, voidedBy: string): Promise<void> {
   await requireSiteAccess();
-  requireReconciliationEnabled();
+  await requireReconciliationEnabled();
   if (!voidedBy.trim()) throw new ValidationError("Voided by is required.");
   await prisma.$transaction(async (tx) => {
     const existing = await tx.bookingPayment.findUniqueOrThrow({ where: { id } });
