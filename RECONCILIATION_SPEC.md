@@ -893,7 +893,18 @@ Direction values:
 
 Constraints and indexes:
 
-- Partial unique index on `(periodId, sourceType, sourceId)` where `reversedAt IS NULL`, preventing two active matches against the same source row in the same period.
+- Index on `(periodId, sourceType, sourceId)` where `reversedAt IS NULL`, to make the
+  "how much of this source is already matched" read fast.
+- **This is deliberately not a unique index.** An earlier draft of this spec asked for a
+  partial unique constraint on `(periodId, sourceType, sourceId)` where `reversedAt IS NULL`,
+  which directly contradicts §7.10: "one expected payment matched across several bank
+  deposits" and "partial matching of a source record" both require two live matches against
+  the same source row in the same period. A unique constraint there would make split
+  matching impossible to record.
+  Double-consumption is prevented by §14's mechanism instead — the available amount is
+  re-read inside the write transaction and validated before the insert, so concurrent
+  attempts give one success and one clear conflict. The index is for read performance;
+  correctness comes from the transaction.
 - Index on `(periodId, bankPostedDate)` for ledger ordering.
 
 ### 11.5 ReconciliationAdjustment

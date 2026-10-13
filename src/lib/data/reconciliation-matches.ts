@@ -17,6 +17,7 @@ import {
 
 import { requireSiteAccess } from "./access";
 import { isoToDate } from "./mappers";
+import { recordAudit, resolveWritablePeriod } from "./reconciliation-periods";
 import { requireReconciliationEnabled } from "./reconciliation-status";
 
 /**
@@ -130,6 +131,9 @@ export async function createMatch(input: CreateMatchInput): Promise<CreateMatchR
   const matchedBy = assertActor(input.matchedBy);
 
   const created = await prisma.$transaction(async (tx) => {
+    // Resolved first, inside the transaction: it both decides which month the
+    // match belongs to and refuses the write if that month is already sealed.
+    const periodId = await resolveWritablePeriod(tx, bankPostedDate, matchedBy);
     const source = await readSource(tx, input.sourceType, input.sourceId);
     // Both reads happen here, inside the transaction — never before it.
     const already = await matchedAgainst(tx, input.sourceType, input.sourceId);
@@ -139,6 +143,7 @@ export async function createMatch(input: CreateMatchInput): Promise<CreateMatchR
     const key = input.statementGroupKey || crypto.randomUUID();
     const row = await tx.reconciliationMatch.create({
       data: {
+        periodId,
         sourceType: input.sourceType,
         sourceId: input.sourceId,
         direction: directionFor(input.sourceType),
@@ -149,6 +154,12 @@ export async function createMatch(input: CreateMatchInput): Promise<CreateMatchR
         matchedBy,
       },
       select: { id: true, statementGroupKey: true },
+    });
+    await recordAudit(tx, {
+      periodId,
+      eventType: "MATCH_CREATED",
+      actor: matchedBy,
+      metadata: { matchId: row.id, sourceType: input.sourceType, sourceId: input.sourceId },
     });
     return { id: row.id, statementGroupKey: row.statementGroupKey ?? key };
   });
@@ -201,6 +212,7 @@ export async function createGroupedMatches(
   const key = crypto.randomUUID();
 
   await prisma.$transaction(async (tx) => {
+    const periodId = await resolveWritablePeriod(tx, bankPostedDate, matchedBy);
     for (const request of requests) {
       const source = await readSource(tx, request.sourceType, request.sourceId);
       const already = await matchedAgainst(tx, request.sourceType, request.sourceId);
@@ -209,8 +221,9 @@ export async function createGroupedMatches(
     }
     // Validated every record before writing any, so the group is all-or-nothing.
     for (const request of requests) {
-      await tx.reconciliationMatch.create({
+      const created = await tx.reconciliationMatch.create({
         data: {
+          periodId,
           sourceType: request.sourceType,
           sourceId: request.sourceId,
           direction: directionFor(request.sourceType),
@@ -219,6 +232,18 @@ export async function createGroupedMatches(
           statementGroupKey: key,
           notes: (input.notes ?? "").slice(0, 2000),
           matchedBy,
+        },
+        select: { id: true },
+      });
+      await recordAudit(tx, {
+        periodId,
+        eventType: "MATCH_CREATED",
+        actor: matchedBy,
+        metadata: {
+          matchId: created.id,
+          sourceType: request.sourceType,
+          sourceId: request.sourceId,
+          statementGroupKey: key,
         },
       });
     }
@@ -243,6 +268,15 @@ export async function reverseMatch(id: string, reversedBy: string, reason?: stri
     const existing = await tx.reconciliationMatch.findUnique({ where: { id } });
     if (!existing) throw new MatchError("That match no longer exists.");
     if (existing.reversedAt) return; // already reversed — nothing to do
+    // §7.13: a finalized month does not permit ordinary unmatching. Read inside
+    // the transaction so a reversal can't slip in while a finalization runs.
+    if (existing.periodId) {
+      await resolveWritablePeriod(
+        tx,
+        existing.bankPostedDate.toISOString().slice(0, 10),
+        actor,
+      );
+    }
     await tx.reconciliationMatch.update({
       where: { id },
       data: {
@@ -250,6 +284,13 @@ export async function reverseMatch(id: string, reversedBy: string, reason?: stri
         reversedBy: actor,
         reversalReason: (reason ?? "").slice(0, 2000),
       },
+    });
+    await recordAudit(tx, {
+      periodId: existing.periodId,
+      eventType: "MATCH_REVERSED",
+      actor,
+      reason,
+      metadata: { matchId: id, sourceType: existing.sourceType, sourceId: existing.sourceId },
     });
   });
 }
@@ -298,18 +339,33 @@ export async function createAdjustment(
   });
   const createdBy = assertActor(input.createdBy);
 
-  const row = await prisma.reconciliationAdjustment.create({
-    data: {
-      direction: input.direction,
-      category: input.category,
-      amount: input.amount,
-      effectiveDate: isoToDate(input.effectiveDate),
-      bankPostedDate: isoToDate(input.bankPostedDate),
-      description: input.description.trim().slice(0, 200),
-      notes: (input.notes ?? "").slice(0, 2000),
-      createdBy,
-    },
-    select: { id: true },
+  const row = await prisma.$transaction(async (tx) => {
+    const periodId = await resolveWritablePeriod(tx, input.bankPostedDate, createdBy);
+    const created = await tx.reconciliationAdjustment.create({
+      data: {
+        periodId,
+        direction: input.direction,
+        category: input.category,
+        amount: input.amount,
+        effectiveDate: isoToDate(input.effectiveDate),
+        bankPostedDate: isoToDate(input.bankPostedDate),
+        description: input.description.trim().slice(0, 200),
+        notes: (input.notes ?? "").slice(0, 2000),
+        createdBy,
+      },
+      select: { id: true },
+    });
+    await recordAudit(tx, {
+      periodId,
+      eventType: "ADJUSTMENT_CREATED",
+      actor: createdBy,
+      metadata: {
+        adjustmentId: created.id,
+        category: input.category,
+        direction: input.direction,
+      },
+    });
+    return created;
   });
   return row;
 }
@@ -324,8 +380,17 @@ export async function voidAdjustment(id: string, voidedBy: string): Promise<void
   if (!existing) throw new MatchError("That adjustment no longer exists.");
   if (existing.status === "VOIDED") return; // idempotent
 
-  await prisma.reconciliationAdjustment.update({
-    where: { id },
-    data: { status: "VOIDED", voidedAt: new Date(), voidedBy: actor },
+  await prisma.$transaction(async (tx) => {
+    await resolveWritablePeriod(tx, existing.bankPostedDate.toISOString().slice(0, 10), actor);
+    await tx.reconciliationAdjustment.update({
+      where: { id },
+      data: { status: "VOIDED", voidedAt: new Date(), voidedBy: actor },
+    });
+    await recordAudit(tx, {
+      periodId: existing.periodId,
+      eventType: "ADJUSTMENT_VOIDED",
+      actor,
+      metadata: { adjustmentId: id },
+    });
   });
 }

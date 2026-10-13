@@ -461,6 +461,10 @@ enum MatchDirection {
 /// receipts (§4.3, §7.10). Opaque to the owner; minted by the server.
 model ReconciliationMatch {
   id       String @id @default(cuid())
+  /// The month this match was written into — the month of its bankPostingDate.
+  /// Required rather than inferred at read time: a finalized month must be
+  /// able to tell what belongs to it, so that it can refuse writes (§8.10).
+  periodId String
   /// Which table `sourceId` refers to.
   sourceType MatchSourceType
   sourceId   String
@@ -486,9 +490,15 @@ model ReconciliationMatch {
   reversedBy     String?
   reversalReason String?
 
+  period ReconciliationPeriod @relation(fields: [periodId], references: [id])
+
   @@index([bankPostedDate])
-  /// Outstanding-pool lookup: "active matches for these source ids".
+  /// Outstanding-pool lookup: "active matches for these source ids". Plain, not
+  /// unique — §7.10's split matching needs two live matches against one source
+  /// row, so correctness comes from the in-transaction amount check, not here.
   @@index([sourceType, sourceId, reversedAt])
+  /// Ledger ordering within a period (§8.7).
+  @@index([periodId, bankPostedDate])
 }
 
 /// Why money moved when it doesn't correspond to any booking receipt or
@@ -511,6 +521,31 @@ enum AdjustmentStatus {
   VOIDED
 }
 
+/// Whether a month has been audited and sealed (§8.10), or is still open for
+/// correction.
+///
+/// `REOPENED` is not the same as `DRAFT`: a reopened month carries the history
+/// of a finalized one and requires a fresh finalization before it is sealed
+/// again (§8.11), which is what stops a correction quietly erasing the fact that
+/// the month had been signed off.
+enum PeriodStatus {
+  DRAFT
+  FINALIZED
+  REOPENED
+}
+
+/// What happened to a reconciliation, for the audit trail (§11.7).
+enum AuditEventType {
+  DRAFT_CREATED
+  MATCH_CREATED
+  MATCH_REVERSED
+  ADJUSTMENT_CREATED
+  ADJUSTMENT_VOIDED
+  PERIOD_FINALIZED
+  PERIOD_REOPENED
+  PERIOD_REFINALIZED
+}
+
 /// A bank movement that can't be explained by a recorded transaction — a
 /// service charge, interest, an owner's cash-in, a transfer that landed twice
 /// (§7.12).
@@ -525,6 +560,9 @@ enum AdjustmentStatus {
 /// movement, it does not invent the thing that supposedly caused it.
 model ReconciliationAdjustment {
   id        String              @id @default(cuid())
+  /// The month this adjustment was written into — the month of its
+  /// bankPostedDate. Required for the same reason as on ReconciliationMatch.
+  periodId  String
   direction MatchDirection
   category  AdjustmentCategory
   status    AdjustmentStatus    @default(ACTIVE)
@@ -544,4 +582,118 @@ model ReconciliationAdjustment {
 
   @@index([bankPostedDate])
   @@index([status, bankPostedDate])
+  @@index([periodId, bankPostedDate])
+
+  period ReconciliationPeriod @relation(fields: [periodId], references: [id])
+}
+
+/// One month of reconciliation — the thing that gets audited and sealed.
+///
+/// The product has a single bank account (§8.2), so there is exactly one period
+/// per month, and `month` is unique rather than "one *active* period per month".
+/// Reopening does not create a second row: it moves this one back to an
+/// editable state, bumps `version`, and leaves the prior finalized snapshot in
+/// place, so the report a month had before a correction is still readable.
+model ReconciliationPeriod {
+  id String @id @default(cuid())
+
+  /// First day of the month, at UTC midnight. A `DateTime` rather than a string
+  /// so range queries and ordering are the database's problem and can't be
+  /// wrong because of a formatting slip.
+  month  DateTime
+  status PeriodStatus @default(DRAFT)
+
+  /// What the bank statement said, in pesos. Exact decimals — §8.6 requires an
+  /// exact-zero difference, so these are never parsed through a float.
+  startingBalance Decimal @default(0) @db.Decimal(10, 2)
+  endingBalance   Decimal @default(0) @db.Decimal(10, 2)
+
+  /// Server-recalculated at finalization (§8.9). Null until then: a figure on a
+  /// draft period is a guess, and storing one would invite treating it as
+  /// authoritative. Only the finalize transaction may write these.
+  calculatedBalance Decimal? @db.Decimal(10, 2)
+  difference        Decimal? @db.Decimal(10, 2)
+
+  statementClosingDate DateTime?
+  /// Bank reference or the statement's filename.
+  statementReference   String?
+  notes                String  @default("")
+
+  /// Incremented on every reopen, so several finalizations of the same month are
+  /// distinguishable and the history page can show prior versions (§8.11).
+  version Int @default(1)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  finalizedAt DateTime?
+  finalizedBy String?
+  reopenedAt  DateTime?
+  reopenedBy  String?
+  /// Required on reopen (§8.11) — a correction with no stated reason is not
+  /// reviewable later.
+  reopenReason String?
+
+  matches     ReconciliationMatch[]
+  adjustments ReconciliationAdjustment[]
+  snapshots   ReconciliationSnapshot[]
+  auditEvents ReconciliationAuditEvent[]
+
+  @@unique([month])
+  @@index([status])
+}
+
+/// The frozen result of a finalization.
+///
+/// A snapshot exists because a report must keep saying what it said: if a guest
+/// is renamed or an expense description is edited afterwards, the numbers from
+/// the audit that produced them must not change underneath (§11.6). Reconstructing
+/// from live rows on demand would mean the report silently rewrites itself.
+model ReconciliationSnapshot {
+  id       String @id @default(cuid())
+  periodId String
+  /// The period version this snapshot froze. Grows on each re-finalization.
+  version Int
+
+  /// Frozen totals, the §8.5 breakdown, and the statement figures as read.
+  summaryJson Json
+  /// The §8.7 virtual ledger, frozen row by row.
+  ledgerJson Json
+  /// Outstanding items at finalization, per §8.8's acknowledgement policy.
+  outstandingJson Json
+
+  finalizedAt DateTime @default(now())
+  finalizedBy String
+
+  period ReconciliationPeriod @relation(fields: [periodId], references: [id])
+
+  /// One snapshot per version — the natural key that stops a double-finalization
+  /// from writing two identical reports (§14's optimistic guard).
+  @@unique([periodId, version])
+  @@index([periodId])
+}
+
+/// Append-only record of what happened to a period and when (§11.7).
+///
+/// Separate from the snapshot on purpose: the snapshot says what the numbers
+/// were, this says who did what and why, including the matches and reversals
+/// that were later undone and are therefore absent from any snapshot.
+model ReconciliationAuditEvent {
+  id String @id @default(cuid())
+
+  /// Null for an event raised before a period existed — a draft being created
+  /// has no period id yet, and losing that event would hide the very first
+  /// entry in the trail.
+  periodId    String?
+  eventType   AuditEventType
+  /// Identity-picker display label, matching matchedBy / createdBy elsewhere.
+  actor       String
+  timestamp   DateTime  @default(now())
+  reason      String?
+  metadataJson Json?
+
+  period ReconciliationPeriod? @relation(fields: [periodId], references: [id])
+
+  @@index([periodId, timestamp])
+  @@index([eventType])
 }
