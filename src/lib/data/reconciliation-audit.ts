@@ -569,6 +569,177 @@ export async function getSnapshotReport(
   };
 }
 
+export type LedgerExportRow = {
+  month: string;
+  status: string;
+  bankPostedDate: string | null;
+  recordDate: string | null;
+  category: string;
+  label: string;
+  detail: string;
+  inflow: number;
+  outflow: number;
+  runningBalance: number;
+  recordedBy: string;
+  reference: string;
+  statementGroup: string;
+  /** Period figures, repeated on each row so the file can be pivoted. */
+  statementOpening: number;
+  statementClosing: number;
+  calculatedBalance: number | null;
+  difference: number | null;
+  finalizedBy: string | null;
+  finalizedAt: string | null;
+  version: number;
+};
+
+/**
+ * Every reconciled movement across every period, for CSV export.
+ *
+ * Built from the same `loadAuditData` the Verify stage reads, so the export can
+ * never disagree with what the screen showed — two implementations of the audit
+ * would drift, and the exported file is the one that gets read after the fact.
+ *
+ * Deliberately does NOT call `requireReconciliationEnabled`. This route exists
+ * as a standalone backup (see the route's own note), and data that was
+ * genuinely reconciled must not become unreachable just because a feature
+ * toggle was flipped afterwards. The site-access guard still applies.
+ */
+export async function listReconciliationLedger(): Promise<LedgerExportRow[]> {
+  await requireSiteAccess();
+
+  const periods = await prisma.reconciliationPeriod.findMany({
+    orderBy: { month: "asc" },
+    select: {
+      id: true,
+      month: true,
+      status: true,
+      startingBalance: true,
+      endingBalance: true,
+      calculatedBalance: true,
+      difference: true,
+      version: true,
+      finalizedAt: true,
+      finalizedBy: true,
+    },
+  });
+
+  const rows: LedgerExportRow[] = [];
+
+  for (const period of periods) {
+    const starting = toAmount(toCentavos(period.startingBalance.toString()));
+    const ending = toAmount(toCentavos(period.endingBalance.toString()));
+
+    const base = {
+      statementOpening: starting,
+      statementClosing: ending,
+      calculatedBalance:
+        period.calculatedBalance === null
+          ? null
+          : toAmount(toCentavos(period.calculatedBalance.toString())),
+      difference:
+        period.difference === null ? null : toAmount(toCentavos(period.difference.toString())),
+      finalizedBy: period.finalizedBy,
+      finalizedAt: period.finalizedAt?.toISOString() ?? null,
+      version: period.version,
+    };
+
+    /**
+     * A sealed month is read from its snapshot, not rebuilt.
+     *
+     * The certified figures on this row are frozen, but the ledger's guest
+     * names and descriptions would come from live records — so fixing a typo in
+     * a guest name after sealing would make the exported month disagree with
+     * the report that was certified. §11.6 exists to prevent exactly that, and
+     * an export that quietly does it undermines the whole mechanism.
+     */
+    const snapshot = await prisma.reconciliationSnapshot.findFirst({
+      where: { periodId: period.id },
+      orderBy: { version: "desc" },
+      select: { ledgerJson: true },
+    });
+
+    if (snapshot && Array.isArray(snapshot.ledgerJson)) {
+      const month = period.month.toISOString().slice(0, 7);
+      for (const entry of snapshot.ledgerJson) {
+        const row = (entry ?? {}) as Record<string, unknown>;
+        const category = typeof row.category === "string" ? (row.category as PeriodCategory) : null;
+        rows.push({
+          month,
+          status: period.status,
+          bankPostedDate: typeof row.bankPostedDate === "string" ? row.bankPostedDate : null,
+          recordDate: typeof row.recordDate === "string" ? row.recordDate : null,
+          category:
+            category && CATEGORY_LABELS[category]
+              ? CATEGORY_LABELS[category]
+              : typeof row.label === "string" && row.kind === "OPENING"
+                ? "Opening balance"
+                : "",
+          label: typeof row.label === "string" ? row.label : "",
+          detail: typeof row.detail === "string" ? row.detail : "",
+          inflow: typeof row.inflow === "number" ? row.inflow : 0,
+          outflow: typeof row.outflow === "number" ? row.outflow : 0,
+          runningBalance: typeof row.runningBalance === "number" ? row.runningBalance : 0,
+          recordedBy: typeof row.recordedBy === "string" ? row.recordedBy : "",
+          reference: typeof row.reference === "string" ? row.reference : "",
+          statementGroup: typeof row.statementGroupKey === "string" ? row.statementGroupKey : "",
+          ...base,
+        });
+      }
+      continue;
+    }
+
+    const { items, outstanding } = await loadAuditData(prisma, period);
+    const totals = calculatePeriodTotals({
+      startingBalance: starting,
+      endingBalance: ending,
+      items,
+      outstanding,
+    });
+
+    // The opening balance is a real ledger row, not a header — a spreadsheet
+    // that starts from a movement has no way to check the first row.
+    rows.push({
+      month: period.month.toISOString().slice(0, 7),
+      status: period.status,
+      bankPostedDate: null,
+      recordDate: null,
+      category: "Opening balance",
+      label: "Statement opening balance",
+      detail: "",
+      inflow: 0,
+      outflow: 0,
+      runningBalance: toAmount(totals.startingBalanceCentavos),
+      recordedBy: "",
+      reference: "",
+      statementGroup: "",
+      ...base,
+    });
+
+    for (const row of buildLedger(totals.startingBalanceCentavos, items)) {
+      if (row.kind !== "MOVEMENT") continue;
+      rows.push({
+        month: period.month.toISOString().slice(0, 7),
+        status: period.status,
+        bankPostedDate: row.bankPostedDate,
+        recordDate: row.recordDate,
+        category: row.category ? CATEGORY_LABELS[row.category] : "",
+        label: row.label,
+        detail: row.detail,
+        inflow: toAmount(row.inflowCentavos),
+        outflow: toAmount(row.outflowCentavos),
+        runningBalance: toAmount(row.runningBalanceCentavos),
+        recordedBy: row.recordedBy,
+        reference: row.reference,
+        statementGroup: row.statementGroupKey ?? "",
+        ...base,
+      });
+    }
+  }
+
+  return rows;
+}
+
 function snapshotSummary(period: PeriodRow, totals: ReturnType<typeof calculatePeriodTotals>) {
   return {
     month: period.month.toISOString().slice(0, 7),

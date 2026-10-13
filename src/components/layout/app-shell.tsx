@@ -196,11 +196,14 @@ export function AppShell({ children }: { children: ReactNode }) {
   );
 }
 
-const EXPORTS: { table: string; label: string }[] = [
+const EXPORTS: { table: string; label: string; needsReconciliation?: boolean }[] = [
   { table: "bookings", label: "Bookings" },
   { table: "expenses", label: "Expenses" },
   { table: "cleaning", label: "Cleaning" },
   { table: "blocked-dates", label: "Blocked dates" },
+  // Only offered when the feature is on — otherwise it's a header-only file
+  // that looks like data loss rather than an empty ledger.
+  { table: "reconciliation", label: "Reconciliation", needsReconciliation: true },
 ];
 
 /**
@@ -213,7 +216,11 @@ const EXPORTS: { table: string; label: string }[] = [
  */
 function ExportMenu({ compact }: { compact?: boolean }) {
   const ref = useRef<HTMLDetailsElement>(null);
+  const { reconciliationEnabled } = useStore();
   const close = () => ref.current?.removeAttribute("open");
+  const items = EXPORTS.filter(
+    (e) => !("needsReconciliation" in e) || e.needsReconciliation !== true || reconciliationEnabled,
+  );
 
   return (
     <details ref={ref} className={cn("group", compact && "relative")}>
@@ -237,7 +244,7 @@ function ExportMenu({ compact }: { compact?: boolean }) {
         {compact ? (
           <p className="px-2 pt-1 pb-1.5 text-xs text-slate-500">Download a CSV backup</p>
         ) : null}
-        {EXPORTS.map((e) => (
+        {items.map((e) => (
           <a
             key={e.table}
             href={`/api/export/${e.table}`}
