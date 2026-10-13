@@ -138,6 +138,8 @@ export type PeriodView = {
   statementReference: string | null;
   notes: string;
   version: number;
+  /** Sent back on save so a concurrent edit is caught rather than overwritten. */
+  updatedAt: string;
   finalizedAt: string | null;
   finalizedBy: string | null;
   reopenedAt: string | null;
@@ -177,6 +179,7 @@ export async function getPeriod(month: string): Promise<PeriodView | null> {
     statementReference: row.statementReference,
     notes: row.notes,
     version: row.version,
+    updatedAt: row.updatedAt.toISOString(),
     finalizedAt: row.finalizedAt?.toISOString() ?? null,
     finalizedBy: row.finalizedBy,
     reopenedAt: row.reopenedAt?.toISOString() ?? null,
@@ -192,6 +195,17 @@ export type StatementSetupInput = {
   statementClosingDate?: string | null;
   statementReference?: string | null;
   notes?: string;
+  /**
+   * The `updatedAt` the editor was looking at.
+   *
+   * §14 asks for a version check on draft updates because more than one person
+   * can be in the wizard at once. Without it, two owners editing the same
+   * statement silently produce last-write-wins: the second save overwrites the
+   * first owner's balances with no indication that anything was lost, and the
+   * month then ties out against figures nobody meant to write. Finalization is
+   * already protected by its own compare-and-set; this protects editing.
+   */
+  expectedUpdatedAt?: string;
 };
 
 /**
@@ -223,8 +237,15 @@ export async function updateStatementSetup(
     if (period.status === "FINALIZED") {
       throw new MatchError(`${input.month} is already finalized. Reopen it to make changes.`);
     }
-    await tx.reconciliationPeriod.update({
-      where: { id: period.id },
+
+    // Conditional update rather than update-by-id: the `updatedAt` equality is
+    // evaluated by the database at write time, so of two people saving at once
+    // exactly one matches the row and the other is told the month moved on.
+    const changed = await tx.reconciliationPeriod.updateMany({
+      where: {
+        id: period.id,
+        ...(input.expectedUpdatedAt ? { updatedAt: new Date(input.expectedUpdatedAt) } : {}),
+      },
       data: {
         startingBalance: toAmount(starting),
         endingBalance: toAmount(ending),
@@ -235,6 +256,12 @@ export async function updateStatementSetup(
         notes: (input.notes ?? "").slice(0, 2000),
       },
     });
+
+    if (changed.count === 0) {
+      throw new MatchError(
+        "Someone else changed this month while you were editing it. Reload and try again so you don't overwrite their figures.",
+      );
+    }
   });
 
   const view = await getPeriod(input.month);

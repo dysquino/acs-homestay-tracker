@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { Modal } from "@/components/ui/modal";
 import { Card } from "@/components/ui/card";
 import { VerifyStage } from "@/components/reconciliation/verify-stage";
 import { VersionHistory } from "@/components/reconciliation/version-history";
@@ -134,39 +135,31 @@ export function AuditWizard({
 
   const index = STEPS.findIndex((s) => s.id === view);
 
+  // The shared Modal rather than a hand-rolled overlay: it already handles
+  // Escape, scroll lock and dialog semantics, and hand-rolling meant the
+  // wizard announced nothing to a screen reader. `dismissible: false` keeps a
+  // stray backdrop click from discarding a half-built statement.
   return (
-    <div className="print-root fixed inset-0 z-50 overflow-y-auto bg-slate-50">
-      <div className="mx-auto min-h-full w-full max-w-6xl px-4 py-5 pb-[calc(2rem+env(safe-area-inset-bottom))] sm:px-6">
-        <div className="mb-4 flex items-center justify-between gap-3">
-          <button
-            type="button"
-            onClick={onClose}
-            className="no-print -ml-1 rounded-md px-2 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900"
-          >
-            ← Back to workspace
-          </button>
-          <div className="no-print flex items-center gap-2">
-            <StatusPill status={status} />
-            {/* Printing is the point of a sealed report, so the control sits
-                beside the status it applies to rather than in a menu. */}
-            {sealed ? (
-              <Button size="sm" onClick={() => window.print()}>
-                Print
-              </Button>
-            ) : null}
-          </div>
-          {/* On paper this line is the only identification the sheet has, so
-              it prints in place of the controls rather than alongside them. */}
-          <p className="print-only hidden text-xs text-slate-600">
-            Reconciliation · {formatMonth(`${month}-01`)}
-          </p>
+    <Modal
+      open
+      wide
+      dismissible={false}
+      onClose={onClose}
+      title={`Monthly Audit · ${formatMonth(`${month}-01`)}`}
+    >
+      <>
+        <div className="no-print mb-4 flex items-center justify-end gap-2">
+          <StatusPill status={status} />
+          {/* Printing is the point of a sealed report, so the control sits
+              beside the status it applies to rather than in a menu. */}
+          {sealed ? (
+            <Button size="sm" onClick={() => window.print()}>
+              Print
+            </Button>
+          ) : null}
         </div>
 
-        <h1 className="text-xl font-semibold text-slate-900">
-          Monthly Audit · {formatMonth(`${month}-01`)}
-        </h1>
-
-        <ol className="no-print mb-5 mt-3 flex gap-1 overflow-x-auto" aria-label="Audit steps">
+        <ol className="no-print mb-5 flex gap-1 overflow-x-auto" aria-label="Audit steps">
           {STEPS.map((s, i) => (
             <li key={s.id} className="shrink-0">
               <button
@@ -238,8 +231,8 @@ export function AuditWizard({
             busy={busy}
           />
         ) : null}
-      </div>
-    </div>
+      </>
+    </Modal>
   );
 }
 
@@ -282,12 +275,20 @@ function StatementStep({ month, onSaved }: { month: string; onSaved: () => Promi
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /**
+   * The `updatedAt` these figures were read at. Sent back on save so a second
+   * person editing the same month is refused rather than silently overwritten —
+   * the balances decide whether the month finalizes, so losing one quietly
+   * would be worse than being asked to reload.
+   */
+  const [readAt, setReadAt] = useState<string | null>(null);
   const { user } = useIdentity();
 
   useEffect(() => {
     void (async () => {
       const [p, prev] = await Promise.all([getPeriod(month), getPreviousFinalizedEndingBalance(month)]);
       setPeriod(p);
+      setReadAt(p?.updatedAt ?? null);
       setSuggestion(prev);
       setForm({
         startingBalance: p ? String(p.startingBalance) : "",
@@ -311,10 +312,14 @@ function StatementStep({ month, onSaved }: { month: string; onSaved: () => Promi
           statementClosingDate: form.statementClosingDate || null,
           statementReference: form.statementReference || null,
           notes: form.notes,
+          expectedUpdatedAt: readAt ?? undefined,
         },
         user?.name ?? "Unknown",
       );
       setSaved(true);
+      // Take the new `updatedAt` as the new baseline, so a second save without
+      // a reload isn't refused against our own first save.
+      setReadAt((await getPeriod(month))?.updatedAt ?? null);
       await onSaved();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Couldn't save the statement.");
@@ -623,38 +628,39 @@ function ReopenDialog({
   onConfirm: () => void;
   busy: boolean;
 }) {
+  // `dismissible: false` here specifically: a half-typed reason is work, and a
+  // backdrop click that throws it away is worse than one that does nothing.
   return (
-    <div className="no-print fixed inset-0 z-50 flex items-end justify-center bg-slate-900/40 p-4 sm:items-center">
-      <Card className="w-full max-w-md p-4 sm:p-5">
-        <h2 className="text-sm font-semibold text-slate-900">
-          Reopen {formatMonth(`${month}-01`)}
-        </h2>
-        <p className="mt-1 text-sm text-slate-600">
-          The month becomes editable again and needs re-finalizing. The report you sealed is
-          kept.
-        </p>
-        <label htmlFor="reopen-reason" className="mt-3 block text-xs font-medium text-slate-700">
-          Why are you reopening it?
-        </label>
-        <textarea
-          id="reopen-reason"
-          rows={3}
-          value={reason}
-          onChange={(e) => onReason(e.target.value)}
-          placeholder="e.g. Found a cleaning payment dated in the wrong month"
-          className="mt-1 block w-full rounded-md border-0 bg-white px-3 py-2 text-sm ring-1 ring-inset ring-slate-300 focus:ring-2 focus:ring-brand-600"
-        />
-        <p className="mt-1 text-xs text-slate-500">Required — this goes into the audit trail.</p>
-        <div className="mt-3 flex gap-2">
+    <Modal
+      open
+      dismissible={false}
+      onClose={onCancel}
+      title={`Reopen ${formatMonth(`${month}-01`)}`}
+      description="The month becomes editable again and needs re-finalizing. The report you sealed is kept."
+      footer={
+        <>
           <Button onClick={onCancel} disabled={busy}>
             Cancel
           </Button>
           <Button variant="primary" onClick={onConfirm} disabled={busy || !reason.trim()}>
             {busy ? "Reopening…" : "Reopen"}
           </Button>
-        </div>
-      </Card>
-    </div>
+        </>
+      }
+    >
+      <label htmlFor="reopen-reason" className="block text-xs font-medium text-slate-700">
+        Why are you reopening it?
+      </label>
+      <textarea
+        id="reopen-reason"
+        rows={3}
+        value={reason}
+        onChange={(e) => onReason(e.target.value)}
+        placeholder="e.g. Found a cleaning payment dated in the wrong month"
+        className="mt-1 block w-full rounded-md border-0 bg-white px-3 py-2 text-sm ring-1 ring-inset ring-slate-300 focus:ring-2 focus:ring-brand-600"
+      />
+      <p className="mt-1 text-xs text-slate-500">Required — this goes into the audit trail.</p>
+    </Modal>
   );
 }
 

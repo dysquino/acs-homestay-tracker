@@ -22,6 +22,7 @@ export function Modal({
   children,
   footer,
   wide,
+  dismissible = true,
 }: {
   open: boolean;
   onClose: () => void;
@@ -30,6 +31,14 @@ export function Modal({
   children: ReactNode;
   footer?: ReactNode;
   wide?: boolean;
+  /**
+   * Whether a backdrop click closes the dialog. Escape and the close button
+   * always work — `dismissible: false` only means "don't let a stray click on
+   * the page behind throw away work". A multi-step wizard is the case: someone
+   * tapping outside a long form is far more likely to be reaching for scroll
+   * than to mean "discard this".
+   */
+  dismissible?: boolean;
 }) {
   useEffect(() => {
     if (!open) return;
@@ -49,10 +58,12 @@ export function Modal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/40 p-0 sm:items-center sm:p-4"
+      // `print-root` so a dialog prints as normal document flow rather than a
+      // viewport-height overlay that clips everything below the fold.
+      className="print-root fixed inset-0 z-50 flex items-end justify-center bg-slate-900/40 p-0 sm:items-center sm:p-4"
       role="presentation"
       onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onClose();
+        if (dismissible && e.target === e.currentTarget) onClose();
       }}
     >
       <div
@@ -63,7 +74,7 @@ export function Modal({
           wide ? "sm:max-w-3xl" : "sm:max-w-lg"
         }`}
       >
-        <header className="flex shrink-0 items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
+        <header className="print-keep flex shrink-0 items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
           <div>
             <h2 className="text-base font-semibold text-slate-900">{title}</h2>
             {description ? (
@@ -75,7 +86,8 @@ export function Modal({
             size="sm"
             onClick={onClose}
             aria-label="Close"
-            className="-mr-1.5 -mt-0.5 text-lg leading-none"
+            // A close button is never useful on paper.
+            className="no-print -mr-1.5 -mt-0.5 text-lg leading-none"
           >
             ×
           </Button>
