@@ -17,7 +17,18 @@ import type { Direction, SourceType } from "./reconciliation-match-rules";
  */
 
 /**
- * The display buckets §8.5 asks the Verify stage to break the month into.
+ * `YYYY-MM-DD` → `YYYY-MM-01`, the canonical form of a period's month.
+ *
+ * Returns a string rather than a Date so the pure module stays free of any
+ * timezone decision. Whoever needs the Date converts it once, at the storage
+ * boundary, which is the only place UTC-vs-local actually matters.
+ */
+export function periodMonthStart(dateISO: string): string {
+  return `${dateISO.slice(0, 7)}-01`;
+}
+
+/**
+ * The reporting buckets §8.5 asks the Verify stage to break the month into.
  *
  * These are reporting categories, not money directions — the direction is
  * derived from the source type and never inferred from a bucket name, so a
