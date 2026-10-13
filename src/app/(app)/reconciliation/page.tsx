@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { PageHeader } from "@/components/layout/app-shell";
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,7 @@ import {
   type AmountEntry,
 } from "@/lib/amount-entry";
 import {
+  createGroupedMatches,
   createMatch,
   reverseMatch,
   voidAdjustment as voidAdjustmentAction,
@@ -26,10 +27,25 @@ import {
   type PoolItem,
   type WorkspaceMonth,
 } from "@/lib/data/reconciliation";
+import { toAmount } from "@/lib/finance";
 import { addMonths, startOfMonth, today } from "@/lib/dates";
 import { formatCurrency, formatMonth, formatShortDate } from "@/lib/format";
 import { useIdentity } from "@/lib/identity";
+import {
+  batchTotals,
+  matchSourceType,
+  type BatchCandidate,
+} from "@/lib/reconciliation-match-rules";
 import { useStore } from "@/lib/store";
+
+/** Pool rows carry Prisma's enum names; the rules work in match source types. */
+function toCandidate(item: PoolItem): BatchCandidate {
+  return {
+    sourceType: matchSourceType(item.sourceType),
+    sourceId: item.sourceId,
+    amount: item.amount,
+  };
+}
 
 /**
  * The reconciliation workspace (§7), read-only for now.
@@ -54,8 +70,13 @@ export default function ReconciliationPage() {
     setMonth(startOfMonth(addMonths(`${month}-01`, delta)).slice(0, 7));
   const [data, setData] = useState<WorkspaceMonth | null>(null);
   const [error, setError] = useState<string | null>(null);
-  /** The pool item the owner is matching right now, if any. */
-  const [selected, setSelected] = useState<PoolItem | null>(null);
+  /**
+   * The transactions the owner is matching right now, in tap order. One item is
+   * an ordinary match; several are one statement line covering several records
+   * (§7.10), so the shape carries both cases rather than having a separate batch
+   * mode that could disagree with the single one.
+   */
+  const [selection, setSelection] = useState<PoolItem[]>([]);
   const [undoing, setUndoing] = useState<string | null>(null);
   const [entry, setEntry] = useState<AmountEntry>(EMPTY_ENTRY);
   const [bankDate, setBankDate] = useState(today());
@@ -64,39 +85,96 @@ export default function ReconciliationPage() {
   const [adjusting, setAdjusting] = useState(false);
   const { user } = useIdentity();
 
+  /** Running totals for the selection bar (§7.11). Exact, in centavos. */
+  const batch = useMemo(() => batchTotals(selection.map(toCandidate)), [selection]);
+  /** A selection spanning both pools can never be one statement line. */
+  const mixed = batch.inflowCentavos > 0n && batch.outflowCentavos > 0n;
+
   /**
-   * Choosing a pool item pre-fills its amount. Clicking the transaction IS the
-   * statement line in the common case, so this saves retyping the figure.
+   * How many history rows share each statement line. A grouped match writes one
+   * row per record, so without this the owner sees three entries for one deposit
+   * and can't tell them apart from three separate deposits.
    */
-  const pick = useCallback((item: PoolItem) => {
-    setSelected(item);
-    setEntry({ digits: centsToDigits(item.amount), negative: false });
-    setMatchError(null);
-  }, []);
+  const groupSizes = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const h of data?.history ?? []) {
+      if (!h.statementGroupKey) continue;
+      counts.set(h.statementGroupKey, (counts.get(h.statementGroupKey) ?? 0) + 1);
+    }
+    return counts;
+  }, [data]);
+
+  /**
+   * Tapping a transaction adds or removes it, then re-seeds the amount from what
+   * is now selected. The typed figure is the owner's reading of one bank line,
+   * so it should always show what the bar is claiming — seeding it on every tap
+   * means adding a second stay updates both together instead of leaving a stale
+   * total sitting next to a three-item selection.
+   *
+   * A mixed selection gets an empty amount rather than a sum, because a sum of
+   * receipts and payouts is a number with no meaning. Confirm stays disabled and
+   * the panel explains why.
+   */
+  const pick = useCallback(
+    (item: PoolItem) => {
+      const next = selection.some((p) => p.key === item.key)
+        ? selection.filter((p) => p.key !== item.key)
+        : [...selection, item];
+      const nextBatch = batchTotals(next.map(toCandidate));
+      const spansBothPools =
+        nextBatch.inflowCentavos > 0n && nextBatch.outflowCentavos > 0n;
+      // One pool at a time, so exactly one side is non-zero and there's no
+      // sign to strip. Widened from centavos rather than summed as floats.
+      const nextSelected =
+        nextBatch.inflowCentavos > 0n ? nextBatch.inflowCentavos : nextBatch.outflowCentavos;
+      setSelection(next);
+      setEntry(
+        spansBothPools || next.length === 0
+          ? EMPTY_ENTRY
+          : { digits: centsToDigits(toAmount(nextSelected)), negative: false },
+      );
+      setMatchError(null);
+    },
+    [selection],
+  );
 
   function clearMatch() {
     setEntry(EMPTY_ENTRY);
-    setSelected(null);
+    setSelection([]);
     setMatchError(null);
   }
 
   async function confirmMatch() {
-    if (!selected) return;
-    const amount = entryToAmount(entry);
-    if (amount === null) return;
+    const typed = entryToAmount(entry);
+    if (typed === null || selection.length === 0) return;
+    const statement = Math.abs(typed);
     setBusy(true);
     setMatchError(null);
     try {
-      await createMatch({
-        sourceType:
-          selected.sourceType === "booking_payment" ? "BOOKING_PAYMENT" : "EXPENSE_SETTLEMENT",
-        sourceId: selected.sourceId,
-        amount: Math.abs(amount),
-        bankPostedDate: bankDate,
-        matchedBy: user?.name ?? "Unknown",
-      });
-      setEntry(EMPTY_ENTRY);
-      setSelected(null);
+      if (selection.length === 1) {
+        // One record, possibly partially matched — a receipt split across two
+        // deposits keeps the typed amount, not the record's full value (§7.10).
+        const item = selection[0];
+        await createMatch({
+          sourceType: matchSourceType(item.sourceType),
+          sourceId: item.sourceId,
+          amount: statement,
+          bankPostedDate: bankDate,
+          matchedBy: user?.name ?? "Unknown",
+        });
+      } else {
+        // A group covers a statement line in full, so each record contributes its
+        // whole outstanding amount and the typed figure is the tie-out check.
+        await createGroupedMatches(
+          selection.map(toCandidate),
+          {
+            bankPostedDate: bankDate,
+            statementAmount: statement,
+            matchedBy: user?.name ?? "Unknown",
+          },
+        );
+      }
+      clearMatch();
       await reload();
     } catch (e) {
       setMatchError(e instanceof Error ? e.message : "Couldn't record that match.");
@@ -257,7 +335,9 @@ export default function ReconciliationPage() {
             onBankDateChange={setBankDate}
             inflows={data.inflows}
             outflows={data.outflows}
-            selected={selected}
+            selection={selection}
+            batch={batch}
+            mixed={mixed}
             onSelect={pick}
             onClear={clearMatch}
             onConfirm={confirmMatch}
@@ -273,7 +353,7 @@ export default function ReconciliationPage() {
               items={data.inflows}
               empty="Every receipt recorded this month has been matched."
               tone="in"
-              selectedKey={selected?.key ?? null}
+              selectedKeys={selection.map((s) => s.key)}
               onSelect={pick}
             />
             <Pool
@@ -282,7 +362,7 @@ export default function ReconciliationPage() {
               items={data.outflows}
               empty="Every payout recorded this month has been matched."
               tone="out"
-              selectedKey={selected?.key ?? null}
+              selectedKeys={selection.map((s) => s.key)}
               onSelect={pick}
             />
           </div>
@@ -319,6 +399,9 @@ export default function ReconciliationPage() {
                   <p className="text-xs text-slate-500">
                     {formatShortDate(h.bankPostedDate)}
                     {h.detail ? ` · ${h.detail}` : ""} · {h.matchedBy}
+                    {h.statementGroupKey && (groupSizes.get(h.statementGroupKey) ?? 0) > 1
+                      ? " · one statement line"
+                      : ""}
                   </p>
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
@@ -364,7 +447,7 @@ function Pool({
   items,
   empty,
   tone,
-  selectedKey,
+  selectedKeys,
   onSelect,
 }: {
   title: string;
@@ -372,9 +455,13 @@ function Pool({
   items: PoolItem[];
   empty: string;
   tone: "in" | "out";
-  selectedKey: string | null;
+  selectedKeys: string[];
   onSelect: (item: PoolItem) => void;
 }) {
+  // A Set so `includes` stays cheap once a month has a long pool, and so the
+  // row check reads as membership rather than an array scan in a render loop.
+  const selected = useMemo(() => new Set(selectedKeys), [selectedKeys]);
+
   return (
     <Card className="h-fit">
       <div className="border-b border-slate-100 px-4 py-3 sm:px-5">
@@ -388,41 +475,56 @@ function Pool({
         <p className="px-4 py-6 text-sm text-slate-500 sm:px-5">{empty}</p>
       ) : (
         <ul className="divide-y divide-slate-100">
-          {items.map((item) => (
-            <li key={item.key}>
-              <button
-                type="button"
-                onClick={() => onSelect(item)}
-                aria-pressed={selectedKey === item.key}
-                className={cn(
-                  "flex w-full items-start justify-between gap-3 px-4 py-2.5 text-left text-sm transition-colors sm:px-5",
-                  selectedKey === item.key
-                    ? "bg-brand-50 ring-1 ring-inset ring-brand-600"
-                    : "hover:bg-slate-50",
-                )}
-              >
-                <span className="min-w-0">
-                  <span className="block font-medium text-slate-900">{item.label}</span>
-                  <span className="block text-xs text-slate-500">
-                    {formatShortDate(item.date)} · {item.detail}
-                    {item.reference ? ` · ${item.reference}` : ""}
-                  </span>
-                  {item.older ? (
-                    <span className="block text-xs text-amber-700">
-                      Carried over from an earlier month
-                    </span>
-                  ) : null}
-                </span>
-                <span
-                  className={`whitespace-nowrap font-medium tabular-nums ${
-                    tone === "in" ? "text-emerald-700" : "text-rose-700"
-                  }`}
+          {items.map((item) => {
+            const isSelected = selected.has(item.key);
+            return (
+              <li key={item.key}>
+                <button
+                  type="button"
+                  onClick={() => onSelect(item)}
+                  aria-pressed={isSelected}
+                  className={cn(
+                    "flex w-full items-start justify-between gap-3 px-4 py-2.5 text-left text-sm transition-colors sm:px-5",
+                    isSelected ? "bg-brand-50 ring-1 ring-inset ring-brand-600" : "hover:bg-slate-50",
+                  )}
                 >
-                  {formatCurrency(item.amount)}
-                </span>
-              </button>
-            </li>
-          ))}
+                  {/* The box makes it obvious a tap adds to the selection rather
+                      than replacing it, which is what lets one statement line
+                      cover several records. */}
+                  <span
+                    aria-hidden="true"
+                    className={cn(
+                      "mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border text-[10px] font-bold",
+                      isSelected
+                        ? "border-brand-600 bg-brand-600 text-white"
+                        : "border-slate-300 bg-white text-transparent",
+                    )}
+                  >
+                    ✓
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block font-medium text-slate-900">{item.label}</span>
+                    <span className="block text-xs text-slate-500">
+                      {formatShortDate(item.date)} · {item.detail}
+                      {item.reference ? ` · ${item.reference}` : ""}
+                    </span>
+                    {item.older ? (
+                      <span className="block text-xs text-amber-700">
+                        Carried over from an earlier month
+                      </span>
+                    ) : null}
+                  </span>
+                  <span
+                    className={`shrink-0 whitespace-nowrap font-medium tabular-nums ${
+                      tone === "in" ? "text-emerald-700" : "text-rose-700"
+                    }`}
+                  >
+                    {formatCurrency(item.amount)}
+                  </span>
+                </button>
+              </li>
+            );
+          })}
         </ul>
       )}
     </Card>

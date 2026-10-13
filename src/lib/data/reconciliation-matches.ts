@@ -9,6 +9,7 @@ import {
   MatchError,
   remainingCentavos,
   validateAdjustment,
+  validateBatch,
   validateMatchAmount,
   type AdjustmentCategoryValue,
   type SourceType,
@@ -168,20 +169,35 @@ export type GroupedMatchRequest = {
  * three receipts share one `statementGroupKey`, so the history view can show
  * them as one statement line rather than three unrelated matches (§4.3).
  *
+ * `statementAmount` is the owner's transcription of the bank line, and the group
+ * must add up to it exactly. Requiring it here rather than only in the UI means
+ * a group can never claim a statement figure its own rows don't produce — the
+ * check `validateBatch` makes is the same one the interface makes, so a caller
+ * that skips the form still can't write a group that doesn't tie out.
+ *
  * Either every record is matched or none is — a partial group would leave the
  * statement line looking like it didn't fully reconcile, which is worse than
  * failing outright.
  */
 export async function createGroupedMatches(
   requests: GroupedMatchRequest[],
-  input: { bankPostedDate: string; notes?: string; matchedBy: string },
+  input: {
+    bankPostedDate: string;
+    /** The figure read off the statement, which the group must total exactly. */
+    statementAmount: number;
+    notes?: string;
+    matchedBy: string;
+  },
 ): Promise<CreateMatchResult> {
   await requireSiteAccess();
   await requireReconciliationEnabled();
 
-  if (requests.length === 0) throw new MatchError("Pick at least one transaction to match.");
+  const statementAmount = toCentavos(input.statementAmount);
   const bankPostedDate = assertBankPostedDate(input.bankPostedDate);
   const matchedBy = assertActor(input.matchedBy);
+  // Shape and direction are decidable without a query, so refuse them before
+  // opening a transaction rather than after.
+  validateBatch(requests, statementAmount);
   const key = crypto.randomUUID();
 
   await prisma.$transaction(async (tx) => {

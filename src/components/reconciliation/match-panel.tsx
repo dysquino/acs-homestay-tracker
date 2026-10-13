@@ -15,6 +15,8 @@ import {
   type Key,
 } from "@/lib/amount-entry";
 import type { PoolItem } from "@/lib/data/reconciliation";
+import { toAmount, toCentavos } from "@/lib/finance";
+import type { BatchTotals } from "@/lib/reconciliation-match-rules";
 
 /**
  * The reconciliation command panel (§9.2).
@@ -25,7 +27,13 @@ import type { PoolItem } from "@/lib/data/reconciliation";
  * is an explicit field rather than an inference, because it's what decides
  * which month the match lands in.
  *
- * Fully controlled: the amount entry and the selected transaction live in the
+ * The selection is a list rather than a single row because one statement line
+ * regularly covers several records — an Airbnb payout for three stays lands as
+ * one deposit (§7.10). With several selected, the typed figure stops being an
+ * amount to write and becomes the check itself: the records must add up to it
+ * exactly before the group can be confirmed.
+ *
+ * Fully controlled: the amount entry and the selected transactions live in the
  * page, so clicking a pool item and typing on the numpad feed the same state
  * without one having to be pushed into the other through an effect.
  */
@@ -36,7 +44,9 @@ export function MatchPanel({
   onBankDateChange,
   inflows,
   outflows,
-  selected,
+  selection,
+  batch,
+  mixed,
   onSelect,
   onClear,
   onConfirm,
@@ -51,7 +61,10 @@ export function MatchPanel({
   onBankDateChange: (value: string) => void;
   inflows: PoolItem[];
   outflows: PoolItem[];
-  selected: PoolItem | null;
+  selection: PoolItem[];
+  batch: BatchTotals;
+  /** True when the selection spans both pools, which no statement line can. */
+  mixed: boolean;
   onSelect: (item: PoolItem) => void;
   onClear: () => void;
   onConfirm: () => void;
@@ -65,7 +78,21 @@ export function MatchPanel({
   const searching = entry.negative ? outflows : inflows;
   const candidates = exactCandidates(searching, entry);
   const amount = entryToAmount(entry);
-  const canConfirm = selected !== null && amount !== null && !busy;
+  const statementCentavos = amount === null ? null : toCentavos(Math.abs(amount));
+
+  const grouped = selection.length > 1;
+  /** For a selection in one pool, exactly one of the two totals is non-zero. */
+  const selectedCentavos = batch.inflowCentavos > 0n ? batch.inflowCentavos : batch.outflowCentavos;
+  const linesUp = statementCentavos !== null && selectedCentavos === statementCentavos;
+
+  /**
+   * A single match may be partial — a receipt split across two deposits — so it
+   * has nothing to tie out against. A group has to add up to the bank line it
+   * claims to be, and the server refuses it otherwise (§7.10); disabling here
+   * just means the owner finds out before submitting.
+   */
+  const canConfirm =
+    selection.length > 0 && amount !== null && !busy && !mixed && (!grouped || linesUp);
 
   function onKeyDown(e: React.KeyboardEvent) {
     const key = keyFromKeyboard(e.key);
@@ -136,7 +163,7 @@ export function MatchPanel({
                   onClick={() => onSelect(c)}
                   className={cn(
                     "flex w-full items-center justify-between gap-3 rounded-lg border px-3 py-2 text-left text-sm",
-                    selected?.key === c.key
+                    selection.some((s) => s.key === c.key)
                       ? "border-brand-600 bg-brand-50"
                       : "border-slate-200 bg-white hover:border-slate-300",
                   )}
@@ -171,11 +198,46 @@ export function MatchPanel({
           </div>
         ) : null}
 
-        {selected && amount !== null ? (
+        {grouped || mixed ? (
+          <div
+            className={cn(
+              "rounded-lg p-2.5 text-xs",
+              mixed
+                ? "bg-amber-50 text-amber-800"
+                : linesUp
+                  ? "bg-emerald-50 text-emerald-800"
+                  : "bg-slate-50 text-slate-600",
+            )}
+          >
+            <p className="font-medium text-slate-900">
+              {mixed
+                ? `${batch.count} selected across both pools`
+                : `${batch.count} selected · ${formatCurrency(toAmount(selectedCentavos))}`}
+            </p>
+            {mixed ? (
+              <p className="mt-1">
+                Money in and money out can&apos;t share one statement line. Deselect one of
+                them and match separately.
+              </p>
+            ) : linesUp ? (
+              <p className="mt-1">
+                Adds up to the {formatCurrency(Math.abs(amount ?? 0))} on your {bankDate}{" "}
+                statement — one bank line covering {batch.count} records.
+              </p>
+            ) : (
+              <p className="mt-1">
+                These add up to {formatCurrency(toAmount(selectedCentavos))}, but your
+                statement says {formatCurrency(Math.abs(amount ?? 0))}. Adjust the
+                selection until the two agree.
+              </p>
+            )}
+          </div>
+        ) : selection.length > 0 ? (
           <div className="rounded-lg bg-slate-50 p-2.5 text-xs text-slate-600">
-            Matching <span className="font-medium text-slate-900">{selected.label}</span> for{" "}
+            Matching <span className="font-medium text-slate-900">{selection[0].label}</span>{" "}
+            for{" "}
             <span className="font-medium text-slate-900">
-              {formatCurrency(Math.abs(amount))}
+              {formatCurrency(Math.abs(amount ?? 0))}
             </span>{" "}
             against your {bankDate} statement.
           </div>
@@ -192,7 +254,7 @@ export function MatchPanel({
             Clear
           </Button>
           <Button className="flex-1" variant="primary" onClick={onConfirm} disabled={!canConfirm}>
-            {busy ? "Matching…" : "Match it"}
+            {busy ? "Matching…" : grouped ? `Match ${batch.count} as one` : "Match it"}
           </Button>
         </div>
       </div>
