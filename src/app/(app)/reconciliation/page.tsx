@@ -8,6 +8,7 @@ import { Card } from "@/components/ui/card";
 import { AdjustmentForm } from "@/components/reconciliation/adjustment-form";
 import { AuditWizard } from "@/components/reconciliation/audit-wizard";
 import { MatchPanel, type SheetState } from "@/components/reconciliation/match-panel";
+import { PayoutWorklist } from "@/components/reconciliation/payout-worklist";
 import {
   centsToDigits,
   EMPTY_ENTRY,
@@ -399,6 +400,7 @@ export default function ReconciliationPage() {
             onSheetStateChange={setSheetState}
           />
           <div className="grid gap-5">
+            <PayoutWorklist onRecorded={reload} />
             <FilterChips
               value={filter}
               onChange={setFilter}

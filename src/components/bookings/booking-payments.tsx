@@ -35,11 +35,14 @@ import {
 export function BookingPayments({
   bookingId,
   totalPayout,
+  source,
   onChanged,
 }: {
   bookingId: string;
   /** The booking's expected amount, for the "received X of Y" line. */
   totalPayout: number;
+  /** Tailors the date hint — the two channels behave very differently. */
+  source: "AIRBNB" | "DIRECT";
   /** Re-fetch the store after a write so the status badge updates. */
   onChanged: () => void;
 }) {
@@ -149,6 +152,7 @@ export function BookingPayments({
         open={formOpen}
         bookingId={bookingId}
         totalPayout={totalPayout}
+        source={source}
         existing={active}
         onClose={() => setFormOpen(false)}
         onSaved={async () => {
@@ -171,10 +175,27 @@ type FormState = {
 
 const FORM_ID = "booking-payment-form";
 
+/**
+ * What "received" means, per channel.
+ *
+ * Airbnb *releases* a payout about 24 hours after check-in, but the money then
+ * takes a further 3–7 business days to arrive depending on the payout method,
+ * and banking skips weekends and holidays. Reconciliation needs the day it was
+ * in the account, so this is spelled out rather than guessed: a pre-filled date
+ * wrong by a fortnight would land in the wrong month and reconcile perfectly
+ * against itself, which is the worst kind of wrong.
+ */
+const DATE_HINTS: Record<"AIRBNB" | "DIRECT", string> = {
+  AIRBNB:
+    "When it landed in your account. Airbnb releases it ~24h after check-in, then the bank takes 3–7 business days more.",
+  DIRECT: "When the money actually reached you — a deposit and the balance are two separate dates.",
+};
+
 function BookingPaymentForm({
   open,
   bookingId,
   totalPayout,
+  source,
   existing,
   onClose,
   onSaved,
@@ -182,6 +203,7 @@ function BookingPaymentForm({
   open: boolean;
   bookingId: string;
   totalPayout: number;
+  source: "AIRBNB" | "DIRECT";
   existing: BookingPayment[];
   onClose: () => void;
   onSaved: () => Promise<void>;
@@ -206,6 +228,7 @@ function BookingPaymentForm({
         key={bookingId}
         bookingId={bookingId}
         totalPayout={totalPayout}
+        source={source}
         existing={existing}
         onSaved={onSaved}
         submit={submit}
@@ -217,19 +240,28 @@ function BookingPaymentForm({
 function BookingPaymentFields({
   bookingId,
   totalPayout,
+  source,
   existing,
   onSaved,
   submit,
 }: {
   bookingId: string;
   totalPayout: number;
+  source: "AIRBNB" | "DIRECT";
   existing: BookingPayment[];
   onSaved: () => Promise<void>;
   submit: ReturnType<typeof useSubmit>;
 }) {
   const { user } = useIdentity();
+  const received = existing.reduce((s, p) => s + p.amount, 0);
+  // What's still expected of this booking. The common case by far is one final
+  // payment for the remainder — a direct booking's balance, or an Airbnb payout
+  // that cleared in full — so it makes a sensible pre-fill and saves retyping a
+  // figure the app already knows. Still editable, and the overpaid warning below
+  // catches a pre-fill that's wrong for a split payment.
+  const remaining = Math.round((totalPayout - received) * 100) / 100;
   const [form, setForm] = useState<FormState>({
-    amount: "",
+    amount: remaining > 0 ? String(remaining) : "",
     receivedDate: today(),
     method: "bank_transfer",
     reference: "",
@@ -269,7 +301,6 @@ function BookingPaymentFields({
     });
   }
 
-  const received = existing.reduce((s, p) => s + p.amount, 0);
   const overpaying = form.amount !== "" && received + Number(form.amount) > totalPayout;
 
   return (
@@ -287,7 +318,7 @@ function BookingPaymentFields({
           )}
         </Field>
 
-        <Field label="Received date" required error={errors.receivedDate}>
+        <Field label="Received date" required error={errors.receivedDate} hint={DATE_HINTS[source]}>
           {(id) => (
             <Input
               id={id}

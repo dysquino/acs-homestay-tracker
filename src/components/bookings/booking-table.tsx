@@ -310,6 +310,7 @@ export function BookingTable({
                 <BookingPayments
                   bookingId={selected.id}
                   totalPayout={selected.totalPayout}
+                  source={selected.source === "airbnb" ? "AIRBNB" : "DIRECT"}
                   onChanged={resync}
                 />
               ) : null}
