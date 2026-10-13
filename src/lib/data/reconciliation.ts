@@ -44,7 +44,7 @@ export type PoolItem = {
 
 export type MatchedItem = {
   key: string;
-  sourceType: PoolItem["sourceType"];
+  sourceType: PoolItem["sourceType"] | "adjustment";
   sourceId: string;
   amount: number;
   bankPostedDate: string;
@@ -228,8 +228,52 @@ export async function getWorkspaceMonth(month: string): Promise<WorkspaceMonth> 
     };
   });
 
-  const matchedInTotal = toPesos(sum(history.filter((h) => h.sourceType === "booking_payment").map((h) => h.amount)));
-  const matchedOutTotal = toPesos(sum(history.filter((h) => h.sourceType === "expense_settlement").map((h) => h.amount)));
+  // Adjustments carry their own bank posting date, so they land in the month's
+  // totals directly rather than needing a separate "match it" step (§4.7).
+  const adjustments = await prisma.reconciliationAdjustment.findMany({
+    where: { status: "ACTIVE", bankPostedDate: { gte, lt } },
+    orderBy: [{ bankPostedDate: "asc" }, { createdAt: "asc" }],
+    select: {
+      id: true,
+      direction: true,
+      amount: true,
+      bankPostedDate: true,
+      category: true,
+      description: true,
+      createdBy: true,
+    },
+  });
+  const adjustmentIn = sumDecimals(
+    adjustments.filter((a) => a.direction === "INFLOW").map((a) => a.amount),
+  );
+  const adjustmentOut = sumDecimals(
+    adjustments.filter((a) => a.direction === "OUTFLOW").map((a) => a.amount),
+  );
+
+  for (const a of adjustments) {
+    history.push({
+      key: a.id,
+      sourceType: "adjustment",
+      sourceId: a.id,
+      amount: toPesos(sumDecimals([a.amount])),
+      bankPostedDate: dateToISO(a.bankPostedDate),
+      label: a.description,
+      detail: ADJUSTMENT_DETAIL[a.category] ?? "Adjustment",
+      matchedBy: a.createdBy,
+      matchedAt: a.bankPostedDate.toISOString(),
+      statementGroupKey: null,
+    });
+  }
+  history.sort((a, b) => a.bankPostedDate.localeCompare(b.bankPostedDate));
+
+  const matchedInTotal = toPesos(
+    sum(history.filter((h) => h.sourceType === "booking_payment").map((h) => h.amount)) +
+      adjustmentIn,
+  );
+  const matchedOutTotal = toPesos(
+    sum(history.filter((h) => h.sourceType === "expense_settlement").map((h) => h.amount)) +
+      adjustmentOut,
+  );
 
   return {
     month,
@@ -246,6 +290,17 @@ export async function getWorkspaceMonth(month: string): Promise<WorkspaceMonth> 
     olderOutCount: outflows.filter((o) => o.older).length,
   };
 }
+
+const ADJUSTMENT_DETAIL: Record<string, string> = {
+  BANK_FEE: "Bank fee",
+  BANK_INTEREST: "Interest",
+  CHARGEBACK: "Chargeback",
+  OWNER_CONTRIBUTION: "Owner contribution",
+  OWNER_WITHDRAWAL: "Owner withdrawal",
+  TRANSFER_CORRECTION: "Transfer correction",
+  DUPLICATE_CORRECTION: "Duplicate correction",
+  OTHER: "Adjustment",
+};
 
 const SETTLEMENT_DETAIL: Record<string, string> = {
   DIRECT_VENDOR_PAYMENT: "Paid vendor",

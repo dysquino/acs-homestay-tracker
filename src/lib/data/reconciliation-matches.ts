@@ -8,7 +8,9 @@ import {
   directionFor,
   MatchError,
   remainingCentavos,
+  validateAdjustment,
   validateMatchAmount,
+  type AdjustmentCategoryValue,
   type SourceType,
 } from "@/lib/reconciliation-match-rules";
 
@@ -233,5 +235,81 @@ export async function reverseMatch(id: string, reversedBy: string, reason?: stri
         reversalReason: (reason ?? "").slice(0, 2000),
       },
     });
+  });
+}
+/* ------------------------------------------------------------------ */
+/* Adjustments — bank movements with no recorded transaction behind    */
+/* them (§4.7, §7.12).                                                 */
+/* ------------------------------------------------------------------ */
+
+export type CreateAdjustmentInput = {
+  direction: "INFLOW" | "OUTFLOW";
+  category: AdjustmentCategoryValue;
+  amount: number;
+  /** When the movement relates to. */
+  effectiveDate: string;
+  /** When it posted to the bank — decides the month. */
+  bankPostedDate: string;
+  description: string;
+  notes?: string;
+  createdBy: string;
+};
+
+/**
+ * Record a bank movement that no booking or expense explains.
+ *
+ * This is the escape hatch that makes reconciliation honest: a service charge,
+ * interest, an owner's cash-in, a transfer that landed twice. Without it an
+ * unexplained statement line has nowhere to go, and the owner either forces it
+ * into an unrelated record or gives up on reconciling the month (§3.2).
+ *
+ * An adjustment explains a movement; it never fabricates the booking or
+ * expense that supposedly caused it (§4.7). It carries its own bank posting
+ * date, so it lands in that month's totals directly — there's no second
+ * "match it" step.
+ */
+export async function createAdjustment(
+  input: CreateAdjustmentInput,
+): Promise<{ id: string }> {
+  await requireSiteAccess();
+  await requireReconciliationEnabled();
+
+  validateAdjustment({
+    amountCentavos: toCentavos(input.amount),
+    description: input.description,
+    effectiveDate: input.effectiveDate,
+    bankPostedDate: input.bankPostedDate,
+  });
+  const createdBy = assertActor(input.createdBy);
+
+  const row = await prisma.reconciliationAdjustment.create({
+    data: {
+      direction: input.direction,
+      category: input.category,
+      amount: input.amount,
+      effectiveDate: isoToDate(input.effectiveDate),
+      bankPostedDate: isoToDate(input.bankPostedDate),
+      description: input.description.trim().slice(0, 200),
+      notes: (input.notes ?? "").slice(0, 2000),
+      createdBy,
+    },
+    select: { id: true },
+  });
+  return row;
+}
+
+/** Void an adjustment rather than deleting it — §7.13 applies here too. */
+export async function voidAdjustment(id: string, voidedBy: string): Promise<void> {
+  await requireSiteAccess();
+  await requireReconciliationEnabled();
+  const actor = assertActor(voidedBy);
+
+  const existing = await prisma.reconciliationAdjustment.findUnique({ where: { id } });
+  if (!existing) throw new MatchError("That adjustment no longer exists.");
+  if (existing.status === "VOIDED") return; // idempotent
+
+  await prisma.reconciliationAdjustment.update({
+    where: { id },
+    data: { status: "VOIDED", voidedAt: new Date(), voidedBy: actor },
   });
 }

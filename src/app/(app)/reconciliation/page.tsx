@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import { PageHeader } from "@/components/layout/app-shell";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { AdjustmentForm } from "@/components/reconciliation/adjustment-form";
 import { MatchPanel } from "@/components/reconciliation/match-panel";
 import {
   centsToDigits,
@@ -12,7 +13,11 @@ import {
   entryToAmount,
   type AmountEntry,
 } from "@/lib/amount-entry";
-import { createMatch, reverseMatch } from "@/lib/data/reconciliation-matches";
+import {
+  createMatch,
+  reverseMatch,
+  voidAdjustment as voidAdjustmentAction,
+} from "@/lib/data/reconciliation-matches";
 import { cn } from "@/lib/cn";
 import { ChevronLeftIcon, ChevronRightIcon } from "@/components/ui/icons";
 import { StatTile } from "@/components/ui/stat";
@@ -56,6 +61,7 @@ export default function ReconciliationPage() {
   const [bankDate, setBankDate] = useState(today());
   const [busy, setBusy] = useState(false);
   const [matchError, setMatchError] = useState<string | null>(null);
+  const [adjusting, setAdjusting] = useState(false);
   const { user } = useIdentity();
 
   /**
@@ -120,6 +126,21 @@ export default function ReconciliationPage() {
         await reload();
       } catch {
         setError("Couldn't undo that match.");
+      } finally {
+        setUndoing(null);
+      }
+    },
+    [reload, user],
+  );
+
+  const voidAdjustment = useCallback(
+    async (id: string) => {
+      setUndoing(id);
+      try {
+        await voidAdjustmentAction(id, user?.name ?? "Unknown");
+        await reload();
+      } catch {
+        setError("Couldn't void that adjustment.");
       } finally {
         setUndoing(null);
       }
@@ -240,6 +261,7 @@ export default function ReconciliationPage() {
             onSelect={pick}
             onClear={clearMatch}
             onConfirm={confirmMatch}
+            onAdjust={() => setAdjusting(true)}
             busy={busy}
             error={matchError}
             monthLabel={formatMonth(`${month}-01`)}
@@ -266,6 +288,16 @@ export default function ReconciliationPage() {
           </div>
         </div>
       )}
+
+      <AdjustmentForm
+        open={adjusting}
+        defaultDate={bankDate}
+        onClose={() => setAdjusting(false)}
+        onSaved={async () => {
+          setAdjusting(false);
+          await reload();
+        }}
+      />
 
       <Card className="mt-5">
         <div className="border-b border-slate-100 px-4 py-3 sm:px-5">
@@ -297,14 +329,25 @@ export default function ReconciliationPage() {
                   >
                     {formatCurrency(h.amount)}
                   </p>
-                  <button
-                    type="button"
-                    onClick={() => undo(h.key)}
-                    disabled={undoing === h.key}
-                    className="rounded-md px-2 py-1 text-xs font-medium text-slate-500 hover:bg-slate-100 hover:text-slate-800 disabled:opacity-50"
-                  >
-                    {undoing === h.key ? "Undoing…" : "Undo"}
-                  </button>
+                  {h.sourceType === "adjustment" ? (
+                    <button
+                      type="button"
+                      onClick={() => voidAdjustment(h.key)}
+                      disabled={undoing === h.key}
+                      className="rounded-md px-2 py-1 text-xs font-medium text-slate-500 hover:bg-slate-100 hover:text-slate-800 disabled:opacity-50"
+                    >
+                      {undoing === h.key ? "Voiding…" : "Void"}
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => undo(h.key)}
+                      disabled={undoing === h.key}
+                      className="rounded-md px-2 py-1 text-xs font-medium text-slate-500 hover:bg-slate-100 hover:text-slate-800 disabled:opacity-50"
+                    >
+                      {undoing === h.key ? "Undoing…" : "Undo"}
+                    </button>
+                  )}
                 </div>
               </li>
             ))}

@@ -490,3 +490,58 @@ model ReconciliationMatch {
   /// Outstanding-pool lookup: "active matches for these source ids".
   @@index([sourceType, sourceId, reversedAt])
 }
+
+/// Why money moved when it doesn't correspond to any booking receipt or
+/// expense payout (§4.7). Deliberately NOT including GUEST_REFUND — that's an
+/// ExpenseSettlement of that type, so a refund stays in the expense totals
+/// instead of splitting across two mechanisms.
+enum AdjustmentCategory {
+  BANK_FEE
+  BANK_INTEREST
+  CHARGEBACK
+  OWNER_CONTRIBUTION
+  OWNER_WITHDRAWAL
+  TRANSFER_CORRECTION
+  DUPLICATE_CORRECTION
+  OTHER
+}
+
+enum AdjustmentStatus {
+  ACTIVE
+  VOIDED
+}
+
+/// A bank movement that can't be explained by a recorded transaction — a
+/// service charge, interest, an owner's cash-in, a transfer that landed twice
+/// (§7.12).
+///
+/// Carries its own `bankPostedDate`, which is what decides the month it lands
+/// in — same rule as a match. So an adjustment recorded for a July statement
+/// appears in July's totals without a second "match it" step; the alternative
+/// would mean creating a row and then immediately matching it to itself, which
+/// is friction with no safety gained.
+///
+/// Never fabricates a booking or an expense (§4.7): an adjustment explains a
+/// movement, it does not invent the thing that supposedly caused it.
+model ReconciliationAdjustment {
+  id        String              @id @default(cuid())
+  direction MatchDirection
+  category  AdjustmentCategory
+  status    AdjustmentStatus    @default(ACTIVE)
+  /// Positive; direction lives in its own column, never in a sign.
+  amount    Decimal             @db.Decimal(10, 2)
+  /// When the movement relates to, as opposed to when it posted.
+  effectiveDate  DateTime
+  bankPostedDate DateTime
+  /// Short statement-style label — "Monthly account fee", "Transfer reversal".
+  description String
+  notes       String   @default("")
+  /// Identity-picker display label, matching matchedBy / createdBy elsewhere.
+  createdBy    String
+  createdAt    DateTime @default(now())
+  voidedAt     DateTime?
+  voidedBy     String?
+
+  @@index([bankPostedDate])
+  @@index([status, bankPostedDate])
+}

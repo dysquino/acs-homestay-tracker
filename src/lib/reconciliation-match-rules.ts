@@ -83,3 +83,69 @@ export function assertActor(value: string): string {
 export function totalRequested(requests: Iterable<{ amountCentavos: bigint }>): bigint {
   return sum(Array.from(requests, (r) => r.amountCentavos));
 }
+
+/* ------------------------------------------------------------------ */
+/* Adjustments — bank movements with no recorded transaction behind   */
+/* them (§4.7). Rules kept here so they're unit-testable without a DB. */
+/* ------------------------------------------------------------------ */
+
+export type AdjustmentCategoryValue =
+  | "BANK_FEE"
+  | "BANK_INTEREST"
+  | "CHARGEBACK"
+  | "OWNER_CONTRIBUTION"
+  | "OWNER_WITHDRAWAL"
+  | "TRANSFER_CORRECTION"
+  | "DUPLICATE_CORRECTION"
+  | "OTHER";
+
+/**
+ * Validate the shape of an adjustment before it is written.
+ *
+ * Two rules worth stating:
+ *
+ * - Amount must be positive. Direction is separate, so a negative amount would
+ *   be a double negative that quietly flips which side of the month's totals
+ *   the money lands on.
+ *
+ * - The bank posting date is required and separate from the effective date.
+ *   The posting date decides the month; the effective date is when the movement
+ *   relates to. An adjustment whose only date is "sometime in July" would have
+ *   no way to place itself in a statement period.
+ */
+export function validateAdjustment(input: {
+  amountCentavos: bigint;
+  description: string;
+  effectiveDate: string;
+  bankPostedDate: string;
+}): void {
+  if (input.amountCentavos <= 0n) {
+    throw new MatchError("Enter an amount greater than zero.");
+  }
+  if (!input.description.trim()) {
+    throw new MatchError("Give this a short description.");
+  }
+  if (input.description.length > 200) {
+    throw new MatchError("Description is too long.");
+  }
+  assertBankPostedDate(input.bankPostedDate);
+  assertBankPostedDate(input.effectiveDate);
+}
+
+/**
+ * Categories that are always an inflow, and always an outflow.
+ *
+ * Offered as a default direction when picking a category, so "Bank interest"
+ * doesn't have to be re-typed as an inflow every month. Still overridable —
+ * a chargeback is normally money out, but the owner knows their statement.
+ */
+export const NATURAL_DIRECTION: Record<AdjustmentCategoryValue, "INFLOW" | "OUTFLOW"> = {
+  BANK_FEE: "OUTFLOW",
+  BANK_INTEREST: "INFLOW",
+  CHARGEBACK: "OUTFLOW",
+  OWNER_CONTRIBUTION: "INFLOW",
+  OWNER_WITHDRAWAL: "OUTFLOW",
+  TRANSFER_CORRECTION: "OUTFLOW",
+  DUPLICATE_CORRECTION: "OUTFLOW",
+  OTHER: "OUTFLOW",
+};

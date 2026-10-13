@@ -40,6 +40,7 @@ export function MatchPanel({
   onSelect,
   onClear,
   onConfirm,
+  onAdjust,
   busy,
   error,
   monthLabel,
@@ -54,6 +55,8 @@ export function MatchPanel({
   onSelect: (item: PoolItem) => void;
   onClear: () => void;
   onConfirm: () => void;
+  /** Opens the adjustment form — the escape hatch when nothing matches. */
+  onAdjust: () => void;
   busy: boolean;
   error: string | null;
   monthLabel: string;
@@ -153,10 +156,19 @@ export function MatchPanel({
             ))}
           </ul>
         ) : hasAmount(entry) && searching.length > 0 ? (
-          <p className="rounded-lg bg-amber-50 p-2.5 text-xs text-amber-800">
-            Nothing matches that figure exactly. Pick the right transaction from the
-            list beside this panel, or check the amount.
-          </p>
+          <div className="rounded-lg bg-amber-50 p-2.5 text-xs text-amber-800">
+            <p>
+              Nothing matches that figure exactly. Pick the right transaction from
+              the list beside this panel, or check the amount.
+            </p>
+            <button
+              type="button"
+              onClick={onAdjust}
+              className="mt-1.5 font-medium underline underline-offset-2"
+            >
+              Nothing on the bank matches — record an adjustment
+            </button>
+          </div>
         ) : null}
 
         {selected && amount !== null ? (
