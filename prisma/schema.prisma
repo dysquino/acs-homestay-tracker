@@ -594,6 +594,21 @@ model ReconciliationAdjustment {
 /// Reopening does not create a second row: it moves this one back to an
 /// editable state, bumps `version`, and leaves the prior finalized snapshot in
 /// place, so the report a month had before a correction is still readable.
+///
+/// ## Database-level sealed-period guard (not visible to Prisma)
+///
+/// A trigger refuses INSERT and UPDATE on `ReconciliationMatch` and
+/// `ReconciliationAdjustment` while the parent period is `FINALIZED` (§8.10).
+/// Prisma cannot represent triggers, so `prisma migrate diff` neither reports
+/// nor reproduces it — it is maintained by hand in
+/// `docs/migrations/2026-10-14_sealed_period_guard.sql`. Re-apply that file if
+/// this database is ever rebuilt from `schema.prisma` alone.
+///
+/// The application guard in `resolveWritablePeriod` stays: it produces an
+/// error an owner can act on, and the trigger is the backstop for any code path
+/// that forgets to call it, plus migrations, admin tools and hand-run SQL.
+/// There is deliberately no trigger on this table — blocking UPDATEs here
+/// would make a sealed month impossible to reopen, which §8.11 requires.
 model ReconciliationPeriod {
   id String @id @default(cuid())
 

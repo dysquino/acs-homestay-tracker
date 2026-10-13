@@ -1,0 +1,89 @@
+/**
+ * Print layout for the sealed reconciliation report (§16).
+ *
+ * The report is the artifact you'd file, and it gets read on paper more often
+ * than anyone expects — so printing it has to produce something legible rather
+ * than a screenshot of an app.
+ *
+ * Three problems this solves, none of them obvious:
+ *
+ * 1. Chrome. Every control that isn't the report is hidden. The stepper, the
+ *    nav, the back link, the reopen button — all gone.
+ *
+ * 2. The page background. `body` is tinted in the app and browsers don't print
+ *    backgrounds by default anyway, so the report is given white and the
+ *    severity of a non-zero difference is carried by the *text* rather than by
+ *    a coloured background that silently vanishes.
+ *
+ * 3. The columns. The Verify stage is a two-column grid on screen; on paper it
+ *    becomes one, because a 22rem sidebar beside a wide table on A4 is how
+ *    rows get clipped.
+ *
+ * `.print-only` is the mirror of `.no-print`: hidden on screen, shown on paper.
+ */
+@media print {
+  @page {
+    margin: 14mm;
+  }
+
+  html,
+  body {
+    background: #fff !important;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  .print-only {
+    display: revert !important;
+  }
+
+  /* Keep a section from splitting across pages, and stop tables from being
+     orphaned from their heading. */
+  .print-keep {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .print-section {
+    break-inside: avoid;
+    box-shadow: none !important;
+    border: 1px solid #cbd5e1 !important;
+    border-radius: 0 !important;
+    margin-bottom: 12pt;
+  }
+
+  /* Grid and flex both collapse to a single column so nothing is clipped at
+     the page edge. */
+  .print-stack {
+    display: block !important;
+  }
+
+  .print-stack > * {
+    margin-bottom: 12pt;
+  }
+
+  table {
+    page-break-inside: auto;
+  }
+
+  tr {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  thead {
+    display: table-header-group;
+  }
+}
+/* The wizard is a fixed full-screen overlay so it can sit above the workspace.
+   Printed as-is that pins the report to one viewport-height page and clips
+   everything below the fold, so it becomes a normal document flow. */
+@media print {
+  .print-root {
+    position: static !important;
+    overflow: visible !important;
+    background: #fff !important;
+  }
+}

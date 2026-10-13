@@ -513,6 +513,62 @@ export async function getSnapshotVersions(month: string): Promise<
   }));
 }
 
+export type SnapshotReport = {
+  version: number;
+  finalizedAt: string;
+  finalizedBy: string;
+  /** The frozen figures, exactly as certified — never recomputed. */
+  summary: Prisma.JsonValue;
+  ledger: Prisma.JsonValue;
+  outstanding: Prisma.JsonValue;
+};
+
+/**
+ * Load one frozen report by version.
+ *
+ * Reads the snapshot rather than reconstructing from live rows, which is the
+ * whole point of storing it (§11.6): if a guest is renamed or an expense
+ * description edited since, a reconstructed "v1" would show today's wording
+ * against last month's numbers. Here it shows what was actually certified.
+ */
+export async function getSnapshotReport(
+  month: string,
+  version: number,
+): Promise<SnapshotReport | null> {
+  await requireSiteAccess();
+  await requireReconciliationEnabled();
+  if (!/^\d{4}-\d{2}$/.test(month)) throw new Error("Month must be YYYY-MM.");
+  if (!Number.isInteger(version) || version < 1) throw new Error("Version must be a positive integer.");
+
+  const period = await prisma.reconciliationPeriod.findUnique({
+    where: { month: isoToDate(periodMonthStart(`${month}-01`)) },
+    select: { id: true },
+  });
+  if (!period) return null;
+
+  const snap = await prisma.reconciliationSnapshot.findUnique({
+    where: { periodId_version: { periodId: period.id, version } },
+    select: {
+      version: true,
+      finalizedAt: true,
+      finalizedBy: true,
+      summaryJson: true,
+      ledgerJson: true,
+      outstandingJson: true,
+    },
+  });
+  if (!snap) return null;
+
+  return {
+    version: snap.version,
+    finalizedAt: snap.finalizedAt.toISOString(),
+    finalizedBy: snap.finalizedBy,
+    summary: snap.summaryJson,
+    ledger: snap.ledgerJson,
+    outstanding: snap.outstandingJson,
+  };
+}
+
 function snapshotSummary(period: PeriodRow, totals: ReturnType<typeof calculatePeriodTotals>) {
   return {
     month: period.month.toISOString().slice(0, 7),

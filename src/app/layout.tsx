@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import { IdentityProvider } from "@/lib/identity";
 
 import "./globals.css";
+import "./print.css";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",

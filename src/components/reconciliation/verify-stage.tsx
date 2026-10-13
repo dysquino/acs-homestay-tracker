@@ -50,7 +50,7 @@ export function VerifyStage({
   status: "DRAFT" | "FINALIZED" | "REOPENED";
 }) {
   return (
-    <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_22rem]">
+    <div className="print-stack grid gap-5 lg:grid-cols-[minmax(0,1fr)_22rem]">
       <div className="grid gap-5">
         <Breakdown totals={totals} />
         <LedgerTable rows={ledger} />
@@ -63,7 +63,7 @@ export function VerifyStage({
           <OutstandingCard items={outstanding} totals={totals} />
         ) : null}
 
-        <div className="rounded-3xl bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_8px_24px_rgba(15,23,42,0.06)]">
+        <div className="no-print rounded-3xl bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_8px_24px_rgba(15,23,42,0.06)]">
           {readOnly ? (
             <>
               <p className="text-sm font-medium text-slate-900">
@@ -113,7 +113,7 @@ function Breakdown({ totals }: { totals: PeriodTotals }) {
   ].filter((r) => r.cents !== 0n);
 
   return (
-    <section className="overflow-hidden rounded-3xl bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04),0_8px_24px_rgba(15,23,42,0.06)]">
+    <section className="print-section overflow-hidden rounded-3xl bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04),0_8px_24px_rgba(15,23,42,0.06)]">
       <header className="border-b border-slate-100 px-4 py-3 sm:px-5">
         <h2 className="text-sm font-semibold text-slate-900">This month in full</h2>
         <p className="text-xs text-slate-500">
@@ -177,7 +177,7 @@ function DifferenceCard({
   return (
     <section
       className={cn(
-        "rounded-3xl p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_8px_24px_rgba(15,23,42,0.06)]",
+        "print-section rounded-3xl p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_8px_24px_rgba(15,23,42,0.06)]",
         ok ? "bg-white" : "bg-amber-50",
       )}
     >
@@ -229,7 +229,7 @@ function OutstandingCard({
   totals: PeriodTotals;
 }) {
   return (
-    <section className="overflow-hidden rounded-3xl bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04),0_8px_24px_rgba(15,23,42,0.06)]">
+    <section className="print-section overflow-hidden rounded-3xl bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04),0_8px_24px_rgba(15,23,42,0.06)]">
       <header className="border-b border-slate-100 px-4 py-3">
         <h2 className="text-sm font-semibold text-slate-900">
           Still outstanding · {items.length}
@@ -274,7 +274,7 @@ function OutstandingCard({
 function LedgerTable({ rows }: { rows: LedgerRow[] }) {
   const movements = rows.filter((r) => r.kind === "MOVEMENT");
   return (
-    <section className="overflow-hidden rounded-3xl bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04),0_8px_24px_rgba(15,23,42,0.06)]">
+    <section className="print-section overflow-hidden rounded-3xl bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04),0_8px_24px_rgba(15,23,42,0.06)]">
       <header className="border-b border-slate-100 px-4 py-3 sm:px-5">
         <h2 className="text-sm font-semibold text-slate-900">Ledger</h2>
         <p className="text-xs text-slate-500">
@@ -287,7 +287,7 @@ function LedgerTable({ rows }: { rows: LedgerRow[] }) {
       ) : (
         <>
           {/* Desktop: a table. */}
-          <table className="hidden w-full text-sm sm:table">
+          <table className="hidden w-full text-sm sm:table print-only">
             <thead>
               <tr className="border-b border-slate-100 text-left text-xs text-slate-500">
                 <th className="px-4 py-2 font-medium sm:px-5">Posted</th>
@@ -333,7 +333,7 @@ function LedgerTable({ rows }: { rows: LedgerRow[] }) {
           </table>
 
           {/* Mobile: a timeline, with the balance on every row (§10.3). */}
-          <ul className="divide-y divide-slate-100 sm:hidden">
+          <ul className="no-print divide-y divide-slate-100 sm:hidden">
             <li className="bg-slate-50 px-4 py-2.5 text-sm">
               <span className="text-slate-600">Opening balance</span>
               <span className="ml-2 font-medium tabular-nums">
