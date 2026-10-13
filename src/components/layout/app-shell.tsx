@@ -12,6 +12,7 @@ import { useActionItems } from "@/lib/use-action-items";
 import {
   BankIcon,
   CalendarIcon,
+  ChevronLeftIcon,
   DownloadIcon,
   HomeIcon,
   ReceiptIcon,
@@ -81,6 +82,12 @@ export function AppShell({ children }: { children: ReactNode }) {
   // §6.2 asks for a usability review before adding a sixth.
   const desktopNav = reconciliationEnabled ? [...NAV, RECONCILIATION_NAV] : NAV;
 
+  // Reconciliation is a focused workspace, not another tab: §10.1 asks for the
+  // standard bottom navigation to be hidden while it's active, because the
+  // control sheet sits where that bar would be and the two would collide. The
+  // route carries its own back action and header instead.
+  const focused = pathname.startsWith("/reconciliation");
+
   return (
     <div className="flex min-h-full flex-col lg:flex-row">
       {/* Desktop sidebar — sticky so navigation stays reachable while a
@@ -124,16 +131,29 @@ export function AppShell({ children }: { children: ReactNode }) {
       {/* Mobile top bar — sticky, like the bottom tabs, so the brand, export
           and who's-recording stay in reach while a long page scrolls. Its
           height is reserved as scroll padding in globals.css, so jumps to a
-          spot on the page (e.g. pagination) don't land underneath it. */}
+          spot on the page (e.g. pagination) don't land underneath it.
+          On the focused reconciliation route the bottom tabs are gone, so a
+          back action replaces the brand — §10.2 asks for an explicit way
+          out of a route that is otherwise a dead end on a phone. */}
       <header className="no-print sticky top-0 z-30 flex items-center justify-between gap-3 bg-white px-4 py-3 shadow-[0_1px_2px_rgba(15,23,42,0.06)] lg:hidden">
-        <Brand />
+        {focused ? (
+          <Link
+            href="/"
+            className="-ml-1 inline-flex items-center gap-1 rounded-md px-1 py-1.5 text-sm font-medium text-slate-700 hover:text-slate-900"
+          >
+            <ChevronLeftIcon className="h-5 w-5" />
+            Back
+          </Link>
+        ) : (
+          <Brand />
+        )}
         <div className="flex items-center gap-1">
           <ExportMenu compact />
           <IdentityPicker />
         </div>
       </header>
 
-      <main className="min-w-0 flex-1 pb-20 lg:pb-0">
+      <main className={cn("min-w-0 flex-1", focused ? "pb-0" : "pb-20 lg:pb-0")}>
         <div className="mx-auto w-full max-w-[88rem] px-4 py-5 sm:px-6 sm:py-7">
           {children}
         </div>
@@ -144,31 +164,34 @@ export function AppShell({ children }: { children: ReactNode }) {
           after the home-screen icon felt undersized next to the rest of an
           app-style layout. The grid-cols-5 + ~74px per cell still leaves
           room for the longest label ("Cleaning", 8 chars) without wrap on
-          320px-wide screens. */}
-      <nav className="no-print fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 rounded-t-3xl bg-white pb-[env(safe-area-inset-bottom)] shadow-[0_-4px_20px_rgba(15,23,42,0.08)] lg:hidden">
-        {NAV.map((item) => {
-          const active = isActive(pathname, item.href);
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              aria-current={active ? "page" : undefined}
-              className={cn(
-                "flex flex-col items-center gap-1 py-2.5 text-xs font-medium",
-                active ? "text-brand-700" : "text-slate-500",
-              )}
-            >
-              <span className="relative">
-                <item.icon className="h-6 w-6" />
-                {badge(item.href) ? (
-                  <span className="absolute -top-1.5 -right-2.5">{badge(item.href)}</span>
-                ) : null}
-              </span>
-              {item.short}
-            </Link>
-          );
-        })}
-      </nav>
+          320px-wide screens. Suppressed on the focused reconciliation route,
+          where the control sheet occupies the same space. */}
+      {focused ? null : (
+        <nav className="no-print fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 rounded-t-3xl bg-white pb-[env(safe-area-inset-bottom)] shadow-[0_-4px_20px_rgba(15,23,42,0.08)] lg:hidden">
+          {NAV.map((item) => {
+            const active = isActive(pathname, item.href);
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                aria-current={active ? "page" : undefined}
+                className={cn(
+                  "flex flex-col items-center gap-1 py-2.5 text-xs font-medium",
+                  active ? "text-brand-700" : "text-slate-500",
+                )}
+              >
+                <span className="relative">
+                  <item.icon className="h-6 w-6" />
+                  {badge(item.href) ? (
+                    <span className="absolute -top-1.5 -right-2.5">{badge(item.href)}</span>
+                  ) : null}
+                </span>
+                {item.short}
+              </Link>
+            );
+          })}
+        </nav>
+      )}
     </div>
   );
 }

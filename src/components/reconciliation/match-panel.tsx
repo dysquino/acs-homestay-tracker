@@ -17,6 +17,24 @@ import {
 import type { PoolItem } from "@/lib/data/reconciliation";
 import { toAmount, toCentavos } from "@/lib/finance";
 import type { BatchTotals } from "@/lib/reconciliation-match-rules";
+import { ChevronDownIcon } from "@/components/ui/icons";
+
+/**
+ * How open the mobile control sheet is (§10.4).
+ *
+ * Three states, because the list is the point on a phone and the controls are
+ * something you reach for once per statement line:
+ *
+ * - `collapsed` — date, amount, and the handle. ~72–88px, so most of the
+ *   transaction list stays visible and tappable.
+ * - `half` — plus the current suggestion and the primary action, which is what
+ *   you need to actually commit a match.
+ * - `expanded` — plus the numpad and everything else, for typing a figure.
+ *
+ * Desktop ignores all three and renders the full panel, so the states can never
+ * leave a desktop user with controls they can't reach.
+ */
+export type SheetState = "collapsed" | "half" | "expanded";
 
 /**
  * The reconciliation command panel (§9.2).
@@ -54,6 +72,8 @@ export function MatchPanel({
   busy,
   error,
   monthLabel,
+  sheetState,
+  onSheetStateChange,
 }: {
   entry: AmountEntry;
   onEntryChange: (entry: AmountEntry) => void;
@@ -73,6 +93,8 @@ export function MatchPanel({
   busy: boolean;
   error: string | null;
   monthLabel: string;
+  sheetState: SheetState;
+  onSheetStateChange: (state: SheetState) => void;
 }) {
   // The sign picks which pool is searched: a negative means outflows.
   const searching = entry.negative ? outflows : inflows;
@@ -94,6 +116,14 @@ export function MatchPanel({
   const canConfirm =
     selection.length > 0 && amount !== null && !busy && !mixed && (!grouped || linesUp);
 
+  /**
+   * Hide a section on a phone unless its state allows it, while leaving it
+   * untouched on desktop. The `xl:block` is what makes the desktop panel whole
+   * regardless of state — otherwise a collapsed sheet would quietly hide the
+   * numpad from a wide browser too.
+   */
+  const onMobile = (allowed: boolean) => cn(!allowed && "hidden xl:block");
+
   function onKeyDown(e: React.KeyboardEvent) {
     const key = keyFromKeyboard(e.key);
     if (key) {
@@ -103,16 +133,67 @@ export function MatchPanel({
   }
 
   return (
-    <Card className="h-fit">
-      <div className="border-b border-slate-100 px-4 py-3">
+    <Card
+      className={cn(
+        "h-fit",
+        // A phone: a bottom sheet over the list, so the transactions stay
+        // visible and tappable behind it. `dvh` rather than `vh` because mobile
+        // browsers grow and shrink the viewport as chrome hides — §10.1.
+        "fixed inset-x-0 bottom-0 z-40 max-h-[75dvh] overflow-y-auto overscroll-contain rounded-b-none",
+        "shadow-[0_-8px_28px_rgba(15,23,42,0.16)]",
+        // A desktop: an ordinary column again, in the grid's left track.
+        "xl:static xl:z-auto xl:max-h-none xl:overflow-visible xl:rounded-3xl",
+        "xl:shadow-[0_1px_2px_rgba(15,23,42,0.04),0_8px_24px_rgba(15,23,42,0.06)]",
+      )}
+    >
+      {/* Phone-only strip: the grab handle, the posting date, and the figure —
+          the three things needed to know what the sheet is about without
+          opening it (§10.4). Stays put in every state so the amount never
+          disappears behind the handle. */}
+      <div className="xl:hidden">
+        <button
+          type="button"
+          onClick={() => onSheetStateChange(sheetState === "expanded" ? "collapsed" : "expanded")}
+          aria-expanded={sheetState === "expanded"}
+          aria-label={sheetState === "expanded" ? "Collapse the match sheet" : "Expand the match sheet"}
+          className="flex w-full items-center gap-3 border-b border-slate-100 px-4 py-2 text-left"
+        >
+          <span aria-hidden="true" className="flex flex-col items-center gap-1">
+            <span className="block h-1 w-9 rounded-full bg-slate-300" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-[11px] font-medium text-slate-500">
+              Posting {bankDate}
+            </span>
+            <span
+              className={cn(
+                "block truncate text-sm font-semibold",
+                entry.negative ? "text-rose-700" : "text-emerald-800",
+              )}
+            >
+              {selection.length > 0
+                ? `${batch.count} selected · ${formatCurrency(toAmount(selectedCentavos))}`
+                : formatEntry(entry) || "₱0"}
+            </span>
+          </span>
+          <ChevronDownIcon
+            className={cn(
+              "h-5 w-5 shrink-0 text-slate-400 transition-transform",
+              sheetState === "expanded" && "rotate-180",
+            )}
+          />
+        </button>
+      </div>
+
+      <div className="hidden border-b border-slate-100 px-4 py-3 xl:block">
         <h2 className="text-sm font-semibold text-slate-900">Match to the bank</h2>
         <p className="text-xs text-slate-500">
           Type a figure from your statement for {monthLabel}.
         </p>
       </div>
 
-      <div className="space-y-3 px-4 py-3" onKeyDown={onKeyDown}>
-        <div>
+      <div className="space-y-3 px-4 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] xl:pb-3" onKeyDown={onKeyDown}>
+        <div className={onMobile(sheetState !== "collapsed")}>
           <label htmlFor="bank-date" className="block text-xs font-medium text-slate-700">
             Bank posting date
           </label>
@@ -128,7 +209,7 @@ export function MatchPanel({
           </p>
         </div>
 
-        <div>
+        <div className={onMobile(sheetState !== "collapsed")}>
           <p className="text-xs font-medium text-slate-700">Amount from statement</p>
           <p
             className={cn(
@@ -144,12 +225,19 @@ export function MatchPanel({
           </p>
         </div>
 
-        <Numpad
-          onPress={(key) => onEntryChange(applyKey(entry, key))}
-          disabled={busy}
-        />
+        {/* The numpad is the reason to fully expand — it is the tallest thing
+            here by far. The candidate list stays at half-open, because §10.4
+            puts "the current suggestion" there and it is what the primary
+            action is about to act on. */}
+        <div className={onMobile(sheetState === "expanded")}>
+          <Numpad
+            onPress={(key) => onEntryChange(applyKey(entry, key))}
+            disabled={busy}
+          />
+        </div>
 
-        {candidates.length > 0 ? (
+        <div className={onMobile(sheetState !== "collapsed")}>
+          {candidates.length > 0 ? (
           <ul className="space-y-1.5">
             <li className="text-xs font-medium text-slate-700">
               {candidates.length === 1
@@ -197,7 +285,11 @@ export function MatchPanel({
             </button>
           </div>
         ) : null}
+        </div>
 
+        {/* Half-open and up: the suggestion and the primary action, which is
+            what it takes to commit a match without expanding. */}
+        <div className={onMobile(sheetState !== "collapsed")}>
         {grouped || mixed ? (
           <div
             className={cn(
@@ -242,6 +334,7 @@ export function MatchPanel({
             against your {bankDate} statement.
           </div>
         ) : null}
+        </div>
 
         {error ? (
           <p className="rounded-lg border border-red-200 bg-red-50 p-2.5 text-xs text-red-700">
@@ -249,6 +342,10 @@ export function MatchPanel({
           </p>
         ) : null}
 
+        {/* Wrapped rather than hidden directly: `hidden` and `flex` are both
+            display utilities, so applying them to one element would leave the
+            winner up to stylesheet order rather than intent. */}
+        <div className={onMobile(sheetState !== "collapsed")}>
         <div className="flex gap-2">
           <Button className="flex-1" onClick={onClear} disabled={busy}>
             Clear
@@ -256,6 +353,7 @@ export function MatchPanel({
           <Button className="flex-1" variant="primary" onClick={onConfirm} disabled={!canConfirm}>
             {busy ? "Matching…" : grouped ? `Match ${batch.count} as one` : "Match it"}
           </Button>
+        </div>
         </div>
       </div>
     </Card>

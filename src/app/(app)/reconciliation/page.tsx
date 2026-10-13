@@ -6,7 +6,7 @@ import { PageHeader } from "@/components/layout/app-shell";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { AdjustmentForm } from "@/components/reconciliation/adjustment-form";
-import { MatchPanel } from "@/components/reconciliation/match-panel";
+import { MatchPanel, type SheetState } from "@/components/reconciliation/match-panel";
 import {
   centsToDigits,
   EMPTY_ENTRY,
@@ -28,6 +28,12 @@ import {
   type WorkspaceMonth,
 } from "@/lib/data/reconciliation";
 import { toAmount } from "@/lib/finance";
+import {
+  countByKind,
+  FILTERS,
+  filterByKind,
+  type PoolFilter,
+} from "@/lib/reconciliation-filters";
 import { addMonths, startOfMonth, today } from "@/lib/dates";
 import { formatCurrency, formatMonth, formatShortDate } from "@/lib/format";
 import { useIdentity } from "@/lib/identity";
@@ -83,6 +89,13 @@ export default function ReconciliationPage() {
   const [busy, setBusy] = useState(false);
   const [matchError, setMatchError] = useState<string | null>(null);
   const [adjusting, setAdjusting] = useState(false);
+  /**
+   * Starts collapsed on a phone so the transaction list is the first thing
+   * visible (§10.3); on a desktop the panel is in the grid regardless and the
+   * state is ignored, so there is nothing to detect here.
+   */
+  const [sheetState, setSheetState] = useState<SheetState>("collapsed");
+  const [filter, setFilter] = useState<PoolFilter>("AUTO");
   const { user } = useIdentity();
 
   /** Running totals for the selection bar (§7.11). Exact, in centavos. */
@@ -103,6 +116,20 @@ export default function ReconciliationPage() {
     }
     return counts;
   }, [data]);
+
+  /** Every outstanding row this month, for the filter chips' counts. */
+  const allOutstanding = useMemo(
+    () => [...(data?.inflows ?? []), ...(data?.outflows ?? [])],
+    [data],
+  );
+  /**
+   * The pools narrowed to the active filter (§7.5). Filtering the rows already
+   * in memory rather than re-querying: the month is loaded as a whole, and a
+   * filter that hit the database would make changing chips feel slow and could
+   * disagree with the totals above if the two were ever read separately.
+   */
+  const visibleInflows = useMemo(() => filterByKind(data?.inflows ?? [], filter), [data, filter]);
+  const visibleOutflows = useMemo(() => filterByKind(data?.outflows ?? [], filter), [data, filter]);
 
   /**
    * Tapping a transaction adds or removes it, then re-seeds the amount from what
@@ -128,6 +155,11 @@ export default function ReconciliationPage() {
       const nextSelected =
         nextBatch.inflowCentavos > 0n ? nextBatch.inflowCentavos : nextBatch.outflowCentavos;
       setSelection(next);
+      // On a phone the sheet starts collapsed so the list is the first thing
+      // visible; picking a transaction is a request to act on it, so open it to
+      // the point where the confirm button is reachable. No visual effect on
+      // desktop, where the panel is already fully visible.
+      if (next.length > 0) setSheetState("half");
       setEntry(
         spansBothPools || next.length === 0
           ? EMPTY_ENTRY
@@ -345,13 +377,24 @@ export default function ReconciliationPage() {
             busy={busy}
             error={matchError}
             monthLabel={formatMonth(`${month}-01`)}
+            sheetState={sheetState}
+            onSheetStateChange={setSheetState}
           />
           <div className="grid gap-5">
+            <FilterChips
+              value={filter}
+              onChange={setFilter}
+              counts={allOutstanding}
+            />
             <Pool
               title="Money in"
               subtitle="Recorded receipts that haven't been matched to a deposit yet."
-              items={data.inflows}
-              empty="Every receipt recorded this month has been matched."
+              items={visibleInflows}
+              empty={
+                filter === "AUTO"
+                  ? "Every receipt recorded this month has been matched."
+                  : "No receipts left under this filter."
+              }
               tone="in"
               selectedKeys={selection.map((s) => s.key)}
               onSelect={pick}
@@ -359,8 +402,14 @@ export default function ReconciliationPage() {
             <Pool
               title="Money out"
               subtitle="Recorded payouts that haven't been matched to a debit yet."
-              items={data.outflows}
-              empty="Every payout recorded this month has been matched."
+              items={visibleOutflows}
+              empty={
+                filter === "AUTO"
+                  ? "Every payout recorded this month has been matched."
+                  : filter === "REFUNDS"
+                    ? "No guest refunds left under this filter."
+                    : "No payouts left under this filter."
+              }
               tone="out"
               selectedKeys={selection.map((s) => s.key)}
               onSelect={pick}
@@ -368,6 +417,11 @@ export default function ReconciliationPage() {
           </div>
         </div>
       )}
+
+      {/* Clears the fixed sheet so the last row of the month stays reachable on
+          a phone — the sheet is out of flow, so without this the bottom of the
+          list sits underneath it. */}
+      <div aria-hidden="true" className="h-24 xl:hidden" />
 
       <AdjustmentForm
         open={adjusting}
@@ -438,6 +492,53 @@ export default function ReconciliationPage() {
         )}
       </Card>
     </>
+  );
+}
+
+/**
+ * The pool filters (§7.5), with the count each one would leave visible.
+ *
+ * Counts are shown even for a filter that currently matches nothing: "Refunds 0"
+ * is the answer to "are there any refunds left?", which is otherwise a question
+ * the interface can't answer without switching to the filter and finding out.
+ */
+function FilterChips({
+  value,
+  onChange,
+  counts,
+}: {
+  value: PoolFilter;
+  onChange: (value: PoolFilter) => void;
+  counts: PoolItem[];
+}) {
+  return (
+    <div
+      role="group"
+      aria-label="Filter transactions"
+      className="flex flex-wrap gap-1.5"
+    >
+      {FILTERS.map((f) => {
+        const active = f.value === value;
+        const n = countByKind(counts, f.value);
+        return (
+          <button
+            key={f.value}
+            type="button"
+            onClick={() => onChange(f.value)}
+            aria-pressed={active}
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors pointer-coarse:py-2.5",
+              active
+                ? "bg-brand-700 text-white"
+                : "bg-white text-slate-600 ring-1 ring-inset ring-slate-200 hover:bg-slate-50",
+            )}
+          >
+            {f.label}
+            <span className={active ? "text-brand-100" : "text-slate-400"}>{n}</span>
+          </button>
+        );
+      })}
+    </div>
   );
 }
 

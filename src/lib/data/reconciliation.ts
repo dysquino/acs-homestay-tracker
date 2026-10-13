@@ -2,6 +2,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { sum } from "@/lib/finance";
+import type { PoolKind } from "@/lib/reconciliation-filters";
 import { requireReconciliationEnabled } from "./reconciliation-status";
 
 import { requireSiteAccess } from "./access";
@@ -40,6 +41,14 @@ export type PoolItem = {
   reference: string;
   /** True when the record's own date is before the selected month. */
   older: boolean;
+  /**
+   * Which of the three record kinds this is — what the pool filters slice on
+   * (§7.5). A guest refund is separated from an ordinary payout because money
+   * going back to a guest is a different question from money going to a vendor,
+   * and chasing one while the other sits in the list is the usual way a month
+   * gets reconciled unevenly.
+   */
+  kind: PoolKind;
 };
 
 export type MatchedItem = {
@@ -171,6 +180,7 @@ export async function getWorkspaceMonth(month: string): Promise<WorkspaceMonth> 
       detail: p.booking.source === "AIRBNB" ? "Airbnb" : "Direct",
       reference: p.reference,
       older: monthOf(dateToISO(p.receivedDate)) < month,
+      kind: "receipt",
     });
   }
 
@@ -189,6 +199,7 @@ export async function getWorkspaceMonth(month: string): Promise<WorkspaceMonth> 
       detail: SETTLEMENT_DETAIL[s.settlementType],
       reference: s.reference,
       older: monthOf(dateToISO(s.paidDate)) < month,
+      kind: s.settlementType === "GUEST_REFUND" ? "refund" : "payout",
     });
   }
 
