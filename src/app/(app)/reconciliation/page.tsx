@@ -408,11 +408,7 @@ export default function ReconciliationPage() {
               title="Money in"
               subtitle="Recorded receipts that haven't been matched to a deposit yet."
               items={visibleInflows}
-              empty={
-                filter === "AUTO"
-                  ? "Every receipt recorded this month has been matched."
-                  : "No receipts left under this filter."
-              }
+              empty={poolEmpty(data.recordedInCount, "receipt", filter)}
               tone="in"
               selectedKeys={selection.map((s) => s.key)}
               onSelect={pick}
@@ -421,13 +417,7 @@ export default function ReconciliationPage() {
               title="Money out"
               subtitle="Recorded payouts that haven't been matched to a debit yet."
               items={visibleOutflows}
-              empty={
-                filter === "AUTO"
-                  ? "Every payout recorded this month has been matched."
-                  : filter === "REFUNDS"
-                    ? "No guest refunds left under this filter."
-                    : "No payouts left under this filter."
-              }
+              empty={poolEmpty(data.recordedOutCount, "payout", filter)}
               tone="out"
               selectedKeys={selection.map((s) => s.key)}
               onSelect={pick}
@@ -511,6 +501,28 @@ export default function ReconciliationPage() {
       </Card>
     </>
   );
+}
+
+/**
+ * The empty-state line for a pool.
+ *
+ * "Nothing here" has two very different causes and the interface has to tell
+ * them apart: work finished, or work never started. Telling an owner that every
+ * receipt has been matched when no receipt was ever recorded is the more
+ * damaging of the two errors — it reads as a completed month.
+ */
+function poolEmpty(
+  recorded: number,
+  noun: "receipt" | "payout",
+  filter: PoolFilter,
+): string {
+  if (recorded === 0) {
+    return filter === "AUTO"
+      ? `No ${noun}s recorded for this month yet. Record one first — matching only works against money you've already entered.`
+      : `No ${noun}s recorded for this month at all, so there is nothing for this filter to show.`;
+  }
+  if (filter !== "AUTO") return `No ${noun}s left under this filter.`;
+  return `Every ${noun} recorded this month has been matched.`;
 }
 
 /**

@@ -61,6 +61,18 @@ export type WorkspaceMonth = {
   /** Transactions carried over from an earlier month, in each pool. */
   olderInCount: number;
   olderOutCount: number;
+  /**
+   * How many payment / settlement records existed for this month *before* the
+   * matched ones were filtered out.
+   *
+   * Without this, an empty pool is ambiguous between "you finished this month"
+   * and "you have not recorded anything for it yet" — and the interface has to
+   * say one of those. Saying "every receipt has been matched" when no receipt
+   * was ever recorded tells the owner a month's work is complete when none has
+   * been started.
+   */
+  recordedInCount: number;
+  recordedOutCount: number;
 };
 
 /** Inclusive start of a 'YYYY-MM' as a UTC-midnight Date. */
@@ -272,6 +284,8 @@ export async function getWorkspaceMonth(month: string): Promise<WorkspaceMonth> 
     unmatchedOutTotal: toPesos(sum(outflows.map((o) => o.amount))),
     olderInCount: inflows.filter((i) => i.older).length,
     olderOutCount: outflows.filter((o) => o.older).length,
+    recordedInCount: paymentRecords.length,
+    recordedOutCount: settlementRecords.length,
   };
 }
 
