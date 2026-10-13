@@ -2,7 +2,13 @@
 
 import { prisma } from "@/lib/prisma";
 import { sum } from "@/lib/finance";
-import type { PoolKind } from "@/lib/reconciliation-filters";
+import {
+  buildPool,
+  poolKey,
+  type MatchedTotals,
+  type PoolItem,
+  type PoolRecord,
+} from "@/lib/reconciliation-pool";
 import { requireReconciliationEnabled } from "./reconciliation-status";
 
 import { requireSiteAccess } from "./access";
@@ -25,31 +31,7 @@ import { dateToISO, isoToDate } from "./mappers";
  * which is a different question (see the ReconciliationMatch model comment).
  */
 
-export type PoolItem = {
-  /** Stable key for React and for selection: `${sourceType}:${id}`. */
-  key: string;
-  sourceType: "booking_payment" | "expense_settlement";
-  sourceId: string;
-  amount: number;
-  /** The source record's own date (receivedDate / paidDate). */
-  date: string;
-  /** Booking guest, expense description, or payee. */
-  label: string;
-  /** Secondary line: source, category, or who was reimbursed. */
-  detail: string;
-  /** Bank / Airbnb reference when recorded. */
-  reference: string;
-  /** True when the record's own date is before the selected month. */
-  older: boolean;
-  /**
-   * Which of the three record kinds this is — what the pool filters slice on
-   * (§7.5). A guest refund is separated from an ordinary payout because money
-   * going back to a guest is a different question from money going to a vendor,
-   * and chasing one while the other sits in the list is the usual way a month
-   * gets reconciled unevenly.
-   */
-  kind: PoolKind;
-};
+export type { PoolItem } from "@/lib/reconciliation-pool";
 
 export type MatchedItem = {
   key: string;
@@ -81,11 +63,6 @@ export type WorkspaceMonth = {
   olderOutCount: number;
 };
 
-/** 'YYYY-MM' for a `YYYY-MM-DD` string. */
-function monthOf(iso: string): string {
-  return iso.slice(0, 7);
-}
-
 /** Inclusive start of a 'YYYY-MM' as a UTC-midnight Date. */
 function monthStart(month: string): Date {
   return isoToDate(`${month}-01`);
@@ -100,18 +77,25 @@ function nextMonthStart(month: string): Date {
 }
 
 /**
- * Every source id that already has a live match in this month, with the total
- * matched against it. A source is "unmatched" only while that total is below
- * its own amount — which is what makes partial matching work (§7.10).
+ * Live matched totals per source record, in centavos — summed across *every*
+ * live match, with no date filter.
+ *
+ * The absent filter is the point. Outstanding is a property of the source
+ * record, not of the month a match posted in: a June receipt cleared by an
+ * August deposit is settled. Scoping this by `bankPostedDate` made a genuinely
+ * reconciled June pool show that receipt again, so an audited month looked
+ * unfinished every time anyone stepped back into it.
  */
-async function matchedTotals(month: string) {
+async function matchedTotals(): Promise<MatchedTotals> {
   const rows = await prisma.reconciliationMatch.findMany({
-    where: { bankPostedDate: { gte: monthStart(month) }, reversedAt: null },
+    where: { reversedAt: null },
     select: { sourceType: true, sourceId: true, amount: true },
   });
-  const totals = new Map<string, bigint>();
+  const totals: MatchedTotals = new Map();
   for (const row of rows) {
-    const key = `${row.sourceType}:${row.sourceId}`;
+    const sourceType =
+      row.sourceType === "BOOKING_PAYMENT" ? "booking_payment" : "expense_settlement";
+    const key = poolKey(sourceType, row.sourceId);
     totals.set(key, (totals.get(key) ?? 0n) + sumDecimals([row.amount]));
   }
   return totals;
@@ -145,7 +129,7 @@ export async function getWorkspaceMonth(month: string): Promise<WorkspaceMonth> 
 
   const gte = monthStart(month);
   const lt = nextMonthStart(month);
-  const totals = await matchedTotals(month);
+  const totals = await matchedTotals();
 
   // Both pools read the source record's own date, so a July receipt waits in
   // July even if it will ultimately be matched against an August statement.
@@ -165,43 +149,32 @@ export async function getWorkspaceMonth(month: string): Promise<WorkspaceMonth> 
     }),
   ]);
 
-  const inflows: PoolItem[] = [];
-  for (const p of payments) {
-    const matched = totals.get(keyOf("booking_payment", p.id)) ?? 0n;
-    const full = sumDecimals([p.amount]);
-    if (matched >= full) continue; // fully matched — not outstanding
-    inflows.push({
-      key: keyOf("booking_payment", p.id),
-      sourceType: "booking_payment",
-      sourceId: p.id,
-      amount: toPesos(full - matched),
-      date: dateToISO(p.receivedDate),
-      label: p.booking.guestName,
-      detail: p.booking.source === "AIRBNB" ? "Airbnb" : "Direct",
-      reference: p.reference,
-      older: monthOf(dateToISO(p.receivedDate)) < month,
-      kind: "receipt",
-    });
-  }
+  const paymentRecords: PoolRecord[] = payments.map((p) => ({
+    id: p.id,
+    sourceType: "booking_payment",
+    amountCentavos: sumDecimals([p.amount]),
+    recordDate: dateToISO(p.receivedDate),
+    label: p.booking.guestName,
+    detail: p.booking.source === "AIRBNB" ? "Airbnb" : "Direct",
+    reference: p.reference,
+    bookingSource: p.booking.source,
+  }));
 
-  const outflows: PoolItem[] = [];
-  for (const s of settlements) {
-    const matched = totals.get(keyOf("expense_settlement", s.id)) ?? 0n;
-    const full = sumDecimals([s.amount]);
-    if (matched >= full) continue;
-    outflows.push({
-      key: keyOf("expense_settlement", s.id),
-      sourceType: "expense_settlement",
-      sourceId: s.id,
-      amount: toPesos(full - matched),
-      date: dateToISO(s.paidDate),
-      label: s.refundForBooking?.guestName ?? s.expense?.description ?? "Refund",
-      detail: SETTLEMENT_DETAIL[s.settlementType],
-      reference: s.reference,
-      older: monthOf(dateToISO(s.paidDate)) < month,
-      kind: s.settlementType === "GUEST_REFUND" ? "refund" : "payout",
-    });
-  }
+  const settlementRecords: PoolRecord[] = settlements.map((s) => ({
+    id: s.id,
+    sourceType: "expense_settlement",
+    amountCentavos: sumDecimals([s.amount]),
+    recordDate: dateToISO(s.paidDate),
+    label: s.refundForBooking?.guestName ?? s.expense?.description ?? "Refund",
+    detail: s.reimbursedTo
+      ? `Reimbursed ${s.reimbursedTo}`
+      : (SETTLEMENT_DETAIL[s.settlementType] ?? "Other"),
+    reference: s.reference,
+    settlementType: s.settlementType,
+  }));
+
+  const inflows = buildPool(paymentRecords, totals, month);
+  const outflows = buildPool(settlementRecords, totals, month);
 
   const historyRows = await prisma.reconciliationMatch.findMany({
     where: { bankPostedDate: { gte, lt }, reversedAt: null },
