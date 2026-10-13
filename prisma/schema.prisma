@@ -419,3 +419,74 @@ model AirbnbCalendarCache {
   checkedAt    DateTime
   lastError    String?
 }
+
+/* ------------------------------------------------------------------ */
+/* Reconciliation — matching recorded transactions to the bank.        */
+/* See RECONCILIATION_SPEC §4 and §11.4.                              */
+/* ------------------------------------------------------------------ */
+
+/// Which side of the ledger a match came from. Deliberately NOT a foreign
+/// key to BookingPayment or ExpenseSettlement — the same match row has to
+/// point at either one, and Prisma can't express a polymorphic reference.
+/// The write action (data/reconciliation.ts) resolves and validates the id
+/// against the table named here.
+enum MatchSourceType {
+  BOOKING_PAYMENT
+  EXPENSE_SETTLEMENT
+}
+
+/// Whether the matched money came in or went out. Redundant with the source
+/// type in practice (a payment is always an inflow), but stored explicitly so
+/// a mismatch is visible in the data rather than silently reinterpreted.
+enum MatchDirection {
+  INFLOW
+  OUTFLOW
+}
+
+/// One statement line matched to one recorded transaction.
+///
+/// A match is the authoritative record that money actually moved through the
+/// bank. Creating one is what takes a receipt or payout out of the "uncleared"
+/// pool and into the month's history; reversing one puts it back (§7.13).
+///
+/// `bankPostedDate` — NOT the source record's own date — is what determines
+/// which month this belongs to. An Airbnb payout received on June 28 that
+/// posts to the account on July 5 is a July inflow, because July is when the
+/// money was actually in the bank. The source row keeps its own `receivedDate`
+/// for when the money arrived. Getting this backwards is why reconciliation
+/// doesn't balance (§4.1).
+///
+/// `statementGroupKey` lets several matches represent a single statement line
+/// — one Airbnb payout covering three stays is one deposit matching three
+/// receipts (§4.3, §7.10). Opaque to the owner; minted by the server.
+model ReconciliationMatch {
+  id       String @id @default(cuid())
+  /// Which table `sourceId` refers to.
+  sourceType MatchSourceType
+  sourceId   String
+  direction  MatchDirection
+  /// The matched amount, never the source's full value: one receipt can be
+  /// split across several deposits, and one payout can cover several
+  /// expenses (§7.10). Positive — direction lives in its own column.
+  amount     Decimal @db.Decimal(10, 2)
+  /// When this posted to the bank; decides the month it lands in.
+  bankPostedDate DateTime
+  /// Set when several matches share one statement line. Null for a plain
+  /// one-to-one match.
+  statementGroupKey String?
+  notes     String   @default("")
+  matchedAt DateTime @default(now())
+  /// Identity-picker display label, matching createdBy elsewhere.
+  matchedBy String
+
+  /// Reversal rather than deletion: §7.13 requires the original match and the
+  /// undo event to stay visible in the audit trail. A reversed match is
+  /// excluded from totals but never erased.
+  reversedAt     DateTime?
+  reversedBy     String?
+  reversalReason String?
+
+  @@index([bankPostedDate])
+  /// Outstanding-pool lookup: "active matches for these source ids".
+  @@index([sourceType, sourceId, reversedAt])
+}

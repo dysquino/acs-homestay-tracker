@@ -10,6 +10,7 @@ import { ACCOUNTS, useIdentity } from "@/lib/identity";
 import { useStore } from "@/lib/store";
 import { useActionItems } from "@/lib/use-action-items";
 import {
+  BankIcon,
   CalendarIcon,
   DownloadIcon,
   HomeIcon,
@@ -36,15 +37,30 @@ const NAV: NavItem[] = [
   { href: "/payment-settings", label: "Settings", short: "Settings", icon: SettingsIcon },
 ];
 
+/**
+ * Reconciliation is separate from NAV because it only appears when the
+ * feature is switched on (RECONCILIATION_ENABLED / the Payment Settings
+ * toggle), and because the mobile tab bar is already at five entries —
+ * §6.2 rules out squeezing a sixth full-width tab in without a usability
+ * review. It gets a desktop sidebar item and a Dashboard link instead.
+ */
+const RECONCILIATION_NAV: NavItem = {
+  href: "/reconciliation",
+  label: "Reconciliation",
+  short: "Reconcile",
+  icon: BankIcon,
+};
+
 function isActive(pathname: string, href: string): boolean {
   return href === "/" ? pathname === "/" : pathname.startsWith(href);
 }
 
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
+  const { bookingRequests, reconciliationEnabled } = useStore();
   // Guests' booking requests waiting for a reply — shown on the Bookings tab;
   // overdue action items — shown on the Dashboard / Home tab.
-  const requests = useStore().bookingRequests.length;
+  const requests = bookingRequests.length;
   const overdue = useActionItems().filter((i) => i.urgency === "overdue").length;
   const counts: Record<string, { n: number; label: string }> = {
     "/": { n: overdue, label: `${overdue} overdue action item${overdue === 1 ? "" : "s"}` },
@@ -60,6 +76,11 @@ export function AppShell({ children }: { children: ReactNode }) {
       </span>
     ) : null;
 
+  // Reconciliation joins the desktop sidebar when the feature is on. It is
+  // deliberately not in the mobile tab bar — that's already five wide, and
+  // §6.2 asks for a usability review before adding a sixth.
+  const desktopNav = reconciliationEnabled ? [...NAV, RECONCILIATION_NAV] : NAV;
+
   return (
     <div className="flex min-h-full flex-col lg:flex-row">
       {/* Desktop sidebar — sticky so navigation stays reachable while a
@@ -70,7 +91,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <Brand />
         </div>
         <nav className="flex-1 space-y-1 px-3">
-          {NAV.map((item) => {
+          {desktopNav.map((item) => {
             const active = isActive(pathname, item.href);
             return (
               <Link
