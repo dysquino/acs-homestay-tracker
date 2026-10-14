@@ -30,13 +30,29 @@ type NavItem = {
   icon: ComponentType<SVGProps<SVGSVGElement>>;
 };
 
+/**
+ * The nav destinations, in order.
+ *
+ * Settings is held separately rather than sitting at the end of this list,
+ * because "last" is a rule rather than a position here: Reconciliation only
+ * joins the desktop sidebar when the feature is switched on, and appending it
+ * to `NAV` used to push it below Settings — the one item that should never
+ * move. Assembling both bars through `buildNav` keeps Settings last no matter
+ * what gets added to the middle later.
+ */
 const NAV: NavItem[] = [
   { href: "/", label: "Dashboard", short: "Home", icon: HomeIcon },
   { href: "/bookings", label: "Bookings", short: "Bookings", icon: CalendarIcon },
   { href: "/expenses", label: "Expenses", short: "Expenses", icon: ReceiptIcon },
   { href: "/cleaning", label: "Cleaning", short: "Cleaning", icon: SparklesIcon },
-  { href: "/payment-settings", label: "Settings", short: "Settings", icon: SettingsIcon },
 ];
+
+const SETTINGS_NAV: NavItem = {
+  href: "/payment-settings",
+  label: "Settings",
+  short: "Settings",
+  icon: SettingsIcon,
+};
 
 /**
  * Reconciliation is separate from NAV because it only appears when the
@@ -44,6 +60,9 @@ const NAV: NavItem[] = [
  * toggle), and because the mobile tab bar is already at five entries —
  * §6.2 rules out squeezing a sixth full-width tab in without a usability
  * review. It gets a desktop sidebar item and a Dashboard link instead.
+ *
+ * Sits just above Settings, so it joins the sidebar as the last thing before
+ * the one item that always stays put.
  */
 const RECONCILIATION_NAV: NavItem = {
   href: "/reconciliation",
@@ -51,6 +70,12 @@ const RECONCILIATION_NAV: NavItem = {
   short: "Reconcile",
   icon: BankIcon,
 };
+
+/** Both bars, Settings pinned last. Reconciliation is desktop-only. */
+function buildNav(withReconciliation: boolean): NavItem[] {
+  const middle = withReconciliation ? [...NAV, RECONCILIATION_NAV] : NAV;
+  return [...middle, SETTINGS_NAV];
+}
 
 function isActive(pathname: string, href: string): boolean {
   return href === "/" ? pathname === "/" : pathname.startsWith(href);
@@ -80,7 +105,8 @@ export function AppShell({ children }: { children: ReactNode }) {
   // Reconciliation joins the desktop sidebar when the feature is on. It is
   // deliberately not in the mobile tab bar — that's already five wide, and
   // §6.2 asks for a usability review before adding a sixth.
-  const desktopNav = reconciliationEnabled ? [...NAV, RECONCILIATION_NAV] : NAV;
+  const desktopNav = buildNav(reconciliationEnabled);
+  const mobileNav = buildNav(false);
 
   // Reconciliation is a focused workspace, not another tab: §10.1 asks for the
   // standard bottom navigation to be hidden while it's active, because the
@@ -168,7 +194,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           where the control sheet occupies the same space. */}
       {focused ? null : (
         <nav className="no-print fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 rounded-t-3xl bg-white pb-[env(safe-area-inset-bottom)] shadow-[0_-4px_20px_rgba(15,23,42,0.08)] lg:hidden">
-          {NAV.map((item) => {
+          {mobileNav.map((item) => {
             const active = isActive(pathname, item.href);
             return (
               <Link
