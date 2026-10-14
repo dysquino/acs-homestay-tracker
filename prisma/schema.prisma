@@ -126,10 +126,41 @@ model Booking {
   /// Guest refunds paid back out of the bank. Reachable from the booking so
   /// the owner can see a stay's receipts and refunds side by side.
   refunds               ExpenseSettlement[] @relation("BookingRefunds")
+  /// Per-stay arrival details filled in from the dashboard before check-in.
+  stayPreparation       StayPreparation?
   createdAt             DateTime            @default(now())
   updatedAt             DateTime            @updatedAt
 
   @@index([checkIn, checkOut])
+}
+
+/// Arrival details that vary per reservation. Kept separate from Booking so
+/// the core booking form and imports do not need to know about door codes.
+model StayPreparation {
+  bookingId    String   @id
+  booking      Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  doorPasscode String   @default("")
+  updatedAt    DateTime @updatedAt
+}
+
+/// Property-wide values used when rendering guest message templates.
+model HomestaySettings {
+  id                          String   @id @default("default")
+  wifiPassword                String   @default("")
+  messageTemplatesInitialized Boolean  @default(false)
+  updatedAt                   DateTime @updatedAt
+}
+
+/// Reusable, owner-editable guest messages. Variables use {{variable}} form.
+model GuestMessageTemplate {
+  id        String   @id @default(cuid())
+  name      String
+  body      String
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([sortOrder, createdAt])
 }
 
 /// Dates the owners close with no guest — maintenance, their own use. Same

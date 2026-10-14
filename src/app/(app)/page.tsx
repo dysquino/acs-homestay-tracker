@@ -9,6 +9,7 @@ import { OccupancyCard } from "@/components/dashboard/occupancy-card";
 import { ProfitHero } from "@/components/dashboard/profit-hero";
 import { SettleCard } from "@/components/dashboard/settle-card";
 import { WeekStrip } from "@/components/dashboard/week-strip";
+import { UpcomingStays } from "@/components/dashboard/upcoming-stays";
 import { ChevronLeftIcon, ChevronRightIcon } from "@/components/ui/icons";
 import { useIdentity } from "@/lib/identity";
 import { addMonths, startOfMonth, today } from "@/lib/dates";
@@ -106,6 +107,10 @@ export default function DashboardPage() {
             </button>
           ) : null}
         </div>
+      </div>
+
+      <div className="mb-5">
+        <UpcomingStays />
       </div>
 
       <ActionItems />
