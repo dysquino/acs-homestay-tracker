@@ -1350,7 +1350,11 @@ The first production release is acceptable when all of the following are true:
 
 The following decisions were resolved during the spec review pass and are now requirements:
 
-1. **First reconciled period.** Reconciliation begins on the first day of the current calendar month. The owner confirms the verified opening balance from that day's bank statement before any workspace interaction begins. No historical reconciliation backfill is performed; older payments and settlements either enter via the opening balance or are excluded.
+1. **First reconciled period.** Reconciliation begins **1 November 2026**, the first day of the month after go-live. The owner confirms the verified opening balance from that day's bank statement before any workspace interaction begins. No historical reconciliation backfill is performed; older payments and settlements either enter via the opening balance or are excluded.
+
+   This was decided on 2026-10-14, superseding the earlier "first day of the current calendar month" wording. October 2026 deliberately closes with no audit at all, so nothing can be reconciled retroactively against it. Everything already in the database — 85 expenses, 30 cleanings, 32 bookings, and the 0 booking payments and 0 settlements recorded so far — sits before the start month and is absorbed by the opening balance rather than backfilled with invented receipt dates (§12.2).
+
+   Nothing in the code encodes this date: the workspace's month stepper is unbounded and defaults to the current month, so November is reached by stepping forward once. The start month is an operational decision recorded here, not a configuration value.
 2. **Outstanding items at finalization.** Allowed under the §8.8 policy. The user must acknowledge the count and value at finalization, and the finalized report preserves an outstanding-item snapshot. If business policy later requires zero outstanding, the change becomes a server-side finalization rule.
 3. **Marking a booking paid.** Requires at least one `BookingPayment` record. The cached `paymentStatus` reflects this and exposes `OVERPAID` when received exceeds `totalPayout` (see §12.1).
 4. **Marking a cleaning paid.** Creates an `ExpenseSettlement` of type `CLEANER_PAYMENT` and prompts for the actual bank-posting date (see §4.6).
