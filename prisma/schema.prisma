@@ -471,6 +471,18 @@ model AirbnbCalendarCache {
   lastError    String?
 }
 
+/// The most recent successful Airbnb CSV import. A singleton is enough for
+/// the Bookings screen to answer "when did we last import?" without guessing
+/// from booking timestamps, which can change when a stay is edited later.
+model AirbnbCsvImport {
+  id         String   @id @default("latest")
+  importedAt DateTime
+  importedBy String
+  created    Int
+  updated    Int
+  skipped    Int
+}
+
 /**
  * ------------------------------------------------------------------
  */
