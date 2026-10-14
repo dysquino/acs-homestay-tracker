@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation";
 
 import { PageHeader } from "@/components/layout/app-shell";
 import { ExpenseForm } from "@/components/expenses/expense-form";
+import { ReimbursementPayout } from "@/components/expenses/reimbursement-payout";
 import { ExpenseSettlements } from "@/components/expenses/expense-settlements";
 import { Badge, RefundBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -67,11 +68,13 @@ export default function ExpensesPage() {
 
 function ExpensesPageContent() {
   const params = useSearchParams();
-  const { expenses, bookings, deleteExpense, updateExpense, resync, reconciliationEnabled } = useStore();
+  const { expenses, bookings, deleteExpense, resync, reconciliationEnabled } = useStore();
 
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Expense | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Expense | null>(null);
+  // Which expense has the reimbursement prompt open, if any.
+  const [reimbursing, setReimbursing] = useState<Expense | null>(null);
   // The expense whose details are open; looked up fresh so an edit shows.
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const selected = expenses.find((e) => e.id === selectedId) ?? null;
@@ -141,14 +144,6 @@ function ExpensesPageContent() {
     setFormOpen(true);
   }
 
-  async function markRefunded(expense: Expense) {
-    try {
-      await updateExpense(expense.id, { refundStatus: "refunded" });
-    } catch {
-      alert("Couldn't update this expense. Please try again.");
-    }
-  }
-
   function toggleSort(key: SortKey) {
     setSort((s) =>
       s.key === key
@@ -159,12 +154,18 @@ function ExpensesPageContent() {
 
   const dirFor = (key: SortKey) => (sort.key === key ? sort.dir : null);
 
+  /**
+   * Opens the payout prompt rather than writing. Reimbursing someone who
+   * fronted the cost is a real movement of money, so it needs the date the
+   * same way every other payout does — clearing the owed flag on its own left
+   * the expense looking settled with no settlement behind it.
+   */
   const markRefundedButton = (e: Expense) => (
     <Button
       size="sm"
       variant="ghost"
       className="text-emerald-700 hover:bg-emerald-50"
-      onClick={() => markRefunded(e)}
+      onClick={() => setReimbursing(e)}
     >
       Mark refunded
     </Button>
@@ -463,6 +464,12 @@ function ExpensesPageContent() {
         open={formOpen}
         expense={editing}
         onClose={() => setFormOpen(false)}
+      />
+
+      <ReimbursementPayout
+        open={reimbursing !== null}
+        expense={reimbursing}
+        onClose={() => setReimbursing(null)}
       />
 
       <DetailSheet

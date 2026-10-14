@@ -253,3 +253,37 @@ describe("settleableAmount", () => {
     expect(settleableAmount([1.005], [0.005])).toBe(100n);
   });
 });
+
+describe("settleableAmount as an over-settlement cap", () => {
+  // Regression: the server-side guard once compared the incoming settlement
+  // against the expense's FULL value instead of its outstanding balance, so
+  // settling a whole ₱2,000 expense in one go computed as ₱4,000 against a
+  // ₱2,000 cap and refused every ordinary first payout.
+  it("allows settling an untouched expense in full", () => {
+    const outstanding = settleableAmount([2000], []);
+    expect(outstanding).toBe(200000n);
+    expect(sum([2000]) <= (outstanding ?? 0n)).toBe(true);
+  });
+
+  it("allows a part payment and then the remainder", () => {
+    const first = settleableAmount([2000], []);
+    expect(sum([500]) <= (first ?? 0n)).toBe(true);
+    const second = settleableAmount([2000], [500]);
+    expect(sum([1500]) <= (second ?? 0n)).toBe(true);
+  });
+
+  it("refuses an amount past what is left", () => {
+    const outstanding = settleableAmount([2000], [1200]);
+    expect(sum([900]) <= (outstanding ?? 0n)).toBe(false);
+  });
+
+  it("refuses any further settlement once fully settled", () => {
+    expect(settleableAmount([2000], [2000])).toBeNull();
+  });
+
+  it("keeps the comparison exact for awkward amounts", () => {
+    const outstanding = settleableAmount([100.01], []);
+    expect(sum([100.01]) <= (outstanding ?? 0n)).toBe(true);
+    expect(sum([100.02]) <= (outstanding ?? 0n)).toBe(false);
+  });
+});

@@ -43,6 +43,7 @@ import {
   deleteExpense as deleteExpenseAction,
   listExpenses,
   updateExpense as updateExpenseAction,
+  type ExpensePayout,
 } from "./data/expenses";
 import { importAirbnbBookings, type ImportInstruction, type ImportResult } from "./data/import";
 import { getReconciliationStatus } from "./data/reconciliation-status";
@@ -125,6 +126,8 @@ type StoreValue = Data & {
   updateExpense: (
     id: string,
     patch: Partial<ExpenseInput>,
+    /** When the money left. Creates the settlement in the same write. */
+    payout?: ExpensePayout,
   ) => Promise<void>;
   deleteExpense: (id: string) => Promise<void>;
   addCleaning: (
@@ -324,11 +327,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   );
 
   const updateExpense = useCallback(
-    async (id: string, patch: Partial<ExpenseInput>) => {
-      await updateExpenseAction(id, patch);
+    async (id: string, patch: Partial<ExpenseInput>, payout?: ExpensePayout) => {
+      await updateExpenseAction(id, patch, payout, actor);
       await refresh();
     },
-    [refresh],
+    [refresh, actor],
   );
 
   const deleteExpense = useCallback(

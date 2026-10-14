@@ -12,7 +12,6 @@ import {
 } from "@/components/ui/field";
 import { Modal } from "@/components/ui/modal";
 import { useIdentity } from "@/lib/identity";
-import { createExpenseSettlement } from "@/lib/data/expense-settlements";
 import { today } from "@/lib/dates";
 import { useStore } from "@/lib/store";
 import { useSubmit, type Submit } from "@/lib/use-submit";
@@ -157,28 +156,27 @@ function ExpenseFields({
     setSubmitError(null);
     await submit.run(async () => {
       try {
-        if (expense) await updateExpense(expense.id, payload);
-        else await addExpense(payload);
-
-        // A date on an existing expense means "this much left the bank that
-        // day". Recorded after the expense save so a settlement always has a
-        // real parent row, and only for the amount still outstanding — a partly
-        // paid expense must not record its full value twice.
-        if (expense && form.payoutDate) {
-          const outstanding = Math.round((expense.amount - expense.settledAmount) * 100) / 100;
-          if (outstanding > 0) {
-            await createExpenseSettlement({
-              expenseId: expense.id,
-              amount: outstanding,
-              paidDate: form.payoutDate,
-              settlementType:
-                form.refundStatus === "owed" ? "owner_reimbursement" : "direct_vendor_payment",
-              reimbursedTo: form.refundStatus === "owed" ? form.paidBy.trim() : "",
-              reference: "",
-              notes: "",
-              createdBy: user?.name ?? "Unknown",
-            });
-          }
+        if (!expense) {
+          await addExpense(payload);
+        } else {
+          // The payout rides along with the expense save rather than following
+          // it, so there's no window where the expense reads as paid out but
+          // carries no settlement — a state the month's outflow pool can't see.
+          // The server settles only what's still outstanding.
+          await updateExpense(
+            expense.id,
+            payload,
+            form.payoutDate
+              ? {
+                  paidDate: form.payoutDate,
+                  settlementType:
+                    form.refundStatus === "owed"
+                      ? "owner_reimbursement"
+                      : "direct_vendor_payment",
+                  reimbursedTo: form.refundStatus === "owed" ? form.paidBy.trim() : "",
+                }
+              : undefined,
+          );
         }
         onClose();
       } catch {

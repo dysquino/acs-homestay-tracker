@@ -88,14 +88,17 @@ async function assertNotOverSettled(
   });
   if (!expense) return; // assertSourceExists already rejects this; don't mask its error.
 
-  const settledSoFar = sum(expense.settlements.map((s) => s.amount.toString()));
-  const total = sum([expense.amount.toString(), incoming.toString()]);
-  if (total - settledSoFar > 1n) {
+  const settled = expense.settlements.map((s) => s.amount.toString());
+  // What the expense has LEFT, not what it's worth. Comparing `incoming`
+  // against the full amount would reject every ordinary first payout —
+  // settling a whole ₱2,000 expense in one go would read as ₱4,000 against a
+  // ₱2,000 cap.
+  const outstanding = settleableAmount([expense.amount.toString()], settled);
+  // Nothing left to settle: already paid in full, or a rounding remainder.
+  if (outstanding === null) return;
+  if (sum([incoming.toString()]) > outstanding) {
     throw new ValidationError(
-      `That is more than this expense has left to settle (₱${toAmount(
-        settleableAmount([expense.amount.toString()], expense.settlements.map((s) => s.amount.toString())) ??
-          0n,
-      ).toFixed(2)} outstanding).`,
+      `That is more than this expense has left to settle (₱${toAmount(outstanding).toFixed(2)} outstanding).`,
     );
   }
 }
