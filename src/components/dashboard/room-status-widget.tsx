@@ -68,9 +68,9 @@ const STATUS_CONFIG: Record<RoomStatus, StatusConfig> = {
   },
 };
 
-/** Cycles to the next status: clean → dirty → in_use → clean. */
+/** Cycles to the next status: clean → in_use → dirty → clean. */
 function toggleTarget(current: RoomStatus): RoomStatus {
-  const order: RoomStatus[] = ["clean", "dirty", "in_use"];
+  const order: RoomStatus[] = ["clean", "in_use", "dirty"];
   return order[(order.indexOf(current) + 1) % order.length];
 }
 
@@ -167,9 +167,9 @@ export function RoomStatusWidget() {
             <p className="mt-0.5 text-xs text-slate-500">
               {current === "dirty"
                 ? "Needs cleaning — tap to change"
-                : current === "clean"
-                  ? "Ready for guests — tap to change"
-                  : "Occupied — tap to change"}
+                : current === "in_use"
+                  ? "Occupied — tap to change"
+                  : "Ready for guests — tap to change"}
             </p>
           </div>
 
