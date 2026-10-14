@@ -12,19 +12,103 @@ const SETTINGS_ID = "default";
 const MAX_SHORT_TEXT = 200;
 const MAX_TEMPLATE_BODY = 4000;
 const MAX_TEMPLATES = 20;
+const MESSAGE_TEMPLATES_VERSION = 3;
 
 const DEFAULT_TEMPLATES = [
   {
     id: "arrival-default",
-    name: "Arrival details",
+    name: "Welcome and house manual",
     sortOrder: 0,
-    body: "Hi {{guest_name}}! We’re looking forward to hosting you. Your check-in is {{check_in}} and check-out is {{check_out}}. The Wi-Fi password is {{wifi_password}}, and your door passcode is {{door_passcode}}. Safe travels!",
+    body: `Hi {{guest_name}}, your stay is coming up soon. You can check in anytime after {{check_in_time}} on {{check_in}}.
+
+Please take time to read our house rules/manual.
+ACs Cozy Condo Unit
+⸻
+Welcome
+Thank you for choosing to stay with us! Please follow the guidelines below for a smooth and pleasant stay.
+⸻
+Check-In / Check-Out
+Check-in: {{check_in_time}}
+Check-out: {{check_out_time}}
+(Early / late requests subject to availability)
+⸻
+Parking
+Free parking is available on a first come, first served basis.
+Please use only parking slots that are not privately owned or already sold.
+Availability is not guaranteed.
+⸻
+Wi-Fi
+Wi-Fi access is complimentary for your stay.
+⸻
+Air Conditioning
+Turn off when leaving
+Keep doors and windows closed while in use
+⸻
+Bathroom
+Do not flush tissue, wipes, or sanitary items
+Use the trash bin provided
+⸻
+Kitchenette
+Light cooking only
+Wash dishes and wipe surfaces after use
+⸻
+Trash Disposal
+Take all trash to the designated garbage area beside the elevator
+Dispose regularly to keep the unit clean
+⸻
+Pool Use
+The swimming pool is located on the 4th floor.
+You may freely use the pool with a maximum of 3 guests at a time.
+
+Daily Operating Hours:
+9:00 AM – 12:00 NN
+2:00 PM – 8:30 PM
+⸻
+Noise & Conduct
+Quiet hours: 10:00 PM – 8:00 AM
+No parties, events, or unregistered guests
+⸻
+House Rules
+No smoking
+No pets
+Respect neighbors and building rules
+⸻
+Safety
+Always lock the door
+Turn off appliances when not in use
+In emergencies, contact authorities first, then notify the host
+⸻
+Need Help?
+Please message us via Airbnb for any concerns.
+
+Here’s the address:
+Unit: 29N15
+Floor: 29
+Unit Number: N15
+JTower Residences, L. Jayme Street, Mandaue, 6014, Central Visayas
+https://maps.app.goo.gl/8HHGYX9Yb1up7i1e6
+
+Your passcode for the door lock:
+{{door_passcode}}
+
+Here are the wifi details:
+Name: {{wifi_name}}
+Password: {{wifi_password}}
+
+If you have any questions, we are here to help. Hope you enjoy your stay!
+
+The ACs`,
   },
   {
     id: "checkout-default",
     name: "Check-out reminder",
     sortOrder: 1,
-    body: "Hi {{guest_name}}, just a friendly reminder that check-out is on {{check_out}}. Thank you for staying with us!",
+    body: `Hi {{guest_name}},
+I hope you had a great stay!
+
+Check out time is {{check_out_time}} on {{check_out}}. I've attached the checkout instructions.
+
+Please let me know if there's anything I can help you with before you go.`,
   },
 ];
 
@@ -53,11 +137,22 @@ export async function listStayPreparation(): Promise<StayPreparationData> {
       update: {},
     });
 
-    if (!settings.messageTemplatesInitialized) {
-      await tx.guestMessageTemplate.createMany({ data: DEFAULT_TEMPLATES, skipDuplicates: true });
+    if (settings.messageTemplatesVersion < MESSAGE_TEMPLATES_VERSION) {
+      await Promise.all(
+        DEFAULT_TEMPLATES.map((template) =>
+          tx.guestMessageTemplate.upsert({
+            where: { id: template.id },
+            create: template,
+            update: { name: template.name, body: template.body, sortOrder: template.sortOrder },
+          }),
+        ),
+      );
       settings = await tx.homestaySettings.update({
         where: { id: SETTINGS_ID },
-        data: { messageTemplatesInitialized: true },
+        data: {
+          messageTemplatesInitialized: true,
+          messageTemplatesVersion: MESSAGE_TEMPLATES_VERSION,
+        },
       });
     }
 
@@ -69,7 +164,10 @@ export async function listStayPreparation(): Promise<StayPreparationData> {
   });
 
   return {
+    wifiName: settings.wifiName,
     wifiPassword: settings.wifiPassword,
+    checkInTime: settings.checkInTime,
+    checkOutTime: settings.checkOutTime,
     doorPasscodes: Object.fromEntries(preparations.map((item) => [item.bookingId, item.doorPasscode])),
     templates: templates.map(templateFromDb),
   };
@@ -86,13 +184,32 @@ export async function saveDoorPasscode(bookingId: string, doorPasscode: string):
   });
 }
 
-export async function saveWifiPassword(wifiPassword: string): Promise<void> {
+export async function saveStayMessageSettings(input: {
+  wifiName: string;
+  wifiPassword: string;
+  checkInTime: string;
+  checkOutTime: string;
+}): Promise<void> {
   await requireSiteAccess();
-  validateText(wifiPassword, "Wi-Fi password", MAX_SHORT_TEXT);
+  validateText(input.wifiName, "Wi-Fi name", MAX_SHORT_TEXT);
+  validateText(input.wifiPassword, "Wi-Fi password", MAX_SHORT_TEXT);
+  validateText(input.checkInTime, "Check-in time", MAX_SHORT_TEXT, true);
+  validateText(input.checkOutTime, "Check-out time", MAX_SHORT_TEXT, true);
   await prisma.homestaySettings.upsert({
     where: { id: SETTINGS_ID },
-    create: { id: SETTINGS_ID, wifiPassword: wifiPassword.trim() },
-    update: { wifiPassword: wifiPassword.trim() },
+    create: {
+      id: SETTINGS_ID,
+      wifiName: input.wifiName.trim(),
+      wifiPassword: input.wifiPassword.trim(),
+      checkInTime: input.checkInTime.trim(),
+      checkOutTime: input.checkOutTime.trim(),
+    },
+    update: {
+      wifiName: input.wifiName.trim(),
+      wifiPassword: input.wifiPassword.trim(),
+      checkInTime: input.checkInTime.trim(),
+      checkOutTime: input.checkOutTime.trim(),
+    },
   });
 }
 

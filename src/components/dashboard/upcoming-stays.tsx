@@ -19,7 +19,7 @@ import {
   deleteGuestMessageTemplate,
   listStayPreparation,
   saveDoorPasscode,
-  saveWifiPassword,
+  saveStayMessageSettings,
   updateGuestMessageTemplate,
 } from "@/lib/data/stay-preparation";
 import { today } from "@/lib/dates";
@@ -30,13 +30,21 @@ import {
   MESSAGE_VARIABLES,
   messageVariables,
   renderGuestMessage,
+  suggestDoorPasscode,
   type GuestMessageTemplate,
   type StayPreparationData,
 } from "@/lib/stay-preparation";
 import { DEFAULT_CLEANING_FEE, useStore } from "@/lib/store";
 import type { Booking } from "@/lib/types";
 
-const EMPTY: StayPreparationData = { doorPasscodes: {}, wifiPassword: "", templates: [] };
+const EMPTY: StayPreparationData = {
+  doorPasscodes: {},
+  wifiName: "",
+  wifiPassword: "",
+  checkInTime: "2:00 PM",
+  checkOutTime: "11:00 AM",
+  templates: [],
+};
 const COLLAPSED = 5;
 
 export function UpcomingStays() {
@@ -187,11 +195,19 @@ function StayPreparationModal({
   const { cleaning, addCleaning, updateCleaning } = useStore();
   const { user } = useIdentity();
   const turnover = cleaning.find((item) => item.bookingId === booking.id);
-  const initialPasscode = data.doorPasscodes[booking.id] ?? "";
+  const savedPasscode = data.doorPasscodes[booking.id] ?? "";
+  const initialPasscode = savedPasscode || suggestDoorPasscode(booking);
   const [passcode, setPasscode] = useState(initialPasscode);
   const [cleaner, setCleaner] = useState(turnover?.cleanerName ?? "");
   const [drafts, setDrafts] = useState<Record<string, string>>(() => {
-    const variables = messageVariables(booking, data.wifiPassword, initialPasscode);
+    const variables = messageVariables(
+      booking,
+      data.wifiName,
+      data.wifiPassword,
+      initialPasscode,
+      data.checkInTime,
+      data.checkOutTime,
+    );
     return Object.fromEntries(data.templates.map((template) => [template.id, renderGuestMessage(template.body, variables)]));
   });
   const [editedDrafts, setEditedDrafts] = useState<Set<string>>(() => new Set());
@@ -238,7 +254,14 @@ function StayPreparationModal({
   }
 
   function refreshDraft(template: GuestMessageTemplate) {
-    const variables = messageVariables(booking!, data.wifiPassword, passcode);
+    const variables = messageVariables(
+      booking,
+      data.wifiName,
+      data.wifiPassword,
+      passcode,
+      data.checkInTime,
+      data.checkOutTime,
+    );
     setDrafts((current) => ({ ...current, [template.id]: renderGuestMessage(template.body, variables) }));
     setEditedDrafts((current) => {
       const next = new Set(current);
@@ -249,7 +272,14 @@ function StayPreparationModal({
 
   function changePasscode(value: string) {
     setPasscode(value);
-    const variables = messageVariables(booking!, data.wifiPassword, value);
+    const variables = messageVariables(
+      booking,
+      data.wifiName,
+      data.wifiPassword,
+      value,
+      data.checkInTime,
+      data.checkOutTime,
+    );
     setDrafts((current) => Object.fromEntries(data.templates.map((template) => [
       template.id,
       editedDrafts.has(template.id)
@@ -273,7 +303,14 @@ function StayPreparationModal({
       <div className="space-y-5">
         <ChecklistSection number="1" title="Add the door passcode" complete={Boolean(data.doorPasscodes[booking.id]?.trim())}>
           <div className="flex flex-col gap-2 sm:flex-row">
-            <Input value={passcode} onChange={(event) => changePasscode(event.target.value)} placeholder="Enter the passcode for this stay" autoComplete="off" />
+            <div className="flex-1">
+              <Input value={passcode} onChange={(event) => changePasscode(event.target.value)} placeholder="Enter the passcode for this stay" autoComplete="off" />
+              {!savedPasscode ? (
+                <p className="mt-1 text-xs text-slate-500">
+                  Suggested from the guest contact and check-in date. Seven digits plus #.
+                </p>
+              ) : null}
+            </div>
             <Button variant="primary" disabled={saving !== null || passcode.trim() === data.doorPasscodes[booking.id]?.trim()} onClick={() => void saveCode()}>
               {saving === "passcode" ? "Saving…" : "Save passcode"}
             </Button>
@@ -342,7 +379,10 @@ function ChecklistSection({ number, title, complete, children }: { number: strin
 }
 
 function MessageSettingsModal({ data, onClose, onChange }: { data: StayPreparationData; onClose: () => void; onChange: (data: StayPreparationData) => void }) {
+  const [wifiName, setWifiName] = useState(data.wifiName);
   const [wifi, setWifi] = useState(data.wifiPassword);
+  const [checkInTime, setCheckInTime] = useState(data.checkInTime);
+  const [checkOutTime, setCheckOutTime] = useState(data.checkOutTime);
   const [rows, setRows] = useState<Record<string, { name: string; body: string }>>(() =>
     Object.fromEntries(data.templates.map((template) => [template.id, { name: template.name, body: template.body }])),
   );
@@ -352,14 +392,25 @@ function MessageSettingsModal({ data, onClose, onChange }: { data: StayPreparati
   const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  async function saveWifi() {
-    setBusy("wifi");
+  async function saveSettings() {
+    setBusy("settings");
     setError(null);
     try {
-      await saveWifiPassword(wifi);
-      onChange({ ...data, wifiPassword: wifi.trim() });
+      await saveStayMessageSettings({
+        wifiName,
+        wifiPassword: wifi,
+        checkInTime,
+        checkOutTime,
+      });
+      onChange({
+        ...data,
+        wifiName: wifiName.trim(),
+        wifiPassword: wifi.trim(),
+        checkInTime: checkInTime.trim(),
+        checkOutTime: checkOutTime.trim(),
+      });
     } catch {
-      setError("Couldn’t save the Wi-Fi password.");
+      setError("Couldn’t save the stay details.");
     } finally {
       setBusy(null);
     }
@@ -413,10 +464,35 @@ function MessageSettingsModal({ data, onClose, onChange }: { data: StayPreparati
     <Modal open title="Guest message settings" description="Changes here apply to every upcoming stay." onClose={onClose} wide>
       <div className="space-y-6">
         <section>
-          <h3 className="text-sm font-semibold text-slate-900">Wi-Fi</h3>
-          <div className="mt-2 flex flex-col gap-2 sm:flex-row">
-            <Input value={wifi} onChange={(event) => setWifi(event.target.value)} placeholder="Wi-Fi password" autoComplete="off" />
-            <Button variant="primary" disabled={busy !== null || wifi.trim() === data.wifiPassword} onClick={() => void saveWifi()}>{busy === "wifi" ? "Saving…" : "Save Wi-Fi"}</Button>
+          <h3 className="text-sm font-semibold text-slate-900">Stay details</h3>
+          <div className="mt-2 grid gap-3 sm:grid-cols-2">
+            <Field label="Check-in time">
+              {(id) => <Input id={id} value={checkInTime} onChange={(event) => setCheckInTime(event.target.value)} placeholder="2:00 PM" />}
+            </Field>
+            <Field label="Check-out time">
+              {(id) => <Input id={id} value={checkOutTime} onChange={(event) => setCheckOutTime(event.target.value)} placeholder="11:00 AM" />}
+            </Field>
+            <Field label="Network name">
+              {(id) => <Input id={id} value={wifiName} onChange={(event) => setWifiName(event.target.value)} placeholder="Wi-Fi name" autoComplete="off" />}
+            </Field>
+            <Field label="Password">
+              {(id) => <Input id={id} value={wifi} onChange={(event) => setWifi(event.target.value)} placeholder="Wi-Fi password" autoComplete="off" />}
+            </Field>
+          </div>
+          <div className="mt-3 flex justify-end">
+            <Button
+              variant="primary"
+              disabled={
+                busy !== null ||
+                (wifiName.trim() === data.wifiName &&
+                  wifi.trim() === data.wifiPassword &&
+                  checkInTime.trim() === data.checkInTime &&
+                  checkOutTime.trim() === data.checkOutTime)
+              }
+              onClick={() => void saveSettings()}
+            >
+              {busy === "settings" ? "Saving…" : "Save stay details"}
+            </Button>
           </div>
         </section>
 

@@ -146,8 +146,12 @@ model StayPreparation {
 /// Property-wide values used when rendering guest message templates.
 model HomestaySettings {
   id                          String   @id @default("default")
+  wifiName                    String   @default("")
   wifiPassword                String   @default("")
+  checkInTime                 String   @default("2:00 PM")
+  checkOutTime                String   @default("11:00 AM")
   messageTemplatesInitialized Boolean  @default(false)
+  messageTemplatesVersion     Int      @default(0)
   updatedAt                   DateTime @updatedAt
 }
 
