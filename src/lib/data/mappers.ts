@@ -373,7 +373,11 @@ export function dateBlockFromDb(row: DbDateBlock): DateBlock {
 /* BookingPayment — one actual receipt of money against a booking.      */
 /* ------------------------------------------------------------------ */
 
-export function bookingPaymentFromDb(row: DbBookingPayment): BookingPayment {
+export function bookingPaymentFromDb(
+  row: Omit<DbBookingPayment, "paymentScreenshot"> & {
+    paymentScreenshot?: Uint8Array | null;
+  },
+): BookingPayment {
   return {
     id: row.id,
     bookingId: row.bookingId,
@@ -382,6 +386,10 @@ export function bookingPaymentFromDb(row: DbBookingPayment): BookingPayment {
     method: BOOKING_PAYMENT_METHOD_FROM_DB[row.method],
     reference: row.reference,
     notes: row.notes,
+    // List queries intentionally omit the bytea column; MIME is the lightweight
+    // presence flag because every writer stores and clears both fields together.
+    hasPaymentScreenshot: row.paymentScreenshotMime !== null,
+    paymentScreenshotMime: row.paymentScreenshotMime,
     status: BOOKING_PAYMENT_STATUS_FROM_DB[row.status],
     createdBy: row.createdBy,
     createdAt: row.createdAt.toISOString(),

@@ -146,8 +146,13 @@ model StayPreparation {
 /// Property-wide values used when rendering guest message templates.
 model HomestaySettings {
   id                          String   @id @default("default")
+  wifiName                    String   @default("")
   wifiPassword                String   @default("")
+  checkInTime                 String   @default("2:00 PM")
+  checkOutTime                String   @default("11:00 AM")
+  hostSignature               String   @default("The ACs")
   messageTemplatesInitialized Boolean  @default(false)
+  messageTemplatesVersion     Int      @default(0)
   updatedAt                   DateTime @updatedAt
 }
 
@@ -217,6 +222,10 @@ model BookingPayment {
   /// searching it is how the reconciliation workspace finds candidates.
   reference    String               @default("")
   notes        String               @default("")
+  /// Proof for this specific receipt. Nullable so payments recorded before
+  /// per-payment proof was introduced remain readable and can be backfilled.
+  paymentScreenshot     Bytes?
+  paymentScreenshotMime String?
   status       BookingPaymentStatus @default(ACTIVE)
   /// Display label from the identity picker, matching `createdBy` on Booking.
   /// Deliberately not a User FK — see the User model comment.

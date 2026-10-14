@@ -82,6 +82,9 @@ export type BookingPayment = {
   /** Bank reference or Airbnb confirmation code when known. */
   reference: string;
   notes: string;
+  /** Proof is fetched on demand so payment lists never send image bytes. */
+  hasPaymentScreenshot: boolean;
+  paymentScreenshotMime: string | null;
   status: BookingPaymentStatus;
   createdBy: string;
   createdAt: string;
