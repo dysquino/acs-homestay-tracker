@@ -116,7 +116,7 @@ export default function DashboardPage() {
       <ActionItems />
 
       {/* Mobile: month picker sits between summary widgets and the chart grid */}
-      <div className="flex sm:hidden items-center justify-center gap-1 rounded-full bg-white p-1 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_8px_24px_rgba(15,23,42,0.06)]">
+      <div className="flex sm:hidden items-center justify-center gap-1 rounded-full bg-white p-1 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_8px_24px_rgba(15,23,42,0.06)] mb-5">
         <MonthStep label="Previous month" onClick={() => selectMonth(addMonths(monthCursor, -1))}>
           <ChevronLeftIcon className="h-4 w-4" />
         </MonthStep>
