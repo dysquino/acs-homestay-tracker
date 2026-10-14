@@ -16,6 +16,7 @@ import { createExpenseSettlement } from "@/lib/data/expense-settlements";
 import { today } from "@/lib/dates";
 import { useStore } from "@/lib/store";
 import { useSubmit, type Submit } from "@/lib/use-submit";
+import { payoutDateDiverges, payoutMonthLabel } from "@/lib/payout-date";
 import {
   EXPENSE_CATEGORIES,
   EXPENSE_REFUND_STATUSES,
@@ -130,9 +131,7 @@ function ExpenseFields({
    * month is the ordinary case and stays silent — friction there is the enemy.
    */
   const payoutDiverges =
-    showPayout &&
-    form.payoutDate !== "" &&
-    form.payoutDate.slice(0, 7) !== (expense?.date ?? "").slice(0, 7);
+    showPayout && payoutDateDiverges(form.payoutDate, expense?.date ?? "");
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -323,7 +322,7 @@ function ExpenseFields({
         <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
           This expense is dated {expense?.date}, but the payout date is {form.payoutDate}.
           Saving records the money as leaving the bank in{" "}
-          {form.payoutDate.slice(0, 7) === today().slice(0, 7) ? "this" : "that"} month — which
+          {payoutMonthLabel(form.payoutDate, today())} month — which
           is what reconciliation will count. If you paid it earlier, change the date.
         </p>
       ) : null}

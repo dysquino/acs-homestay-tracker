@@ -17,6 +17,7 @@ import { formatDateRange } from "@/lib/format";
 import { knownCleaners } from "@/lib/selectors";
 import { DEFAULT_CLEANING_FEE, useStore } from "@/lib/store";
 import { useSubmit, type Submit } from "@/lib/use-submit";
+import { payoutDateDiverges, payoutMonthLabel } from "@/lib/payout-date";
 import {
   CLEANING_PAYMENT_STATUSES,
   CLEANING_STATUSES,
@@ -174,8 +175,7 @@ function CleaningFields({
    */
   const showPayout =
     form.paymentStatus === "paid" && (record?.paymentStatus ?? "unpaid") !== "paid";
-  const payoutDiverges =
-    showPayout && form.payoutDate !== "" && form.payoutDate.slice(0, 7) !== form.date.slice(0, 7);
+  const payoutDiverges = showPayout && payoutDateDiverges(form.payoutDate, form.date);
 
   return (
     <form id={FORM_ID} onSubmit={onSubmit} className="space-y-4">
@@ -317,7 +317,7 @@ function CleaningFields({
         <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
           This cleaning is dated {form.date}, but the payout date is{" "}
           {form.payoutDate}. Saving records the cleaner&apos;s money as leaving the bank
-          in {form.payoutDate.slice(0, 7) === today().slice(0, 7) ? "this" : "that"}{" "}
+          in {payoutMonthLabel(form.payoutDate, today())}{" "}
           month — which is what reconciliation will count. If you paid them earlier,
           change the date.
         </p>
