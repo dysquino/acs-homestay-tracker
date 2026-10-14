@@ -10,6 +10,7 @@ import { useIdentity } from "@/lib/identity";
 import {
   createExpenseSettlement,
   listExpenseSettlements,
+  updateExpenseSettlement,
   voidExpenseSettlement,
 } from "@/lib/data/expense-settlements";
 import { expensePayoutSummary } from "@/lib/expense-payout";
@@ -45,6 +46,7 @@ export function ExpenseSettlements({
   const [settlements, setSettlements] = useState<ExpenseSettlement[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [formOpen, setFormOpen] = useState(false);
+  const [editingSettlement, setEditingSettlement] = useState<ExpenseSettlement | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -145,9 +147,14 @@ export function ExpenseSettlements({
                 ) : null}
               </div>
               {s.status === "active" ? (
-                <Button size="sm" variant="ghost" onClick={() => void voidSettlement(s)}>
-                  Void
-                </Button>
+                <div className="flex gap-1">
+                  <Button size="sm" variant="ghost" onClick={() => { setEditingSettlement(s); setFormOpen(true); }}>
+                    Edit
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={() => void voidSettlement(s)}>
+                    Void
+                  </Button>
+                </div>
               ) : null}
             </li>
           ))}
@@ -157,10 +164,12 @@ export function ExpenseSettlements({
       <SettlementForm
         open={formOpen}
         expense={expense}
+        editingSettlement={editingSettlement}
         outstanding={payout?.outstanding ?? 0}
-        onClose={() => setFormOpen(false)}
+        onClose={() => { setFormOpen(false); setEditingSettlement(null); }}
         onSaved={async () => {
           setFormOpen(false);
+          setEditingSettlement(null);
           await load();
           onChanged();
         }}
@@ -183,35 +192,39 @@ const FORM_ID = "expense-settlement-form";
 function SettlementForm({
   open,
   expense,
+  editingSettlement,
   outstanding,
   onClose,
   onSaved,
 }: {
   open: boolean;
   expense: Expense;
+  editingSettlement: ExpenseSettlement | null;
   outstanding: number;
   onClose: () => void;
   onSaved: () => Promise<void>;
 }) {
   const submit = useSubmit();
+  const isEditing = editingSettlement !== null;
   return (
     <Modal
       open={open}
       onClose={onClose}
-      title="Record a payout"
-      description="When the money actually left the homestay account."
+      title={isEditing ? "Edit payout" : "Record a payout"}
+      description={isEditing ? "Change the details of this payout." : "When the money actually left the homestay account."}
       footer={
         <>
           <Button onClick={onClose}>Cancel</Button>
           <Button type="submit" form={FORM_ID} variant="primary" disabled={submit.saving}>
-            {submit.saving ? "Saving…" : "Save payout"}
+            {submit.saving ? "Saving…" : isEditing ? "Save changes" : "Save payout"}
           </Button>
         </>
       }
     >
       <SettlementFields
-        key={`${expense.id}-${outstanding}`}
+        key={`${expense.id}-${outstanding}-${editingSettlement?.id ?? "new"}`}
         expense={expense}
+        editingSettlement={editingSettlement}
         outstanding={outstanding}
         onSaved={onSaved}
         submit={submit}
@@ -222,26 +235,40 @@ function SettlementForm({
 
 function SettlementFields({
   expense,
+  editingSettlement,
   outstanding,
   onSaved,
   submit,
 }: {
   expense: Expense;
+  editingSettlement: ExpenseSettlement | null;
   outstanding: number;
   onSaved: () => Promise<void>;
   submit: ReturnType<typeof useSubmit>;
 }) {
   const { user } = useIdentity();
+  const isEditing = editingSettlement !== null;
   // An expense marked "owed" is by definition waiting to be reimbursed, so
   // that's the sensible default rather than making the owner pick it again.
-  const [form, setForm] = useState<FormState>({
-    amount: String(outstanding),
-    paidDate: today(),
-    settlementType: expense.refundStatus === "owed" ? "owner_reimbursement" : "direct_vendor_payment",
-    reimbursedTo: expense.paidBy,
-    reference: "",
-    notes: "",
-  });
+  const [form, setForm] = useState<FormState>(() =>
+    isEditing
+      ? {
+          amount: String(editingSettlement.amount),
+          paidDate: editingSettlement.paidDate,
+          settlementType: editingSettlement.settlementType,
+          reimbursedTo: editingSettlement.reimbursedTo,
+          reference: editingSettlement.reference ?? "",
+          notes: editingSettlement.notes ?? "",
+        }
+      : {
+          amount: String(outstanding),
+          paidDate: today(),
+          settlementType: expense.refundStatus === "owed" ? "owner_reimbursement" : "direct_vendor_payment",
+          reimbursedTo: expense.paidBy,
+          reference: "",
+          notes: "",
+        },
+  );
   const [errors, setErrors] = useState<Partial<Record<keyof FormState, string>>>({});
   const [submitError, setSubmitError] = useState<string | null>(null);
 
@@ -273,16 +300,27 @@ function SettlementFields({
     setSubmitError(null);
     await submit.run(async () => {
       try {
-        await createExpenseSettlement({
-          expenseId: expense.id,
-          amount: Number(form.amount),
-          paidDate: form.paidDate,
-          settlementType: form.settlementType,
-          reimbursedTo: isReimbursement ? form.reimbursedTo.trim() : "",
-          reference: form.reference.trim(),
-          notes: form.notes.trim(),
-          createdBy: user?.name ?? "Unknown",
-        });
+        if (isEditing) {
+          await updateExpenseSettlement(editingSettlement.id, {
+            amount: Number(form.amount),
+            paidDate: form.paidDate,
+            settlementType: form.settlementType,
+            reimbursedTo: isReimbursement ? form.reimbursedTo.trim() : "",
+            reference: form.reference.trim(),
+            notes: form.notes.trim(),
+          });
+        } else {
+          await createExpenseSettlement({
+            expenseId: expense.id,
+            amount: Number(form.amount),
+            paidDate: form.paidDate,
+            settlementType: form.settlementType,
+            reimbursedTo: isReimbursement ? form.reimbursedTo.trim() : "",
+            reference: form.reference.trim(),
+            notes: form.notes.trim(),
+            createdBy: user?.name ?? "Unknown",
+          });
+        }
         await onSaved();
       } catch {
         setSubmitError("Couldn't save this payout. Please try again.");
