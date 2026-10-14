@@ -258,6 +258,9 @@ export function expenseFromDb(row: DbExpense): Expense {
     createdBy: row.createdBy,
     cleaningId: row.cleaningId,
     refundStatus: EXPENSE_REFUND_STATUS_FROM_DB[row.refundStatus],
+    // Derived from the settlements relation, which this base row doesn't carry.
+    // `listExpenses` includes it and overrides this with the real total.
+    settledAmount: 0,
   };
 }
 

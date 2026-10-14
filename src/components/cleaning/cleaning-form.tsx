@@ -33,6 +33,8 @@ type FormState = {
   paymentAmount: string;
   paymentStatus: CleaningPaymentStatus;
   notes: string;
+  /** YYYY-MM-DD, or "" to leave the cleaner unpaid with no payout recorded. */
+  payoutDate: string;
 };
 
 function initialState(record: CleaningRecord | null): FormState {
@@ -45,6 +47,7 @@ function initialState(record: CleaningRecord | null): FormState {
       paymentAmount: String(DEFAULT_CLEANING_FEE),
       paymentStatus: "unpaid",
       notes: "",
+      payoutDate: "",
     };
   }
   return {
@@ -54,6 +57,10 @@ function initialState(record: CleaningRecord | null): FormState {
     status: record.status,
     paymentAmount: String(record.paymentAmount),
     paymentStatus: record.paymentStatus,
+    // Pre-filled when marking a cleaner's payment as paid, since that's the
+    // moment the owner knows it. Left empty if it's already recorded, so
+    // re-saving an old cleaning doesn't stamp a new date on it.
+    payoutDate: record.paymentStatus === "unpaid" ? today() : "",
     notes: record.notes,
   };
 }
@@ -147,8 +154,8 @@ function CleaningFields({
     setSubmitError(null);
     await submit.run(async () => {
       try {
-        if (record) await updateCleaning(record.id, payload);
-        else await addCleaning(payload);
+        if (record) await updateCleaning(record.id, payload, form.payoutDate || undefined);
+        else await addCleaning(payload, form.payoutDate || undefined);
         onClose();
       } catch {
         setSubmitError("Couldn't save this cleaning record. Please try again.");
@@ -159,6 +166,16 @@ function CleaningFields({
   const sortedBookings = [...bookings].sort((a, b) =>
     b.checkOut.localeCompare(a.checkOut),
   );
+
+  /**
+   * Only when this save actually flips the cleaner to paid. Marking an already
+   * paid cleaning "done" again must not stamp a fresh payout date onto a
+   * settlement that was recorded weeks ago.
+   */
+  const showPayout =
+    form.paymentStatus === "paid" && (record?.paymentStatus ?? "unpaid") !== "paid";
+  const payoutDiverges =
+    showPayout && form.payoutDate !== "" && form.payoutDate.slice(0, 7) !== form.date.slice(0, 7);
 
   return (
     <form id={FORM_ID} onSubmit={onSubmit} className="space-y-4">
@@ -267,6 +284,22 @@ function CleaningFields({
           )}
         </Field>
 
+        {showPayout ? (
+          <Field
+            label="Payout date"
+            hint={`When ₱${(Number(form.paymentAmount) || 0).toFixed(2)} was handed to the cleaner.`}
+          >
+            {(id) => (
+              <Input
+                id={id}
+                type="date"
+                value={form.payoutDate}
+                onChange={(e) => set("payoutDate", e.target.value)}
+              />
+            )}
+          </Field>
+        ) : null}
+
         <Field label="Notes" className="sm:col-span-2">
           {(id) => (
             <Textarea
@@ -279,6 +312,16 @@ function CleaningFields({
           )}
         </Field>
       </div>
+
+      {payoutDiverges ? (
+        <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+          This cleaning is dated {form.date}, but the payout date is{" "}
+          {form.payoutDate}. Saving records the cleaner&apos;s money as leaving the bank
+          in {form.payoutDate.slice(0, 7) === today().slice(0, 7) ? "this" : "that"}{" "}
+          month — which is what reconciliation will count. If you paid them earlier,
+          change the date.
+        </p>
+      ) : null}
 
       {submitError ? (
         <p className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700">

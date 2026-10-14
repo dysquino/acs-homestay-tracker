@@ -173,6 +173,16 @@ export type Expense = {
    * Most expenses need no reimbursement, so "refunded" is the default.
    */
   refundStatus: ExpenseRefundStatus;
+
+  /**
+   * How much of this expense has been recorded as actually leaving the bank.
+   *
+   * Distinct from `refundStatus`, which answers "is the person who fronted
+   * this still owed?" and is `refunded` for the majority of expenses whether or
+   * not the money has moved. Without this figure an expense can be fully paid
+   * and still have no payout date on record, which is invisible from the list.
+   */
+  settledAmount: number;
 };
 
 export type ExpenseRefundStatus = "refunded" | "owed";
@@ -186,7 +196,8 @@ export const EXPENSE_REFUND_STATUSES: {
 ];
 
 /** What a client may submit — `cleaningId` is only ever set by the server. */
-export type ExpenseInput = Omit<Expense, "id" | "cleaningId">;
+/** Derived from settlements, never submitted — excluded from the input shape. */
+export type ExpenseInput = Omit<Expense, "id" | "cleaningId" | "settledAmount">;
 
 /** The fixed roster who can be recorded as having paid an expense. */
 export const PAID_BY: { value: string; label: string }[] = [

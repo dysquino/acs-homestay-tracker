@@ -104,6 +104,30 @@ export function absolute(centavos: bigint): bigint {
 }
 
 /**
+ * What a new settlement should cover, given what's already been recorded
+ * against `total` — or `null` if there's nothing left worth recording.
+ *
+ * This is the rule that stops a second payout being written against an expense
+ * that's already settled, which is why it works from the outstanding balance and
+ * never from the expense's own figure. The tolerance is a centavo because a
+ * leftover that small is rounding from splitting a peso, not money the owner
+ * still needs to hand over — and a one-centavo settlement row would be noise
+ * in every reconciliation it appears in.
+ *
+ * A negative balance (over-settled, e.g. an overpayment) also returns `null`:
+ * there's nothing left to pay, and writing it off as a new settlement would
+ * invent money.
+ */
+export function settleableAmount(
+  total: Iterable<number | string | bigint>,
+  settled: Iterable<number | string | bigint>,
+): bigint | null {
+  const outstanding = sum(total) - sum(settled);
+  if (outstanding <= 1n) return null;
+  return outstanding;
+}
+
+/**
  * Whether `value` is within `tolerance` centavos of `expected`.
  *
  * §8.6 makes the finalization requirement an exact zero difference, but the

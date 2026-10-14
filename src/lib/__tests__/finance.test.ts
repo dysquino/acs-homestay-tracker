@@ -8,6 +8,7 @@ import {
   MAX_CENTAVOS,
   negate,
   roundToCentavos,
+  settleableAmount,
   subtract,
   sum,
   sumAmounts,
@@ -213,5 +214,42 @@ describe("assertWithinMax", () => {
 
   it("accepts negative balances, which are valid in the audit", () => {
     expect(() => assertWithinMax(-500n)).not.toThrow();
+  });
+});
+describe("settleableAmount", () => {
+  it("covers the whole amount when nothing is recorded yet", () => {
+    expect(settleableAmount([1500], [])).toBe(150000n);
+  });
+
+  it("covers only what's outstanding, so a partly settled expense isn't paid twice", () => {
+    expect(settleableAmount([1500], [600])).toBe(90000n);
+    // The dangerous case: the caller passes the expense's own figure and pays
+    // the full 1,500 again. This is what the function exists to prevent.
+    expect(settleableAmount([1500], [1500])).toBeNull();
+  });
+
+  it("sums several prior settlements across split payouts", () => {
+    expect(settleableAmount([1000], [100, 250.5, "49.49"])).toBe(60001n);
+  });
+
+  it("records nothing for a fully settled expense", () => {
+    expect(settleableAmount([500], [200, 300])).toBeNull();
+  });
+
+  it("treats a centavo of leftover as rounding, not money still owed", () => {
+    expect(settleableAmount([100], [99.99])).toBeNull();
+  });
+
+  it("still covers two centavos, because that's a real remainder", () => {
+    expect(settleableAmount([100], [99.98])).toBe(2n);
+  });
+
+  it("records nothing when an expense is over-settled", () => {
+    expect(settleableAmount([100], [120])).toBeNull();
+  });
+
+  it("keeps float inputs exact by going through centavos", () => {
+    expect(settleableAmount([0.1, 0.2], [])).toBe(30n);
+    expect(settleableAmount([1.005], [0.005])).toBe(100n);
   });
 });

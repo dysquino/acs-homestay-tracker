@@ -127,10 +127,16 @@ type StoreValue = Data & {
     patch: Partial<ExpenseInput>,
   ) => Promise<void>;
   deleteExpense: (id: string) => Promise<void>;
-  addCleaning: (input: Omit<CleaningRecord, "id">) => Promise<CleaningRecord>;
+  addCleaning: (
+    input: Omit<CleaningRecord, "id">,
+    /** When the cleaner was paid. Creates the settlement in the same write. */
+    payoutDate?: string,
+  ) => Promise<CleaningRecord>;
   updateCleaning: (
     id: string,
     patch: Partial<Omit<CleaningRecord, "id">>,
+    /** When the cleaner was paid. Creates the settlement in the same write. */
+    payoutDate?: string,
   ) => Promise<void>;
   deleteCleaning: (id: string) => Promise<void>;
   /** Resolves with the created booking, or an error to show (e.g. dates taken). */
@@ -334,8 +340,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   );
 
   const addCleaning = useCallback(
-    async (input: Omit<CleaningRecord, "id">) => {
-      const record = await createCleaning(input);
+    async (input: Omit<CleaningRecord, "id">, payoutDate?: string) => {
+      const record = await createCleaning(input, payoutDate);
       await refresh();
       return record;
     },
@@ -343,8 +349,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   );
 
   const updateCleaning = useCallback(
-    async (id: string, patch: Partial<Omit<CleaningRecord, "id">>) => {
-      await updateCleaningAction(id, patch, actor);
+    async (id: string, patch: Partial<Omit<CleaningRecord, "id">>, payoutDate?: string) => {
+      await updateCleaningAction(id, patch, actor, payoutDate);
       await refresh();
     },
     [refresh, actor],

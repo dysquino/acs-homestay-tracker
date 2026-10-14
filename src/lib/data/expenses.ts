@@ -1,6 +1,7 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
+import { toAmount, toCentavos } from "@/lib/finance";
 import type { Expense, ExpenseInput } from "@/lib/types";
 import { ValidationError, validateExpense } from "@/lib/validation";
 
@@ -11,8 +12,17 @@ const MANAGED = "This expense is managed from the Cleaning page.";
 
 export async function listExpenses(): Promise<Expense[]> {
   await requireSiteAccess();
-  const rows = await prisma.expense.findMany({ orderBy: { date: "desc" } });
-  return rows.map(expenseFromDb);
+  // Active settlements only: a voided one releases its amount back, and this is
+  // what decides whether the expense still needs a payout date.
+  const rows = await prisma.expense.findMany({
+    orderBy: { date: "desc" },
+    include: { settlements: { where: { status: "ACTIVE" }, select: { amount: true } } },
+  });
+  return rows.map((row) => {
+    let settled = 0n;
+    for (const s of row.settlements) settled += toCentavos(s.amount.toString());
+    return { ...expenseFromDb(row), settledAmount: toAmount(settled) };
+  });
 }
 
 export async function createExpense(

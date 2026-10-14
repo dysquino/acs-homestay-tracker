@@ -1,7 +1,8 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
-import { toAmount, toCentavos } from "@/lib/finance";
+import type { Prisma } from "@prisma/client";
+import { settleableAmount, sum, toAmount, toCentavos } from "@/lib/finance";
 import { requireReconciliationEnabled } from "./reconciliation-status";
 import type { ExpenseSettlement, ExpenseSettlementInput } from "@/lib/types";
 import { ValidationError, validateExpenseSettlement } from "@/lib/validation";
@@ -54,8 +55,49 @@ export async function createExpenseSettlement(
   await requireReconciliationEnabled();
   validateExpenseSettlement(input);
   await assertSourceExists(input);
-  const row = await prisma.expenseSettlement.create({ data: expenseSettlementToDb(input) });
+  const row = await prisma.$transaction(async (tx) => {
+    if (input.expenseId) await assertNotOverSettled(tx, input.expenseId, input.amount);
+    return tx.expenseSettlement.create({ data: expenseSettlementToDb(input) });
+  });
   return expenseSettlementFromDb(row);
+}
+
+/**
+ * Refuses a settlement that would push an expense past its own value.
+ *
+ * The form already sends only the outstanding remainder, so in normal use this
+ * never fires — it's the backstop for the case the form can't see: a second
+ * window open on a stale expense, or a client that sends the full amount by
+ * mistake. Both write real double-payouts into the audit, and the whole point
+ * of a settlement is that it can be trusted against the statement.
+ *
+ * Guest refunds are skipped — they settle against a booking's total, not an
+ * expense's, and that cap lives on the booking side.
+ *
+ * Read inside the caller's transaction so two concurrent writes can't both see
+ * the same "outstanding" figure and each pass.
+ */
+async function assertNotOverSettled(
+  tx: Prisma.TransactionClient,
+  expenseId: string,
+  incoming: number | string,
+): Promise<void> {
+  const expense = await tx.expense.findUnique({
+    where: { id: expenseId },
+    include: { settlements: { where: { status: "ACTIVE" }, select: { amount: true } } },
+  });
+  if (!expense) return; // assertSourceExists already rejects this; don't mask its error.
+
+  const settledSoFar = sum(expense.settlements.map((s) => s.amount.toString()));
+  const total = sum([expense.amount.toString(), incoming.toString()]);
+  if (total - settledSoFar > 1n) {
+    throw new ValidationError(
+      `That is more than this expense has left to settle (₱${toAmount(
+        settleableAmount([expense.amount.toString()], expense.settlements.map((s) => s.amount.toString())) ??
+          0n,
+      ).toFixed(2)} outstanding).`,
+    );
+  }
 }
 
 export async function updateExpenseSettlement(
@@ -172,12 +214,12 @@ export async function listExpensesAwaitingPayout(limit = 100): Promise<ExpenseAw
 
   const out: ExpenseAwaitingPayout[] = [];
   for (const e of expenses) {
-    let settled = 0n;
-    for (const s of e.settlements) settled += toCentavos(s.amount.toString());
+    const amounts = e.settlements.map((s) => s.amount.toString());
     const total = toCentavos(e.amount.toString());
-    const outstanding = total - settled;
-    // A centavo is a rounding artefact, not money still to pay out.
-    if (outstanding <= 1n) continue;
+    const settled = sum(amounts);
+    const outstanding = settleableAmount([total], amounts);
+    // Nothing worth chasing: already settled, or a rounding artefact.
+    if (outstanding === null) continue;
 
     out.push({
       id: e.id,
