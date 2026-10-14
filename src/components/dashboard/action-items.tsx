@@ -5,6 +5,7 @@ import { useState } from "react";
 
 import { BookingForm } from "@/components/bookings/booking-form";
 import { CleaningForm } from "@/components/cleaning/cleaning-form";
+import { CleanerPayout } from "@/components/cleaning/cleaner-payout";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader } from "@/components/ui/card";
 import { CheckIcon, WarningIcon } from "@/components/ui/icons";
@@ -40,6 +41,7 @@ export function ActionItems() {
   const [error, setError] = useState<{ id: string; message: string } | null>(null);
   const [editBooking, setEditBooking] = useState<Booking | null>(null);
   const [editCleaning, setEditCleaning] = useState<CleaningRecord | null>(null);
+  const [paying, setPaying] = useState<CleaningRecord | null>(null);
 
   async function run(item: ActionItem, task: () => Promise<void>) {
     setBusy(item.id);
@@ -61,8 +63,10 @@ export function ActionItems() {
       case "markCleaningDone":
         return run(item, () => updateCleaning(a.cleaningId, { status: "completed" }));
       case "markCleaningPaid":
-        // Same as "Mark paid" on the Cleaning page: also records its expense.
-        return run(item, () => updateCleaning(a.cleaningId, { paymentStatus: "paid", status: "completed" }));
+        // Asks for the payout date rather than writing blind — a settlement
+        // with no date leaves the month unreconcilable, and this is the one
+        // place the owner is most likely acting in good faith.
+        return setPaying(cleaning.find((c) => c.id === a.cleaningId) ?? null);
       case "editBooking":
         return setEditBooking(bookings.find((b) => b.id === a.bookingId) ?? null);
       case "editCleaning":
@@ -145,6 +149,7 @@ export function ActionItems() {
 
       <BookingForm open={editBooking !== null} booking={editBooking} onClose={() => setEditBooking(null)} />
       <CleaningForm open={editCleaning !== null} record={editCleaning} onClose={() => setEditCleaning(null)} />
+      <CleanerPayout open={paying !== null} record={paying} onClose={() => setPaying(null)} />
     </Card>
   );
 }

@@ -24,10 +24,8 @@ import { useStore } from "@/lib/store";
 import { useSubmit, type Submit } from "@/lib/use-submit";
 import {
   BOOKING_SOURCES,
-  PAYMENT_STATUSES,
   type Booking,
   type BookingSource,
-  type PaymentStatus,
 } from "@/lib/types";
 
 type FormState = {
@@ -37,7 +35,6 @@ type FormState = {
   checkOut: string;
   guestsCount: string;
   totalPayout: string;
-  paymentStatus: PaymentStatus;
   notes: string;
 };
 
@@ -50,7 +47,6 @@ function initialState(booking: Booking | null): FormState {
       checkOut: addDays(today(), 2),
       guestsCount: "2",
       totalPayout: "",
-      paymentStatus: "pending",
       notes: "",
     };
   }
@@ -61,7 +57,6 @@ function initialState(booking: Booking | null): FormState {
     checkOut: booking.checkOut,
     guestsCount: String(booking.guestsCount),
     totalPayout: String(booking.totalPayout),
-    paymentStatus: booking.paymentStatus,
     notes: booking.notes,
   };
 }
@@ -202,7 +197,11 @@ function BookingFields({
       // No longer on the form; an edit keeps whatever the booking already has
       // (e.g. the service fee an Airbnb import recorded).
       platformFee: booking?.platformFee ?? 0,
-      paymentStatus: form.paymentStatus,
+      // Payment status is derived from the booking's recorded payments
+      // (§12.1), so it is no longer picked here — an edit passes through
+      // whatever the cache already holds, and a new booking starts pending
+      // until its first payment is recorded.
+      paymentStatus: booking?.paymentStatus ?? "pending",
       contactInfo: booking?.contactInfo ?? "",
       notes: form.notes.trim(),
       createdBy: booking?.createdBy ?? user?.name ?? "Unknown",
@@ -348,24 +347,6 @@ function BookingFields({
               onChange={(e) => set("totalPayout", e.target.value)}
               placeholder="0.00"
             />
-          )}
-        </Field>
-
-        <Field label="Payment status">
-          {(id) => (
-            <Select
-              id={id}
-              value={form.paymentStatus}
-              onChange={(e) =>
-                set("paymentStatus", e.target.value as PaymentStatus)
-              }
-            >
-              {PAYMENT_STATUSES.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </Select>
           )}
         </Field>
 

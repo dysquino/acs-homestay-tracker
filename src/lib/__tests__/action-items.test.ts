@@ -49,6 +49,7 @@ const expense = (o: Partial<Expense>): Expense => ({
   createdBy: "t",
   cleaningId: null,
   refundStatus: "refunded",
+  settledAmount: 0,
   ...o,
 });
 const request = (o: Partial<BookingRequest>): BookingRequest => ({

@@ -81,6 +81,17 @@ export function ListIcon(props: SVGProps<SVGSVGElement>) {
   );
 }
 
+/** Three stacked dots — the "more destinations" overflow affordance. */
+export function DotsIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Icon {...props}>
+      <circle cx="5" cy="12" r="1.5" />
+      <circle cx="12" cy="12" r="1.5" />
+      <circle cx="19" cy="12" r="1.5" />
+    </Icon>
+  );
+}
+
 export function PlusIcon(props: SVGProps<SVGSVGElement>) {
   return (
     <Icon {...props}>

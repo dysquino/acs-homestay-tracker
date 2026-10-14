@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 
 import { PageHeader } from "@/components/layout/app-shell";
 import { CleaningForm } from "@/components/cleaning/cleaning-form";
+import { CleanerPayout } from "@/components/cleaning/cleaner-payout";
 import {
   CleaningPaymentBadge,
   CleaningStatusBadge,
@@ -55,7 +56,7 @@ import {
 const PERIOD_PRESETS: PresetKey[] = ["thisMonth", "nextMonth", "lastMonth", "last3", "thisYear", "all"];
 
 export default function CleaningPage() {
-  const { cleaning, bookings, updateCleaning, deleteCleaning } = useStore();
+  const { cleaning, bookings, deleteCleaning } = useStore();
 
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<CleaningRecord | null>(null);
@@ -64,6 +65,10 @@ export default function CleaningPage() {
   );
   // The record whose details are open; looked up fresh so an edit shows.
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  // Which record has the payout prompt open, if any. "Mark paid" asks for the
+  // payout date rather than writing blind — a settlement with no date leaves
+  // the month's outflow pool empty and the month unreconcilable.
+  const [paying, setPaying] = useState<CleaningRecord | null>(null);
   const selected = cleaning.find((c) => c.id === selectedId) ?? null;
   const setSelected = (c: CleaningRecord | null) => setSelectedId(c?.id ?? null);
 
@@ -126,22 +131,11 @@ export default function CleaningPage() {
       size="sm"
       variant="ghost"
       className="text-emerald-700 hover:bg-emerald-50"
-      onClick={() => markPaid(c)}
+      onClick={() => setPaying(c)}
     >
       Mark paid
     </Button>
   );
-
-  async function markPaid(record: CleaningRecord) {
-    try {
-      await updateCleaning(record.id, {
-        paymentStatus: "paid",
-        status: "completed",
-      });
-    } catch {
-      alert("Couldn't update this record. Please try again.");
-    }
-  }
 
   return (
     <>
@@ -351,7 +345,7 @@ export default function CleaningPage() {
                                   size="sm"
                                   variant="ghost"
                                   className="mr-1 text-emerald-700 hover:bg-emerald-50"
-                                  onClick={() => markPaid(c)}
+                                  onClick={() => setPaying(c)}
                                 >
                                   Mark paid
                                 </Button>
@@ -425,6 +419,8 @@ export default function CleaningPage() {
         record={editing}
         onClose={() => setFormOpen(false)}
       />
+
+      <CleanerPayout open={paying !== null} record={paying} onClose={() => setPaying(null)} />
 
       <DetailSheet
         open={selected !== null}

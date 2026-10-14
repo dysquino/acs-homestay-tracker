@@ -3,14 +3,18 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useRef, type ComponentType, type ReactNode, type SVGProps } from "react";
+import { useRef, useState, type ComponentType, type ReactNode, type SVGProps } from "react";
 
+import { Modal } from "@/components/ui/modal";
 import { cn } from "@/lib/cn";
 import { ACCOUNTS, useIdentity } from "@/lib/identity";
 import { useStore } from "@/lib/store";
 import { useActionItems } from "@/lib/use-action-items";
 import {
+  BankIcon,
   CalendarIcon,
+  ChevronLeftIcon,
+  DotsIcon,
   DownloadIcon,
   HomeIcon,
   ReceiptIcon,
@@ -28,13 +32,63 @@ type NavItem = {
   icon: ComponentType<SVGProps<SVGSVGElement>>;
 };
 
+/**
+ * The nav destinations, in order.
+ *
+ * Settings is held separately rather than sitting at the end of this list,
+ * because "last" is a rule rather than a position here: Reconciliation only
+ * joins the desktop sidebar when the feature is switched on, and appending it
+ * to `NAV` used to push it below Settings — the one item that should never
+ * move. Assembling both bars through `buildNav` keeps Settings last no matter
+ * what gets added to the middle later.
+ */
 const NAV: NavItem[] = [
   { href: "/", label: "Dashboard", short: "Home", icon: HomeIcon },
   { href: "/bookings", label: "Bookings", short: "Bookings", icon: CalendarIcon },
   { href: "/expenses", label: "Expenses", short: "Expenses", icon: ReceiptIcon },
   { href: "/cleaning", label: "Cleaning", short: "Cleaning", icon: SparklesIcon },
-  { href: "/payment-settings", label: "Settings", short: "Settings", icon: SettingsIcon },
 ];
+
+const SETTINGS_NAV: NavItem = {
+  href: "/payment-settings",
+  label: "Settings",
+  short: "Settings",
+  icon: SettingsIcon,
+};
+
+/**
+ * Reconciliation is separate from NAV because it only appears when the
+ * feature is switched on (RECONCILIATION_ENABLED / the Payment Settings
+ * toggle), and because the mobile tab bar is already at five entries —
+ * §6.2 rules out squeezing a sixth full-width tab in without a usability
+ * review. It gets a desktop sidebar item and a Dashboard link instead.
+ *
+ * Sits just above Settings, so it joins the sidebar as the last thing before
+ * the one item that always stays put.
+ */
+const RECONCILIATION_NAV: NavItem = {
+  href: "/reconciliation",
+  label: "Reconciliation",
+  short: "Reconcile",
+  icon: BankIcon,
+};
+
+/**
+ * Mobile's fifth cell. Stands in for the destinations that don't earn a
+ * full-width tab on a phone — it opens a sheet rather than navigating.
+ */
+const MORE_NAV: NavItem = {
+  href: "__more",
+  label: "More",
+  short: "More",
+  icon: DotsIcon,
+};
+
+/** Both bars, Settings pinned last. Reconciliation is desktop-only. */
+function buildNav(withReconciliation: boolean): NavItem[] {
+  const middle = withReconciliation ? [...NAV, RECONCILIATION_NAV] : NAV;
+  return [...middle, SETTINGS_NAV];
+}
 
 function isActive(pathname: string, href: string): boolean {
   return href === "/" ? pathname === "/" : pathname.startsWith(href);
@@ -42,9 +96,11 @@ function isActive(pathname: string, href: string): boolean {
 
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
+  const { bookingRequests, reconciliationEnabled } = useStore();
+  const [moreOpen, setMoreOpen] = useState(false);
   // Guests' booking requests waiting for a reply — shown on the Bookings tab;
   // overdue action items — shown on the Dashboard / Home tab.
-  const requests = useStore().bookingRequests.length;
+  const requests = bookingRequests.length;
   const overdue = useActionItems().filter((i) => i.urgency === "overdue").length;
   const counts: Record<string, { n: number; label: string }> = {
     "/": { n: overdue, label: `${overdue} overdue action item${overdue === 1 ? "" : "s"}` },
@@ -60,6 +116,30 @@ export function AppShell({ children }: { children: ReactNode }) {
       </span>
     ) : null;
 
+  const desktopNav = buildNav(reconciliationEnabled);
+
+  /**
+   * Destinations behind the mobile "More" cell.
+   *
+   * A phone's tab bar can't grow to six without the cells getting narrow
+   * enough that the longest label wraps, so rather than cramming every
+   * destination in, the two that don't need a permanent tab live behind one
+   * tap. Reconciliation still isn't a tab — §6.2 asked for a usability review
+   * before making it one, and a sheet is a way to reach it without promising
+   * it permanent space.
+   */
+  const overflowItems = [
+    ...(reconciliationEnabled ? [RECONCILIATION_NAV] : []),
+    SETTINGS_NAV,
+  ];
+  const mobileNav = [...NAV, MORE_NAV];
+
+  // Reconciliation is a focused workspace, not another tab: §10.1 asks for the
+  // standard bottom navigation to be hidden while it's active, because the
+  // control sheet sits where that bar would be and the two would collide. The
+  // route carries its own back action and header instead.
+  const focused = pathname.startsWith("/reconciliation");
+
   return (
     <div className="flex min-h-full flex-col lg:flex-row">
       {/* Desktop sidebar — sticky so navigation stays reachable while a
@@ -70,7 +150,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <Brand />
         </div>
         <nav className="flex-1 space-y-1 px-3">
-          {NAV.map((item) => {
+          {desktopNav.map((item) => {
             const active = isActive(pathname, item.href);
             return (
               <Link
@@ -103,16 +183,29 @@ export function AppShell({ children }: { children: ReactNode }) {
       {/* Mobile top bar — sticky, like the bottom tabs, so the brand, export
           and who's-recording stay in reach while a long page scrolls. Its
           height is reserved as scroll padding in globals.css, so jumps to a
-          spot on the page (e.g. pagination) don't land underneath it. */}
+          spot on the page (e.g. pagination) don't land underneath it.
+          On the focused reconciliation route the bottom tabs are gone, so a
+          back action replaces the brand — §10.2 asks for an explicit way
+          out of a route that is otherwise a dead end on a phone. */}
       <header className="no-print sticky top-0 z-30 flex items-center justify-between gap-3 bg-white px-4 py-3 shadow-[0_1px_2px_rgba(15,23,42,0.06)] lg:hidden">
-        <Brand />
+        {focused ? (
+          <Link
+            href="/"
+            className="-ml-1 inline-flex items-center gap-1 rounded-md px-1 py-1.5 text-sm font-medium text-slate-700 hover:text-slate-900"
+          >
+            <ChevronLeftIcon className="h-5 w-5" />
+            Back
+          </Link>
+        ) : (
+          <Brand />
+        )}
         <div className="flex items-center gap-1">
           <ExportMenu compact />
           <IdentityPicker />
         </div>
       </header>
 
-      <main className="min-w-0 flex-1 pb-20 lg:pb-0">
+      <main className={cn("min-w-0 flex-1", focused ? "pb-0" : "pb-20 lg:pb-0")}>
         <div className="mx-auto w-full max-w-[88rem] px-4 py-5 sm:px-6 sm:py-7">
           {children}
         </div>
@@ -121,42 +214,108 @@ export function AppShell({ children }: { children: ReactNode }) {
       {/* Mobile bottom tabs. Sized generously so tappability matches app nav
           expectations — bumped from 11px text + 20px icons to 12px + 24px
           after the home-screen icon felt undersized next to the rest of an
-          app-style layout. The grid-cols-5 + ~74px per cell still leaves
-          room for the longest label ("Cleaning", 8 chars) without wrap on
-          320px-wide screens. */}
-      <nav className="no-print fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 rounded-t-3xl bg-white pb-[env(safe-area-inset-bottom)] shadow-[0_-4px_20px_rgba(15,23,42,0.08)] lg:hidden">
-        {NAV.map((item) => {
-          const active = isActive(pathname, item.href);
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              aria-current={active ? "page" : undefined}
-              className={cn(
-                "flex flex-col items-center gap-1 py-2.5 text-xs font-medium",
-                active ? "text-brand-700" : "text-slate-500",
-              )}
-            >
-              <span className="relative">
-                <item.icon className="h-6 w-6" />
-                {badge(item.href) ? (
-                  <span className="absolute -top-1.5 -right-2.5">{badge(item.href)}</span>
-                ) : null}
-              </span>
-              {item.short}
-            </Link>
-          );
-        })}
-      </nav>
+          app-style layout. Stays five cells wide at ~74px each, which still
+          leaves room for the longest label ("Cleaning", 8 chars) without wrap
+          on 320px-wide screens. Suppressed on the focused reconciliation
+          route, where the control sheet occupies the same space. */}
+      {focused ? null : (
+        <nav className="no-print fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 rounded-t-3xl bg-white pb-[env(safe-area-inset-bottom)] shadow-[0_-4px_20px_rgba(15,23,42,0.08)] lg:hidden">
+          {mobileNav.map((item) => {
+            const isMore = item.href === "__more";
+            const active = !isMore && isActive(pathname, item.href);
+
+            // The overflow cell highlights whenever one of the destinations it
+            // holds is the current page — otherwise Settings would look
+            // unselected while you were standing on it.
+            const holdsCurrent = isMore && overflowItems.some((o) => isActive(pathname, o.href));
+            const selected = active || (holdsCurrent && !moreOpen);
+
+            // One colour class, never both. `cn` is a plain join with no
+            // tailwind-merge, so emitting `text-slate-500` alongside
+            // `text-brand-700` would leave the winner up to the order Tailwind
+            // happens to emit them in.
+            const className = cn(
+              "flex flex-col items-center gap-1 py-2.5 text-xs font-medium",
+              selected ? "text-brand-700" : "text-slate-500",
+            );
+
+            if (isMore) {
+              return (
+                <button
+                  key={item.href}
+                  type="button"
+                  onClick={() => setMoreOpen(true)}
+                  aria-haspopup="dialog"
+                  aria-expanded={moreOpen}
+                  className={className}
+                >
+                  <span className="relative">
+                    <item.icon className="h-6 w-6" />
+                  </span>
+                  {item.short}
+                </button>
+              );
+            }
+
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                aria-current={active ? "page" : undefined}
+                className={className}
+              >
+                <span className="relative">
+                  <item.icon className="h-6 w-6" />
+                  {badge(item.href) ? (
+                    <span className="absolute -top-1.5 -right-2.5">{badge(item.href)}</span>
+                  ) : null}
+                </span>
+                {item.short}
+              </Link>
+            );
+          })}
+        </nav>
+      )}
+
+      {/*
+        The mobile overflow sheet. Rendered outside the `focused` guard above
+        on purpose — it can only be opened from the tab bar, so it's never
+        reachable on the reconciliation route anyway.
+      */}
+      <Modal open={moreOpen} onClose={() => setMoreOpen(false)} title="More">
+        <ul className="space-y-1">
+          {overflowItems.map((item) => (
+            <li key={item.href}>
+              <Link
+                href={item.href}
+                aria-current={isActive(pathname, item.href) ? "page" : undefined}
+                onClick={() => setMoreOpen(false)}
+                className={cn(
+                  "flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium",
+                  isActive(pathname, item.href)
+                    ? "bg-brand-50 text-brand-700"
+                    : "text-slate-700 hover:bg-slate-50",
+                )}
+              >
+                <item.icon className="h-5 w-5 text-slate-400" />
+                {item.label}
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </Modal>
     </div>
   );
 }
 
-const EXPORTS: { table: string; label: string }[] = [
+const EXPORTS: { table: string; label: string; needsReconciliation?: boolean }[] = [
   { table: "bookings", label: "Bookings" },
   { table: "expenses", label: "Expenses" },
   { table: "cleaning", label: "Cleaning" },
   { table: "blocked-dates", label: "Blocked dates" },
+  // Only offered when the feature is on — otherwise it's a header-only file
+  // that looks like data loss rather than an empty ledger.
+  { table: "reconciliation", label: "Reconciliation", needsReconciliation: true },
 ];
 
 /**
@@ -169,7 +328,11 @@ const EXPORTS: { table: string; label: string }[] = [
  */
 function ExportMenu({ compact }: { compact?: boolean }) {
   const ref = useRef<HTMLDetailsElement>(null);
+  const { reconciliationEnabled } = useStore();
   const close = () => ref.current?.removeAttribute("open");
+  const items = EXPORTS.filter(
+    (e) => !("needsReconciliation" in e) || e.needsReconciliation !== true || reconciliationEnabled,
+  );
 
   return (
     <details ref={ref} className={cn("group", compact && "relative")}>
@@ -193,7 +356,7 @@ function ExportMenu({ compact }: { compact?: boolean }) {
         {compact ? (
           <p className="px-2 pt-1 pb-1.5 text-xs text-slate-500">Download a CSV backup</p>
         ) : null}
-        {EXPORTS.map((e) => (
+        {items.map((e) => (
           <a
             key={e.table}
             href={`/api/export/${e.table}`}

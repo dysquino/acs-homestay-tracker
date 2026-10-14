@@ -4,6 +4,7 @@ import { listBookings } from "@/lib/data/bookings";
 import { listExpenses } from "@/lib/data/expenses";
 import { listCleaning } from "@/lib/data/cleaning";
 import { listDateBlocks } from "@/lib/data/date-blocks";
+import { listReconciliationLedger } from "@/lib/data/reconciliation-audit";
 import { csvResponse, toCsv } from "@/lib/csv";
 import { addDays, daysBetween, nightCount, today } from "@/lib/dates";
 import {
@@ -26,7 +27,7 @@ import {
  * standalone backup — not something that depends on this app still running.
  */
 
-const TABLES = ["bookings", "expenses", "cleaning", "blocked-dates"] as const;
+const TABLES = ["bookings", "expenses", "cleaning", "blocked-dates", "reconciliation"] as const;
 type Table = (typeof TABLES)[number];
 
 function isTable(value: string): value is Table {
@@ -81,6 +82,46 @@ async function buildCsv(table: Table): Promise<string> {
         e.paidBy,
         labelFor(EXPENSE_REFUND_STATUSES, e.refundStatus),
         e.cleaningId ? "Yes" : "",
+      ]),
+    );
+  }
+
+  if (table === "reconciliation") {
+    // The ledger, not the raw match rows. A spreadsheet of movements with a
+    // running balance can be checked by eye and pivoted by month; a dump of
+    // match ids cannot. The period's statement figures ride along on every row
+    // so the file is self-contained — the point is that it still means
+    // something when the app isn't there to ask.
+    const ledger = await listReconciliationLedger();
+    return toCsv(
+      [
+        "Month", "Period Status",
+        "Bank Posted", "Record Date", "Category", "Guest / Payee", "Detail",
+        "In", "Out", "Running Balance", "Recorded By", "Reference", "Statement Group",
+        "Statement Opening", "Statement Closing", "Calculated Balance", "Difference",
+        "Finalized By", "Finalized At", "Version",
+      ],
+      ledger.map((r) => [
+        r.month,
+        r.status,
+        r.bankPostedDate ?? "",
+        r.recordDate ?? "",
+        r.category,
+        r.label,
+        r.detail,
+        r.inflow === 0 ? "" : r.inflow,
+        r.outflow === 0 ? "" : r.outflow,
+        r.runningBalance,
+        r.recordedBy,
+        r.reference,
+        r.statementGroup,
+        r.statementOpening,
+        r.statementClosing,
+        r.calculatedBalance ?? "",
+        r.difference ?? "",
+        r.finalizedBy ?? "",
+        r.finalizedAt ?? "",
+        r.version,
       ]),
     );
   }

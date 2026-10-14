@@ -1,14 +1,19 @@
+import { toCentavos } from "./finance";
 import {
+  BOOKING_PAYMENT_METHODS,
   BOOKING_SOURCES,
   CLEANING_PAYMENT_STATUSES,
   CLEANING_STATUSES,
   EXPENSE_CATEGORIES,
   EXPENSE_REFUND_STATUSES,
   PAYMENT_STATUSES,
+  SETTLEMENT_TYPES,
   type BookingInput,
+  type BookingPaymentInput,
   type BookingRequestInput,
   type CleaningRecord,
   type ExpenseInput,
+  type ExpenseSettlementInput,
 } from "./types";
 
 /**
@@ -49,6 +54,32 @@ function money(value: unknown, field: string, { min }: { min: "zero" | "positive
   if (value > MAX_MONEY) fail(`${field} is too large.`);
 }
 
+/**
+ * A money amount on the financial-event models, checked through the exact
+ * centavos helpers rather than by range comparison alone.
+ *
+ * A `number` can pass `> 0 && <= MAX` and still be un-schedulable: `1234.565`
+ * has to become either ₱1,234.56 or ₱1,234.57 depending on the rounding rule,
+ * which is exactly the centavo drift §8.6 forbids. So we convert first and let
+ * the conversion reject anything that isn't exactly two decimals.
+ */
+function exactMoney(value: unknown, field: string, { min }: { min: "zero" | "positive" }): void {
+  money(value, field, { min });
+  try {
+    toCentavos(value as number);
+  } catch {
+    fail(`${field} can't have more than 2 decimal places.`);
+  }
+}
+
+function id(value: unknown, field: string, { required }: { required: boolean }): void {
+  if (value === undefined || value === null || value === "") {
+    if (required) fail(`${field} is required.`);
+    return;
+  }
+  text(value, field, { max: MAX_NAME, required: true });
+}
+
 function text(value: unknown, field: string, { max, required }: { max: number; required?: boolean }): void {
   if (typeof value !== "string") fail(`${field} must be text.`);
   if (required && !value.trim()) fail(`${field} is required.`);
@@ -75,6 +106,53 @@ export function validateBooking(b: BookingInput): void {
   text(b.contactInfo, "Contact info", { max: MAX_NAME });
   text(b.notes, "Notes", { max: MAX_TEXT });
   text(b.createdBy, "Created by", { max: MAX_NAME });
+}
+
+/**
+ * One receipt against a booking. Amount must be positive — direction is implied
+ * by the row type, never by a sign (§4.2), so a negative here is a mistake
+ * rather than a refund. Refunds are ExpenseSettlements.
+ */
+export function validateBookingPayment(p: BookingPaymentInput): void {
+  id(p.bookingId, "Booking", { required: true });
+  exactMoney(p.amount, "Amount", { min: "positive" });
+  date(p.receivedDate, "Received date");
+  oneOf(p.method, BOOKING_PAYMENT_METHODS, "Method");
+  text(p.reference, "Reference", { max: MAX_TEXT });
+  text(p.notes, "Notes", { max: MAX_TEXT });
+  text(p.createdBy, "Created by", { max: MAX_NAME });
+}
+
+/**
+ * One outflow against an expense — or a guest refund against a booking. Which
+ * of the two is decided by `settlementType`, so the pair of ids is validated
+ * against it rather than accepted as-is: a refund must name a booking and must
+ * not name an expense, and everything else is the reverse (§4.2).
+ */
+export function validateExpenseSettlement(s: ExpenseSettlementInput): void {
+  exactMoney(s.amount, "Amount", { min: "positive" });
+  date(s.paidDate, "Paid date");
+  oneOf(s.settlementType, SETTLEMENT_TYPES, "Settlement type");
+  text(s.reference, "Reference", { max: MAX_TEXT });
+  text(s.notes, "Notes", { max: MAX_TEXT });
+  text(s.createdBy, "Created by", { max: MAX_NAME });
+
+  if (s.settlementType === "guest_refund") {
+    id(s.refundForBookingId, "Booking", { required: true });
+    if (s.expenseId) fail("A guest refund is against a booking, not an expense.");
+    if (s.reimbursedTo) fail("A guest refund isn't a reimbursement — leave who was reimbursed blank.");
+    return;
+  }
+
+  id(s.expenseId, "Expense", { required: true });
+  if (s.refundForBookingId) fail("Only a guest refund is against a booking.");
+  // Only a reimbursement has someone to reimburse; anything else carrying a
+  // name here would double-report a payee already on the expense.
+  if (s.settlementType === "owner_reimbursement") {
+    text(s.reimbursedTo, "Reimbursed to", { max: MAX_NAME, required: true });
+  } else if (s.reimbursedTo) {
+    fail("Only a reimbursement records who was reimbursed.");
+  }
 }
 
 export function validateExpense(e: ExpenseInput): void {

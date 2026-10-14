@@ -15,6 +15,7 @@ import { useIdentity } from "@/lib/identity";
 import { today } from "@/lib/dates";
 import { useStore } from "@/lib/store";
 import { useSubmit, type Submit } from "@/lib/use-submit";
+import { payoutDateDiverges, payoutMonthLabel } from "@/lib/payout-date";
 import {
   EXPENSE_CATEGORIES,
   EXPENSE_REFUND_STATUSES,
@@ -31,6 +32,8 @@ type FormState = {
   amount: string;
   paidBy: string;
   refundStatus: ExpenseRefundStatus;
+  /** YYYY-MM-DD, or "" to leave the expense without a recorded payout. */
+  payoutDate: string;
 };
 
 const FORM_ID = "expense-form";
@@ -89,6 +92,10 @@ function ExpenseFields({
           amount: String(expense.amount),
           paidBy: expense.paidBy,
           refundStatus: expense.refundStatus,
+          // Pre-filled with today because the common case is "I just paid this".
+          // For an expense from an earlier month that default is likely wrong,
+          // which is what the divergence note under the field is for.
+          payoutDate: expense.amount - expense.settledAmount > 0 ? today() : "",
         }
       : {
           date: today(),
@@ -100,6 +107,9 @@ function ExpenseFields({
           paidBy: "",
           // The normal case: paid directly, nobody is owed anything back.
           refundStatus: "refunded",
+          // A new expense has no row to attach a payout to yet, so the date is
+          // recorded from the worklist once it exists.
+          payoutDate: "",
         },
   );
   const [errors, setErrors] = useState<Partial<Record<keyof FormState, string>>>(
@@ -109,6 +119,18 @@ function ExpenseFields({
 
   const set = <K extends keyof FormState>(key: K, value: FormState[K]) =>
     setForm((f) => ({ ...f, [key]: value }));
+
+  const outstanding =
+    expense ? Math.round((expense.amount - expense.settledAmount) * 100) / 100 : 0;
+  const showPayout = Boolean(expense) && outstanding > 0;
+  /**
+   * The dangerous default: an expense from an earlier month stamped with
+   * today's date files the money in the wrong period, and reconciliation cannot
+   * detect it because a wrong date reconciles perfectly against itself. Same
+   * month is the ordinary case and stays silent — friction there is the enemy.
+   */
+  const payoutDiverges =
+    showPayout && payoutDateDiverges(form.payoutDate, expense?.date ?? "");
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -134,8 +156,28 @@ function ExpenseFields({
     setSubmitError(null);
     await submit.run(async () => {
       try {
-        if (expense) await updateExpense(expense.id, payload);
-        else await addExpense(payload);
+        if (!expense) {
+          await addExpense(payload);
+        } else {
+          // The payout rides along with the expense save rather than following
+          // it, so there's no window where the expense reads as paid out but
+          // carries no settlement — a state the month's outflow pool can't see.
+          // The server settles only what's still outstanding.
+          await updateExpense(
+            expense.id,
+            payload,
+            form.payoutDate
+              ? {
+                  paidDate: form.payoutDate,
+                  settlementType:
+                    form.refundStatus === "owed"
+                      ? "owner_reimbursement"
+                      : "direct_vendor_payment",
+                  reimbursedTo: form.refundStatus === "owed" ? form.paidBy.trim() : "",
+                }
+              : undefined,
+          );
+        }
         onClose();
       } catch {
         setSubmitError("Couldn't save this expense. Please try again.");
@@ -234,6 +276,26 @@ function ExpenseFields({
           )}
         </Field>
 
+        {showPayout ? (
+          <Field
+            label="Payout date"
+            hint={
+              outstanding < (expense?.amount ?? 0)
+                ? `${outstanding.toFixed(2)} of this is still unrecorded.`
+                : "When this left the homestay account."
+            }
+          >
+            {(id) => (
+              <Input
+                id={id}
+                type="date"
+                value={form.payoutDate}
+                onChange={(e) => set("payoutDate", e.target.value)}
+              />
+            )}
+          </Field>
+        ) : null}
+
         <Field
           label="Refund status"
           hint="Has the person above been paid back for fronting this?"
@@ -253,6 +315,15 @@ function ExpenseFields({
           )}
         </Field>
       </div>
+
+      {payoutDiverges ? (
+        <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+          This expense is dated {expense?.date}, but the payout date is {form.payoutDate}.
+          Saving records the money as leaving the bank in{" "}
+          {payoutMonthLabel(form.payoutDate, today())} month — which
+          is what reconciliation will count. If you paid it earlier, change the date.
+        </p>
+      ) : null}
 
       {submitError ? (
         <p className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700">

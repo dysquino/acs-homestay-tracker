@@ -35,10 +35,15 @@ enum BookingSource {
   DIRECT
 }
 
+/// Cached on the booking for list rendering; always recomputed from
+/// BookingPayment rows before it is trusted (see RECONCILIATION_SPEC §12.1).
+/// OVERPAID is not an error state — the guest sent more than the payout, which
+/// is reconciled by refunding the excess or explaining it with an adjustment.
 enum PaymentStatus {
   PAID
   PENDING
   PARTIAL
+  OVERPAID
 }
 
 enum ExpenseCategory {
@@ -84,21 +89,21 @@ model User {
 }
 
 model Booking {
-  id               String             @id @default(cuid())
-  guestName        String
-  source           BookingSource
-  checkIn          DateTime
-  checkOut         DateTime
-  guestsCount      Int
-  totalPayout      Decimal            @db.Decimal(10, 2)
-  platformFee      Decimal            @default(0) @db.Decimal(10, 2)
-  paymentStatus    PaymentStatus
-  contactInfo      String             @default("")
-  notes            String             @default("")
-  createdBy        String
+  id                    String              @id @default(cuid())
+  guestName             String
+  source                BookingSource
+  checkIn               DateTime
+  checkOut              DateTime
+  guestsCount           Int
+  totalPayout           Decimal             @db.Decimal(10, 2)
+  platformFee           Decimal             @default(0) @db.Decimal(10, 2)
+  paymentStatus         PaymentStatus
+  contactInfo           String              @default("")
+  notes                 String              @default("")
+  createdBy             String
   /// Airbnb's reservation code (e.g. HM5M3MR8KQ), set only by the CSV import.
   /// Unique, so importing the same file twice can never create a duplicate.
-  confirmationCode String?            @unique
+  confirmationCode      String?             @unique
   /// Payment screenshot for direct bookings — copied from the BookingRequest
   /// on approval (so the bytes belong to the reservation, not just the
   /// request), and editable by the owner afterwards. Bytes are magic-byte
@@ -109,15 +114,53 @@ model Booking {
   /// ID photo for direct bookings — same shape and rules as the payment
   /// screenshot. The guest-side form makes it required at submit time;
   /// the server stays permissive (old /book clients stay compatible).
-  idPhoto     Bytes?
-  idPhotoMime String?
-  cleanings        CleaningSchedule[]
+  idPhoto               Bytes?
+  idPhotoMime           String?
+  cleanings             CleaningSchedule[]
   /// The guest's request this booking was approved from, if any.
-  request          BookingRequest?
-  createdAt        DateTime           @default(now())
-  updatedAt        DateTime           @updatedAt
+  request               BookingRequest?
+  /// One row per actual receipt of money. Zero = nothing received yet, so a
+  /// booking can be unpaid, part-paid (deposit + balance), or paid in full.
+  /// Reconciliation reads these rows, never the cached `paymentStatus`.
+  payments              BookingPayment[]
+  /// Guest refunds paid back out of the bank. Reachable from the booking so
+  /// the owner can see a stay's receipts and refunds side by side.
+  refunds               ExpenseSettlement[] @relation("BookingRefunds")
+  /// Per-stay arrival details filled in from the dashboard before check-in.
+  stayPreparation       StayPreparation?
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
 
   @@index([checkIn, checkOut])
+}
+
+/// Arrival details that vary per reservation. Kept separate from Booking so
+/// the core booking form and imports do not need to know about door codes.
+model StayPreparation {
+  bookingId    String   @id
+  booking      Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  doorPasscode String   @default("")
+  updatedAt    DateTime @updatedAt
+}
+
+/// Property-wide values used when rendering guest message templates.
+model HomestaySettings {
+  id                          String   @id @default("default")
+  wifiPassword                String   @default("")
+  messageTemplatesInitialized Boolean  @default(false)
+  updatedAt                   DateTime @updatedAt
+}
+
+/// Reusable, owner-editable guest messages. Variables use {{variable}} form.
+model GuestMessageTemplate {
+  id        String   @id @default(cuid())
+  name      String
+  body      String
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([sortOrder, createdAt])
 }
 
 /// Dates the owners close with no guest — maintenance, their own use. Same
@@ -137,6 +180,123 @@ model DateBlock {
   @@index([startDate, endDate])
 }
 
+/// Void, don't delete — a payment that reached the bank is a financial fact,
+/// and §7.13 requires the audit trail to keep it either way.
+enum BookingPaymentStatus {
+  ACTIVE
+  VOIDED
+  /// The whole amount was reversed by the homestay. Partial refunds are NOT
+  /// modelled here: they are an ExpenseSettlement of type GUEST_REFUND, which
+  /// keeps one amount in one place and lets the receipt stay ACTIVE.
+  REFUNDED
+}
+
+enum BookingPaymentMethod {
+  AIRBNB_PAYOUT
+  BANK_TRANSFER
+  INSTAPAY
+  CASH_DEPOSIT
+  OTHER
+}
+
+/// One actual receipt of money against a booking — a deposit, an installment,
+/// an Airbnb payout, a final balance. `amount` is a positive value; direction is
+/// implied by the row type, never by a sign. Sums are computed in integer
+/// centavos (src/lib/finance.ts) so a table's rows always add to its total.
+model BookingPayment {
+  id           String               @id @default(cuid())
+  bookingId    String
+  booking      Booking              @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  amount       Decimal              @db.Decimal(10, 2)
+  /// When the money actually arrived (a stay in July paid in June is a June
+  /// receipt). Stored UTC-midnight from a `YYYY-MM-DD` local date — see the
+  /// mappers.
+  receivedDate DateTime
+  method       BookingPaymentMethod @default(OTHER)
+  /// Bank reference / Airbnb confirmation code when known. Free text, but
+  /// searching it is how the reconciliation workspace finds candidates.
+  reference    String               @default("")
+  notes        String               @default("")
+  status       BookingPaymentStatus @default(ACTIVE)
+  /// Display label from the identity picker, matching `createdBy` on Booking.
+  /// Deliberately not a User FK — see the User model comment.
+  createdBy    String
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+  voidedAt     DateTime?
+  voidedBy     String?
+
+  @@index([bookingId])
+  /// The outstanding-inflows list is "active payments, newest first, for a
+  /// given receive date" — this covers it without a table scan.
+  @@index([status, receivedDate])
+}
+
+/// Void, don't delete — same reason as BookingPayment.
+enum ExpenseSettlementStatus {
+  ACTIVE
+  VOIDED
+}
+
+/// What moved the money. See RECONCILIATION_SPEC §4.5 and §11.2 for why
+/// GUEST_REFUND lives here rather than in the adjustment categories.
+enum SettlementType {
+  /// Homestay paid the vendor directly.
+  DIRECT_VENDOR_PAYMENT
+  /// Homestay paid back whoever in `paidBy` fronted the cost. This is the
+  /// moment an owner-fronted expense becomes a bank outflow (§4.1).
+  OWNER_REIMBURSEMENT
+  /// Settlement for the expense the app created for a paid cleaning.
+  CLEANER_PAYMENT
+  /// Money returned to a guest. Modelled as an outflow against the booking,
+  /// never as a negative payment on the receipt (§4.2).
+  GUEST_REFUND
+  OTHER
+}
+
+/// One actual movement of money out of the homestay bank against an expense.
+/// The expense itself records the cost and its purpose; the settlement records
+/// when the money actually left. An expense paid out of pocket by an owner has
+/// no settlement until they're reimbursed.
+model ExpenseSettlement {
+  id                 String                  @id @default(cuid())
+  /// Set for every type except GUEST_REFUND, which settles against a booking.
+  /// Exactly one of `expenseId` / `refundForBookingId` must be set —
+  /// enforced in the write action (see expense-settlements.ts), since Prisma
+  /// has no portable CHECK constraint across both the presence and
+  /// exclusivity rules.
+  expenseId          String?
+  expense            Expense?                @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  /// Set only for settlementType GUEST_REFUND — the booking the money went
+  /// back to. Cascade matches BookingPayment's, so removing the booking removes
+  /// its refunds too.
+  refundForBookingId String?
+  refundForBooking   Booking?                @relation("BookingRefunds", fields: [refundForBookingId], references: [id], onDelete: Cascade)
+  amount             Decimal                 @db.Decimal(10, 2)
+  /// When the money left the bank — the reimbursement date, not the expense
+  /// date. A July cleaning paid in August is an August outflow (§4.1).
+  paidDate           DateTime
+  settlementType     SettlementType
+  /// Who was reimbursed, for OWNER_REIMBURSEMENT. Free text so it matches the
+  /// `paidBy` value on the expense without a join.
+  reimbursedTo       String                  @default("")
+  reference          String                  @default("")
+  notes              String                  @default("")
+  status             ExpenseSettlementStatus @default(ACTIVE)
+  /// The identity-picker label, same convention as BookingPayment.createdBy.
+  createdBy          String
+  createdAt          DateTime                @default(now())
+  updatedAt          DateTime                @updatedAt
+  voidedAt           DateTime?
+  voidedBy           String?
+
+  @@index([expenseId])
+  /// Outstanding-outflows list, same shape as BookingPayment's second index.
+  @@index([status, paidDate])
+  /// Refunds are looked up per booking, not per expense.
+  @@index([refundForBookingId])
+}
+
 model Expense {
   id           String              @id @default(cuid())
   date         DateTime
@@ -152,6 +312,9 @@ model Expense {
   /// Cascade: deleting the cleaning record deletes its expense too.
   cleaningId   String?             @unique
   cleaning     CleaningSchedule?   @relation(fields: [cleaningId], references: [id], onDelete: Cascade)
+  /// One row per time money actually left the bank for this expense. Empty
+  /// for an owner-fronted expense until they're reimbursed (§4.5).
+  settlements  ExpenseSettlement[]
   createdAt    DateTime            @default(now())
   updatedAt    DateTime            @updatedAt
 
@@ -186,20 +349,20 @@ enum BookingRequestStatus {
 /// Requests don't block the calendar — only approving one creates a real
 /// (Direct, payment pending) Booking, which is linked back here.
 model BookingRequest {
-  id          String               @id @default(cuid())
-  guestName   String
-  contactInfo String
-  checkIn     DateTime
-  checkOut    DateTime
-  guestsCount Int
-  message     String               @default("")
-  status      BookingRequestStatus @default(PENDING)
+  id                    String               @id @default(cuid())
+  guestName             String
+  contactInfo           String
+  checkIn               DateTime
+  checkOut              DateTime
+  guestsCount           Int
+  message               String               @default("")
+  status                BookingRequestStatus @default(PENDING)
   /// Set when approved. SetNull: deleting the booking later keeps the
   /// request as a record of what was asked for.
-  bookingId   String?              @unique
-  booking     Booking?             @relation(fields: [bookingId], references: [id], onDelete: SetNull)
-  decidedBy   String?
-  decidedAt   DateTime?
+  bookingId             String?              @unique
+  booking               Booking?             @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+  decidedBy             String?
+  decidedAt             DateTime?
   /// Optional InstaPay proof the guest (or an owner, on their behalf)
   /// uploaded. Bytes are magic-byte-sniffed at write; see
   /// `src/lib/payment-screenshot.ts`. Capped at MAX_PAYMENT_SCREENSHOT_BYTES.
@@ -209,9 +372,9 @@ model BookingRequest {
   /// + size rules as the payment screenshot. The guest-side form requires
   /// it; the server doesn't (old clients stay compatible) — but the form is
   /// the only realistic path guests use.
-  idPhoto     Bytes?
-  idPhotoMime String?
-  createdAt   DateTime             @default(now())
+  idPhoto               Bytes?
+  idPhotoMime           String?
+  createdAt             DateTime             @default(now())
 
   @@index([status, createdAt])
 }
@@ -226,42 +389,52 @@ model BookingRequest {
 /// both are zero, the booking page hides the breakdown (no estimate to
 /// give).
 model PaymentConfig {
-  id            String   @id @default("singleton")
-  bankName      String
-  accountName   String
-  accountNumber String
+  id                        String   @id @default("singleton")
+  bankName                  String
+  accountName               String
+  accountNumber             String
   /// Optional QR override uploaded from Settings. Same magic-byte + size
   /// rules as a payment screenshot (src/lib/payment-screenshot.ts). When
   /// null, /book falls back to /public/qr-code.JPG so the static file
   /// works as a built-in default.
-  qrCode        Bytes?
-  qrCodeMime    String?
+  qrCode                    Bytes?
+  qrCodeMime                String?
   /// Per-night rate shown on /book. Informational only — the owner still
   /// fills totalPayout per booking (CSV-imported or hand-entered); this is
   /// the breakdown the guest sees *before* they send the request.
-  nightlyRate   Decimal  @default(0) @db.Decimal(10, 2)
+  nightlyRate               Decimal  @default(0) @db.Decimal(10, 2)
   /// Cleaning fee added for short-term bookings (< 5 nights). Used on the
   /// /book breakdown when the stay is shorter than the long-stay cutoff.
-  cleaningFee   Decimal  @default(0) @db.Decimal(10, 2)
+  cleaningFee               Decimal  @default(0) @db.Decimal(10, 2)
   /// Cleaning fee for long-term bookings (>= 5 nights). If 0, falls back to
   /// `cleaningFee` for stays that would have used this tier.
-  cleaningFeeLong Decimal @default(0) @db.Decimal(10, 2)
+  cleaningFeeLong           Decimal  @default(0) @db.Decimal(10, 2)
   /// The number of nights at which a stay flips from "short" to "long" and
   /// starts using `cleaningFeeLong` instead of `cleaningFee`. Owner-tunable
   /// from Payment Settings — defaults to 5 to preserve the original
   /// behavior. Capped at 60 since 60+ nights is already in "long-term"
   /// territory; lower bound is 2 (a 1-night stay can't be "long").
-  longStayThresholdNights Int @default(5)
+  longStayThresholdNights   Int      @default(5)
   /// Whether the ID photo is required on the public /book form. When false,
   /// the field is shown as optional and the form doesn't block submission
   /// for it. The server stays permissive regardless (old /book versions
   /// keep working).
-  idPhotoRequired          Boolean  @default(true)
+  idPhotoRequired           Boolean  @default(true)
   /// Whether the payment screenshot is required on the public /book form.
   /// When true, the form blocks submission until a screenshot is attached.
   paymentScreenshotRequired Boolean  @default(false)
-  updatedAt     DateTime @updatedAt
-  updatedBy     String
+  /// Master switch for the reconciliation feature (the booking-payment and
+  /// expense-settlement panels and their server actions). Owner-toggleable
+  /// from Payment Settings so it can be switched off between reconciles
+  /// without a deploy. Defaults to false: the feature stays out of the way
+  /// until someone deliberately turns it on.
+  ///
+  /// RECONCILIATION_ENABLED, when set, wins over this — see
+  /// src/lib/reconciliation-flag.ts. That keeps an operator able to force the
+  /// feature off for every deployment at once, even if this row says on.
+  reconciliationEnabled    Boolean  @default(false)
+  updatedAt                 DateTime @updatedAt
+  updatedBy                 String
 }
 
 /// The last good copy of the Airbnb calendar feed (AIRBNB_ICAL_URL), so its
@@ -276,4 +449,297 @@ model AirbnbCalendarCache {
   /// When a read was last attempted, and why it failed (null if it didn't).
   checkedAt    DateTime
   lastError    String?
+}
+
+/* ------------------------------------------------------------------ */
+/* Reconciliation — matching recorded transactions to the bank.        */
+/* See RECONCILIATION_SPEC §4 and §11.4.                              */
+/* ------------------------------------------------------------------ */
+
+/// Which side of the ledger a match came from. Deliberately NOT a foreign
+/// key to BookingPayment or ExpenseSettlement — the same match row has to
+/// point at either one, and Prisma can't express a polymorphic reference.
+/// The write action (data/reconciliation.ts) resolves and validates the id
+/// against the table named here.
+enum MatchSourceType {
+  BOOKING_PAYMENT
+  EXPENSE_SETTLEMENT
+}
+
+/// Whether the matched money came in or went out. Redundant with the source
+/// type in practice (a payment is always an inflow), but stored explicitly so
+/// a mismatch is visible in the data rather than silently reinterpreted.
+enum MatchDirection {
+  INFLOW
+  OUTFLOW
+}
+
+/// One statement line matched to one recorded transaction.
+///
+/// A match is the authoritative record that money actually moved through the
+/// bank. Creating one is what takes a receipt or payout out of the "uncleared"
+/// pool and into the month's history; reversing one puts it back (§7.13).
+///
+/// `bankPostedDate` — NOT the source record's own date — is what determines
+/// which month this belongs to. An Airbnb payout received on June 28 that
+/// posts to the account on July 5 is a July inflow, because July is when the
+/// money was actually in the bank. The source row keeps its own `receivedDate`
+/// for when the money arrived. Getting this backwards is why reconciliation
+/// doesn't balance (§4.1).
+///
+/// `statementGroupKey` lets several matches represent a single statement line
+/// — one Airbnb payout covering three stays is one deposit matching three
+/// receipts (§4.3, §7.10). Opaque to the owner; minted by the server.
+model ReconciliationMatch {
+  id       String @id @default(cuid())
+  /// The month this match was written into — the month of its bankPostingDate.
+  /// Required rather than inferred at read time: a finalized month must be
+  /// able to tell what belongs to it, so that it can refuse writes (§8.10).
+  periodId String
+  /// Which table `sourceId` refers to.
+  sourceType MatchSourceType
+  sourceId   String
+  direction  MatchDirection
+  /// The matched amount, never the source's full value: one receipt can be
+  /// split across several deposits, and one payout can cover several
+  /// expenses (§7.10). Positive — direction lives in its own column.
+  amount     Decimal @db.Decimal(10, 2)
+  /// When this posted to the bank; decides the month it lands in.
+  bankPostedDate DateTime
+  /// Set when several matches share one statement line. Null for a plain
+  /// one-to-one match.
+  statementGroupKey String?
+  notes     String   @default("")
+  matchedAt DateTime @default(now())
+  /// Identity-picker display label, matching createdBy elsewhere.
+  matchedBy String
+
+  /// Reversal rather than deletion: §7.13 requires the original match and the
+  /// undo event to stay visible in the audit trail. A reversed match is
+  /// excluded from totals but never erased.
+  reversedAt     DateTime?
+  reversedBy     String?
+  reversalReason String?
+
+  period ReconciliationPeriod @relation(fields: [periodId], references: [id])
+
+  @@index([bankPostedDate])
+  /// Outstanding-pool lookup: "active matches for these source ids". Plain, not
+  /// unique — §7.10's split matching needs two live matches against one source
+  /// row, so correctness comes from the in-transaction amount check, not here.
+  @@index([sourceType, sourceId, reversedAt])
+  /// Ledger ordering within a period (§8.7).
+  @@index([periodId, bankPostedDate])
+}
+
+/// Why money moved when it doesn't correspond to any booking receipt or
+/// expense payout (§4.7). Deliberately NOT including GUEST_REFUND — that's an
+/// ExpenseSettlement of that type, so a refund stays in the expense totals
+/// instead of splitting across two mechanisms.
+enum AdjustmentCategory {
+  BANK_FEE
+  BANK_INTEREST
+  CHARGEBACK
+  OWNER_CONTRIBUTION
+  OWNER_WITHDRAWAL
+  TRANSFER_CORRECTION
+  DUPLICATE_CORRECTION
+  OTHER
+}
+
+enum AdjustmentStatus {
+  ACTIVE
+  VOIDED
+}
+
+/// Whether a month has been audited and sealed (§8.10), or is still open for
+/// correction.
+///
+/// `REOPENED` is not the same as `DRAFT`: a reopened month carries the history
+/// of a finalized one and requires a fresh finalization before it is sealed
+/// again (§8.11), which is what stops a correction quietly erasing the fact that
+/// the month had been signed off.
+enum PeriodStatus {
+  DRAFT
+  FINALIZED
+  REOPENED
+}
+
+/// What happened to a reconciliation, for the audit trail (§11.7).
+enum AuditEventType {
+  DRAFT_CREATED
+  MATCH_CREATED
+  MATCH_REVERSED
+  ADJUSTMENT_CREATED
+  ADJUSTMENT_VOIDED
+  PERIOD_FINALIZED
+  PERIOD_REOPENED
+  PERIOD_REFINALIZED
+}
+
+/// A bank movement that can't be explained by a recorded transaction — a
+/// service charge, interest, an owner's cash-in, a transfer that landed twice
+/// (§7.12).
+///
+/// Carries its own `bankPostedDate`, which is what decides the month it lands
+/// in — same rule as a match. So an adjustment recorded for a July statement
+/// appears in July's totals without a second "match it" step; the alternative
+/// would mean creating a row and then immediately matching it to itself, which
+/// is friction with no safety gained.
+///
+/// Never fabricates a booking or an expense (§4.7): an adjustment explains a
+/// movement, it does not invent the thing that supposedly caused it.
+model ReconciliationAdjustment {
+  id        String              @id @default(cuid())
+  /// The month this adjustment was written into — the month of its
+  /// bankPostedDate. Required for the same reason as on ReconciliationMatch.
+  periodId  String
+  direction MatchDirection
+  category  AdjustmentCategory
+  status    AdjustmentStatus    @default(ACTIVE)
+  /// Positive; direction lives in its own column, never in a sign.
+  amount    Decimal             @db.Decimal(10, 2)
+  /// When the movement relates to, as opposed to when it posted.
+  effectiveDate  DateTime
+  bankPostedDate DateTime
+  /// Short statement-style label — "Monthly account fee", "Transfer reversal".
+  description String
+  notes       String   @default("")
+  /// Identity-picker display label, matching matchedBy / createdBy elsewhere.
+  createdBy    String
+  createdAt    DateTime @default(now())
+  voidedAt     DateTime?
+  voidedBy     String?
+
+  @@index([bankPostedDate])
+  @@index([status, bankPostedDate])
+  @@index([periodId, bankPostedDate])
+
+  period ReconciliationPeriod @relation(fields: [periodId], references: [id])
+}
+
+/// One month of reconciliation — the thing that gets audited and sealed.
+///
+/// The product has a single bank account (§8.2), so there is exactly one period
+/// per month, and `month` is unique rather than "one *active* period per month".
+/// Reopening does not create a second row: it moves this one back to an
+/// editable state, bumps `version`, and leaves the prior finalized snapshot in
+/// place, so the report a month had before a correction is still readable.
+///
+/// ## Database-level sealed-period guard (not visible to Prisma)
+///
+/// A trigger refuses INSERT and UPDATE on `ReconciliationMatch` and
+/// `ReconciliationAdjustment` while the parent period is `FINALIZED` (§8.10).
+/// Prisma cannot represent triggers, so `prisma migrate diff` neither reports
+/// nor reproduces it — it is maintained by hand in
+/// `docs/migrations/2026-10-14_sealed_period_guard.sql`. Re-apply that file if
+/// this database is ever rebuilt from `schema.prisma` alone.
+///
+/// The application guard in `resolveWritablePeriod` stays: it produces an
+/// error an owner can act on, and the trigger is the backstop for any code path
+/// that forgets to call it, plus migrations, admin tools and hand-run SQL.
+/// There is deliberately no trigger on this table — blocking UPDATEs here
+/// would make a sealed month impossible to reopen, which §8.11 requires.
+model ReconciliationPeriod {
+  id String @id @default(cuid())
+
+  /// First day of the month, at UTC midnight. A `DateTime` rather than a string
+  /// so range queries and ordering are the database's problem and can't be
+  /// wrong because of a formatting slip.
+  month  DateTime
+  status PeriodStatus @default(DRAFT)
+
+  /// What the bank statement said, in pesos. Exact decimals — §8.6 requires an
+  /// exact-zero difference, so these are never parsed through a float.
+  startingBalance Decimal @default(0) @db.Decimal(10, 2)
+  endingBalance   Decimal @default(0) @db.Decimal(10, 2)
+
+  /// Server-recalculated at finalization (§8.9). Null until then: a figure on a
+  /// draft period is a guess, and storing one would invite treating it as
+  /// authoritative. Only the finalize transaction may write these.
+  calculatedBalance Decimal? @db.Decimal(10, 2)
+  difference        Decimal? @db.Decimal(10, 2)
+
+  statementClosingDate DateTime?
+  /// Bank reference or the statement's filename.
+  statementReference   String?
+  notes                String  @default("")
+
+  /// Incremented on every reopen, so several finalizations of the same month are
+  /// distinguishable and the history page can show prior versions (§8.11).
+  version Int @default(1)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  finalizedAt DateTime?
+  finalizedBy String?
+  reopenedAt  DateTime?
+  reopenedBy  String?
+  /// Required on reopen (§8.11) — a correction with no stated reason is not
+  /// reviewable later.
+  reopenReason String?
+
+  matches     ReconciliationMatch[]
+  adjustments ReconciliationAdjustment[]
+  snapshots   ReconciliationSnapshot[]
+  auditEvents ReconciliationAuditEvent[]
+
+  @@unique([month])
+  @@index([status])
+}
+
+/// The frozen result of a finalization.
+///
+/// A snapshot exists because a report must keep saying what it said: if a guest
+/// is renamed or an expense description is edited afterwards, the numbers from
+/// the audit that produced them must not change underneath (§11.6). Reconstructing
+/// from live rows on demand would mean the report silently rewrites itself.
+model ReconciliationSnapshot {
+  id       String @id @default(cuid())
+  periodId String
+  /// The period version this snapshot froze. Grows on each re-finalization.
+  version Int
+
+  /// Frozen totals, the §8.5 breakdown, and the statement figures as read.
+  summaryJson Json
+  /// The §8.7 virtual ledger, frozen row by row.
+  ledgerJson Json
+  /// Outstanding items at finalization, per §8.8's acknowledgement policy.
+  outstandingJson Json
+
+  finalizedAt DateTime @default(now())
+  finalizedBy String
+
+  period ReconciliationPeriod @relation(fields: [periodId], references: [id])
+
+  /// One snapshot per version — the natural key that stops a double-finalization
+  /// from writing two identical reports (§14's optimistic guard).
+  @@unique([periodId, version])
+  @@index([periodId])
+}
+
+/// Append-only record of what happened to a period and when (§11.7).
+///
+/// Separate from the snapshot on purpose: the snapshot says what the numbers
+/// were, this says who did what and why, including the matches and reversals
+/// that were later undone and are therefore absent from any snapshot.
+model ReconciliationAuditEvent {
+  id String @id @default(cuid())
+
+  /// Null for an event raised before a period existed — a draft being created
+  /// has no period id yet, and losing that event would hide the very first
+  /// entry in the trail.
+  periodId    String?
+  eventType   AuditEventType
+  /// Identity-picker display label, matching matchedBy / createdBy elsewhere.
+  actor       String
+  timestamp   DateTime  @default(now())
+  reason      String?
+  metadataJson Json?
+
+  period ReconciliationPeriod? @relation(fields: [periodId], references: [id])
+
+  @@index([periodId, timestamp])
+  @@index([eventType])
 }

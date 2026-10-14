@@ -18,6 +18,7 @@ import {
   Tr,
 } from "@/components/ui/table";
 import { DetailSheet } from "@/components/ui/detail-sheet";
+import { BookingPayments } from "@/components/bookings/booking-payments";
 import { Pagination } from "@/components/ui/pagination";
 import { IdPhotoProof } from "@/components/bookings/id-photo";
 import { PaymentProof } from "@/components/bookings/payment-proof";
@@ -45,11 +46,16 @@ export type BookingSortKey =
 
 export type Sort = { key: BookingSortKey; dir: "asc" | "desc" };
 
-/** Pending → partial → paid: the order a payment actually progresses. */
+/**
+ * Pending → partial → paid is the order a payment actually progresses. Overpaid
+ * sorts last: it's past "paid", and the owner's next action on it is a refund
+ * rather than chasing the remainder.
+ */
 const PAYMENT_RANK: Record<Booking["paymentStatus"], number> = {
   pending: 0,
   partial: 1,
   paid: 2,
+  overpaid: 3,
 };
 
 export function sortBookings(bookings: Booking[], sort: Sort): Booking[] {
@@ -99,7 +105,7 @@ export function BookingTable({
   // Totals below cover every filtered booking; only the rows are paged.
   const paging = usePagination(bookings, resetKey);
   // For re-fetching after the photo viewers attach/remove.
-  const { resync } = useStore();
+  const { resync, reconciliationEnabled } = useStore();
   // The booking whose details are open; looked up fresh so an edit shows.
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const selected = bookings.find((b) => b.id === selectedId) ?? null;
@@ -299,7 +305,16 @@ export function BookingTable({
         }
         body={
           selected ? (
-            <div className="space-y-2 rounded-lg border border-slate-100 bg-slate-50/60 p-3">
+            <div className="space-y-3">
+              {reconciliationEnabled ? (
+                <BookingPayments
+                  bookingId={selected.id}
+                  totalPayout={selected.totalPayout}
+                  source={selected.source === "airbnb" ? "AIRBNB" : "DIRECT"}
+                  onChanged={resync}
+                />
+              ) : null}
+              <div className="space-y-2 rounded-lg border border-slate-100 bg-slate-50/60 p-3">
               <div className="flex flex-wrap items-baseline gap-2 text-sm">
                 <span className="shrink-0 text-slate-500">ID photo:</span>
                 <IdPhotoProof
@@ -317,6 +332,7 @@ export function BookingTable({
                   hasScreenshot={selected.hasPaymentScreenshot}
                   onChanged={resync}
                 />
+              </div>
               </div>
             </div>
           ) : null

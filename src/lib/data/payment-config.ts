@@ -53,6 +53,9 @@ export type PaymentConfigData = {
   /// Whether the payment screenshot is required on the public /book form.
   /// Defaults to false (was always optional before this flag existed).
   paymentScreenshotRequired: boolean;
+  /// Master switch for the reconciliation feature. Resolved through
+  /// isReconciliationEnabled() by the caller, so the env override applies.
+  reconciliationEnabled: boolean;
   updatedAt: string;
 };
 
@@ -68,6 +71,7 @@ function rowToConfig(row: {
   longStayThresholdNights: number;
   idPhotoRequired: boolean;
   paymentScreenshotRequired: boolean;
+  reconciliationEnabled: boolean;
   updatedAt: Date;
 }): PaymentConfigData {
   return {
@@ -82,6 +86,7 @@ function rowToConfig(row: {
     longStayThresholdNights: row.longStayThresholdNights,
     idPhotoRequired: row.idPhotoRequired,
     paymentScreenshotRequired: row.paymentScreenshotRequired,
+    reconciliationEnabled: row.reconciliationEnabled,
     updatedAt: row.updatedAt.toISOString(),
   };
 }
@@ -120,6 +125,8 @@ export type SetPaymentConfigInput = {
   idPhotoRequired?: boolean;
   /** Whether the payment screenshot is required on /book. */
   paymentScreenshotRequired?: boolean;
+  /** Whether the reconciliation feature is switched on. */
+  reconciliationEnabled?: boolean;
 };
 
 /**
@@ -201,6 +208,8 @@ export async function setPaymentConfig(input: SetPaymentConfigInput): Promise<Pa
   if (input.idPhotoRequired !== undefined) data.idPhotoRequired = input.idPhotoRequired;
   if (input.paymentScreenshotRequired !== undefined)
     data.paymentScreenshotRequired = input.paymentScreenshotRequired;
+  if (input.reconciliationEnabled !== undefined)
+    data.reconciliationEnabled = input.reconciliationEnabled;
 
   const row = await prisma.paymentConfig.upsert({
     where: { id: "singleton" },
@@ -216,6 +225,7 @@ export async function setPaymentConfig(input: SetPaymentConfigInput): Promise<Pa
       longStayThresholdNights: longStayThresholdNights ?? 5,
       idPhotoRequired: input.idPhotoRequired ?? true,
       paymentScreenshotRequired: input.paymentScreenshotRequired ?? false,
+      reconciliationEnabled: input.reconciliationEnabled ?? false,
       qrCode: input.qrCode && input.qrCode !== null ? Buffer.from(input.qrCode.bytes) : undefined,
       qrCodeMime:
         input.qrCode && input.qrCode !== null

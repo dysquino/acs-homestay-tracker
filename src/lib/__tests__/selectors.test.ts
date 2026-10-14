@@ -64,6 +64,7 @@ const expense = (o: Partial<Expense>): Expense => ({
   createdBy: "t",
   cleaningId: null,
   refundStatus: "refunded",
+  settledAmount: 0,
   ...o,
 });
 
@@ -136,6 +137,7 @@ describe("income by month", () => {
           createdBy: "t",
           cleaningId: null,
           refundStatus: "refunded",
+          settledAmount: 0,
         },
       ],
       "2026-03-15",

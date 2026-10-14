@@ -43,8 +43,10 @@ import {
   deleteExpense as deleteExpenseAction,
   listExpenses,
   updateExpense as updateExpenseAction,
+  type ExpensePayout,
 } from "./data/expenses";
 import { importAirbnbBookings, type ImportInstruction, type ImportResult } from "./data/import";
+import { getReconciliationStatus } from "./data/reconciliation-status";
 import { useIdentity } from "./identity";
 import type {
   Booking,
@@ -93,6 +95,13 @@ type Data = {
   airbnbStatus: AirbnbSyncStatus;
   /** Dates the owners closed with no guest (maintenance, own use). */
   dateBlocks: DateBlock[];
+  /**
+   * Whether the reconciliation feature is switched on. Driven by the toggle in
+   * Payment Settings (or the RECONCILIATION_ENABLED override). When false the
+   * booking-payment and expense-settlement panels aren't rendered at all,
+   * rather than being shown and then rejecting the write.
+   */
+  reconciliationEnabled: boolean;
 };
 
 type StoreValue = Data & {
@@ -117,12 +126,20 @@ type StoreValue = Data & {
   updateExpense: (
     id: string,
     patch: Partial<ExpenseInput>,
+    /** When the money left. Creates the settlement in the same write. */
+    payout?: ExpensePayout,
   ) => Promise<void>;
   deleteExpense: (id: string) => Promise<void>;
-  addCleaning: (input: Omit<CleaningRecord, "id">) => Promise<CleaningRecord>;
+  addCleaning: (
+    input: Omit<CleaningRecord, "id">,
+    /** When the cleaner was paid. Creates the settlement in the same write. */
+    payoutDate?: string,
+  ) => Promise<CleaningRecord>;
   updateCleaning: (
     id: string,
     patch: Partial<Omit<CleaningRecord, "id">>,
+    /** When the cleaner was paid. Creates the settlement in the same write. */
+    payoutDate?: string,
   ) => Promise<void>;
   deleteCleaning: (id: string) => Promise<void>;
   /** Resolves with the created booking, or an error to show (e.g. dates taken). */
@@ -149,6 +166,7 @@ const EMPTY: Data = {
   airbnbFinished: [],
   airbnbStatus: { enabled: false, fetchedAt: null, error: null },
   dateBlocks: [],
+  reconciliationEnabled: false,
 };
 
 export function StoreProvider({ children }: { children: ReactNode }) {
@@ -184,6 +202,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }
     if (request !== latest.current) return false;
     const [bookings, expenses, cleaning, bookingRequests, airbnb, dateBlocks] = lists;
+    // Read separately from the lists above: if this call were to fail the whole
+    // load would fail, and losing the entire app over a toggle read would be a
+    // poor trade. Fall back to "off", which hides the panels — the safe
+    // direction, since their writes would be refused anyway.
+    let reconciliationEnabled = false;
+    try {
+      ({ enabled: reconciliationEnabled } = await getReconciliationStatus());
+    } catch {
+      reconciliationEnabled = false;
+    }
     setData({
       bookings,
       expenses,
@@ -193,6 +221,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       airbnbFinished: airbnb.finished,
       airbnbStatus: airbnb.status,
       dateBlocks,
+      reconciliationEnabled,
     });
     return true;
   }, []);
@@ -298,11 +327,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   );
 
   const updateExpense = useCallback(
-    async (id: string, patch: Partial<ExpenseInput>) => {
-      await updateExpenseAction(id, patch);
+    async (id: string, patch: Partial<ExpenseInput>, payout?: ExpensePayout) => {
+      await updateExpenseAction(id, patch, payout, actor);
       await refresh();
     },
-    [refresh],
+    [refresh, actor],
   );
 
   const deleteExpense = useCallback(
@@ -314,8 +343,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   );
 
   const addCleaning = useCallback(
-    async (input: Omit<CleaningRecord, "id">) => {
-      const record = await createCleaning(input);
+    async (input: Omit<CleaningRecord, "id">, payoutDate?: string) => {
+      const record = await createCleaning(input, payoutDate);
       await refresh();
       return record;
     },
@@ -323,8 +352,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   );
 
   const updateCleaning = useCallback(
-    async (id: string, patch: Partial<Omit<CleaningRecord, "id">>) => {
-      await updateCleaningAction(id, patch, actor);
+    async (id: string, patch: Partial<Omit<CleaningRecord, "id">>, payoutDate?: string) => {
+      await updateCleaningAction(id, patch, actor, payoutDate);
       await refresh();
     },
     [refresh, actor],

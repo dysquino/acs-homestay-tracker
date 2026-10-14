@@ -10,6 +10,7 @@ import type { PaymentConfigData } from "@/lib/data/payment-config";
 import { formatAccountNumber } from "@/lib/format";
 import { useIdentity } from "@/lib/identity";
 import { MAX_PAYMENT_SCREENSHOT_BYTES } from "@/lib/payment-screenshot";
+import { envReconciliationOverride } from "@/lib/reconciliation-flag";
 import { cn } from "@/lib/cn";
 
 const FALLBACK_QR_PATH = "/qr-code.JPG";
@@ -31,6 +32,9 @@ export function PaymentSettingsForm({
   initial: PaymentConfigData | null;
 }) {
   const { user } = useIdentity();
+  // When RECONCILIATION_ENABLED is set it overrides the toggle below, so say so
+  // rather than letting someone change the checkbox and see nothing happen.
+  const reconciliationEnvLocked = envReconciliationOverride() !== null;
   const [bankName, setBankName] = useState(initial?.bankName ?? "");
   const [accountName, setAccountName] = useState(initial?.accountName ?? "");
   // Stored as digits only; rendered with spaces (formatAccountNumber) so the
@@ -50,6 +54,9 @@ export function PaymentSettingsForm({
   const [idPhotoRequired, setIdPhotoRequired] = useState<boolean>(initial?.idPhotoRequired ?? true);
   const [paymentScreenshotRequired, setPaymentScreenshotRequired] = useState<boolean>(
     initial?.paymentScreenshotRequired ?? false,
+  );
+  const [reconciliationEnabled, setReconciliationEnabled] = useState<boolean>(
+    initial?.reconciliationEnabled ?? false,
   );
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -146,6 +153,7 @@ export function PaymentSettingsForm({
           longStayThresholdNights,
           idPhotoRequired,
           paymentScreenshotRequired,
+          reconciliationEnabled,
         });
         setSaved(true);
         // The server is now the source of truth; staged changes are baked in.
@@ -277,6 +285,35 @@ export function PaymentSettingsForm({
             </span>
           </span>
         </label>
+      </div>
+
+      <div className="border-t border-slate-100 p-4 sm:p-5 space-y-3">
+        <div className="text-xs font-medium text-slate-800">Reconciliation</div>
+        <label className="flex items-start gap-2.5 text-sm text-slate-700">
+          <input
+            type="checkbox"
+            checked={reconciliationEnabled}
+            onChange={(e) => setReconciliationEnabled(e.target.checked)}
+            className="mt-0.5 h-4 w-4 shrink-0 rounded border-slate-300 text-brand-700 focus:ring-brand-600"
+          />
+          <span>
+            <span className="font-medium text-slate-900">Enable reconciliation</span>
+            <span className="block text-xs text-slate-500">
+              Adds &ldquo;Payments received&rdquo; to each booking and &ldquo;Paid out&rdquo;
+              to each expense, so money received and money spent can be matched
+              against the bank later. Safe to switch off at any time — records
+              already saved are kept.
+            </span>
+          </span>
+        </label>
+        {reconciliationEnvLocked ? (
+          <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+            This deployment forces reconciliation{" "}
+            {envReconciliationOverride() ? "on" : "off"} with the{" "}
+            <code className="font-mono">RECONCILIATION_ENABLED</code> environment
+            variable, so this toggle won&apos;t take effect until that&apos;s changed.
+          </p>
+        ) : null}
       </div>
 
       <div className="border-t border-slate-100 p-4 sm:p-5 space-y-3">
