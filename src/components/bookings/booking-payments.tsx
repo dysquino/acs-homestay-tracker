@@ -119,7 +119,7 @@ export function BookingPayments({
       ) : payments.length === 0 ? (
         <p className="mt-2 text-xs text-slate-500">
           Nothing recorded yet. Add each receipt separately — a deposit, an
-          instalment, and the final balance are three separate payments.
+          installment, and the final balance are three separate payments.
         </p>
       ) : (
         <ul className="mt-2 divide-y divide-slate-100">
