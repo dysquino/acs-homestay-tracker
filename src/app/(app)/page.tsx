@@ -7,6 +7,7 @@ import { CashFlowChart, type ChartRange } from "@/components/dashboard/cash-flow
 import { MoneyInBankCard } from "@/components/dashboard/money-in-bank-card";
 import { OccupancyCard } from "@/components/dashboard/occupancy-card";
 import { ProfitHero } from "@/components/dashboard/profit-hero";
+import { RoomStatusWidget } from "@/components/dashboard/room-status-widget";
 import { SettleCard } from "@/components/dashboard/settle-card";
 import { WeekStrip } from "@/components/dashboard/week-strip";
 import { UpcomingStays } from "@/components/dashboard/upcoming-stays";
@@ -111,6 +112,10 @@ export default function DashboardPage() {
 
       <div className="mb-5">
         <UpcomingStays />
+      </div>
+
+      <div className="flex justify-center mb-5">
+        <RoomStatusWidget />
       </div>
 
       <ActionItems />

@@ -65,6 +65,14 @@ enum CleaningPaymentStatus {
   UNPAID
 }
 
+/// The physical room's readiness state, shown as a pill on the dashboard.
+/// IN_USE is derived from active bookings; owners manually flip CLEAN/DIRTY.
+enum RoomStatus {
+  CLEAN
+  DIRTY
+  IN_USE
+}
+
 /// Whether whoever is in an expense's `paidBy` has been paid back yet, for
 /// expenses someone fronted out of pocket. Not "is this expense paid" — an
 /// expense is inherently money already spent; this tracks reimbursing the
@@ -442,6 +450,9 @@ model PaymentConfig {
   /// src/lib/reconciliation-flag.ts. That keeps an operator able to force the
   /// feature off for every deployment at once, even if this row says on.
   reconciliationEnabled    Boolean  @default(false)
+  /// The physical room's readiness state. Defaults to CLEAN on first run.
+  /// IN_USE is derived from active bookings but the owner can override it.
+  roomStatus               RoomStatus @default(CLEAN)
   updatedAt                 DateTime @updatedAt
   updatedBy                 String
 }
