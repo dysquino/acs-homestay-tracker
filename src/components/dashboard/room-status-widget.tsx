@@ -68,9 +68,10 @@ const STATUS_CONFIG: Record<RoomStatus, StatusConfig> = {
   },
 };
 
-/** The opposite of the current toggleable status, for the confirm modal. */
+/** Cycles to the next status: clean → dirty → in_use → clean. */
 function toggleTarget(current: RoomStatus): RoomStatus {
-  return current === "dirty" ? "clean" : "dirty";
+  const order: RoomStatus[] = ["clean", "dirty", "in_use"];
+  return order[(order.indexOf(current) + 1) % order.length];
 }
 
 /**
@@ -108,15 +109,12 @@ export function RoomStatusWidget() {
   const [pending, setPending] = useState<RoomStatus | null>(null);
   const [saving, setSaving] = useState(false);
 
-  const isReadOnly = current === "in_use";
-
   // The active booking shown on the pill when in_use.
   const activeBooking = bookings.find(
     (b) => b.checkIn <= t && b.checkOut > t,
   );
 
   function requestToggle() {
-    if (isReadOnly) return;
     setPending(toggleTarget(current));
     setConfirmOpen(true);
   }
@@ -140,14 +138,14 @@ export function RoomStatusWidget() {
       <div
         className={`
           w-full rounded-2xl ring-2 ring-inset ${cfg.bg} ${cfg.ring}
-          ${!isReadOnly ? "cursor-pointer hover:scale-[1.01] active:scale-[0.99] transition-transform" : ""}
+          cursor-pointer hover:scale-[1.01] active:scale-[0.99] transition-transform
         `}
         onClick={requestToggle}
-        role={isReadOnly ? "status" : "button"}
-        aria-label={isReadOnly ? `Room status: ${cfg.label}` : `Room status: ${cfg.label}. Click to change.`}
-        aria-pressed={isReadOnly ? undefined : current === "dirty"}
-        tabIndex={isReadOnly ? undefined : 0}
-        onKeyDown={isReadOnly ? undefined : (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); requestToggle(); } }}
+        role="button"
+        aria-label={`Room status: ${cfg.label}. Click to change.`}
+        aria-pressed={current === "dirty"}
+        tabIndex={0}
+        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); requestToggle(); } }}
       >
         <div className="flex items-center gap-3 px-5 py-3">
           {/* Status icon */}
@@ -163,28 +161,24 @@ export function RoomStatusWidget() {
                 {activeBooking.guestName} · {formatDateRange(activeBooking.checkIn, activeBooking.checkOut)}
               </p>
             )}
-            {!isReadOnly && (
-              <p className="mt-0.5 text-xs text-slate-500">
-                {current === "dirty" ? "Needs cleaning — tap to mark clean" : "Ready for guests — tap to mark dirty"}
-              </p>
+            {current === "in_use" && !activeBooking && (
+              <p className="mt-0.5 text-xs text-blue-400 italic">No active booking</p>
             )}
+            <p className="mt-0.5 text-xs text-slate-500">
+              {current === "dirty"
+                ? "Needs cleaning — tap to change"
+                : current === "clean"
+                  ? "Ready for guests — tap to change"
+                  : "Occupied — tap to change"}
+            </p>
           </div>
 
           {/* Toggle arrow */}
-          {!isReadOnly ? (
-            <div className="shrink-0 text-slate-400">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
-                <path d="m9 5 7 7-7 7" />
-              </svg>
-            </div>
-          ) : (
-            <div className="shrink-0 text-blue-300">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
-                <circle cx="12" cy="12" r="10" />
-                <path d="M12 6v6l4 2" />
-              </svg>
-            </div>
-          )}
+          <div className="shrink-0 text-slate-400">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
+              <path d="m9 5 7 7-7 7" />
+            </svg>
+          </div>
         </div>
       </div>
 
@@ -222,6 +216,9 @@ export function RoomStatusWidget() {
             )}
             {pending === "clean" && (
               <> — confirm the room has been cleaned and is ready.</>
+            )}
+            {pending === "in_use" && (
+              <> — mark the room as occupied.</>
             )}
           </p>
         )}
