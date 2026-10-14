@@ -14,6 +14,7 @@ import { WarningIcon } from "@/components/ui/icons";
 import { Modal } from "@/components/ui/modal";
 import { IdPhotoProof } from "@/components/bookings/id-photo";
 import { PaymentProof } from "@/components/bookings/payment-proof";
+import { BookingPayments } from "@/components/bookings/booking-payments";
 import { useIdentity } from "@/lib/identity";
 import { addDays, nightCount, today } from "@/lib/dates";
 import { formatDateRange } from "@/lib/format";
@@ -74,6 +75,7 @@ export function BookingForm({
   onClose: () => void;
 }) {
   const submit = useSubmit();
+  const { reconciliationEnabled, resync } = useStore();
   // Invalid or overlapping dates block saving (no double bookings); the
   // fields below report it up because the submit button lives in the footer.
   const [blocked, setBlocked] = useState(false);
@@ -99,13 +101,23 @@ export function BookingForm({
     >
       {/* Mounted only while open, and re-keyed per booking, so the fields
           always start from a clean copy of the record being edited. */}
-      <BookingFields
-        key={booking?.id ?? "new"}
-        booking={booking}
-        onClose={onClose}
-        submit={submit}
-        onBlockedChange={setBlocked}
-      />
+      <div className="space-y-4">
+        <BookingFields
+          key={booking?.id ?? "new"}
+          booking={booking}
+          onClose={onClose}
+          submit={submit}
+          onBlockedChange={setBlocked}
+        />
+        {booking && reconciliationEnabled ? (
+          <BookingPayments
+            bookingId={booking.id}
+            totalPayout={booking.totalPayout}
+            source={booking.source === "airbnb" ? "AIRBNB" : "DIRECT"}
+            onChanged={resync}
+          />
+        ) : null}
+      </div>
     </Modal>
   );
 }

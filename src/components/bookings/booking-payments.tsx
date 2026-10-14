@@ -5,6 +5,8 @@ import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { CurrencyInput, Field, Input, Select, Textarea } from "@/components/ui/field";
 import { Modal } from "@/components/ui/modal";
+import { ImageUploadField } from "@/components/ui/image-upload-field";
+import { PaymentProof } from "@/components/bookings/payment-proof";
 import { today } from "@/lib/dates";
 import { useIdentity } from "@/lib/identity";
 import {
@@ -137,6 +139,13 @@ export function BookingPayments({
                   <p className="truncate text-xs text-slate-500">Ref {p.reference}</p>
                 ) : null}
                 {p.notes ? <p className="text-xs text-slate-500">{p.notes}</p> : null}
+                <PaymentProof
+                  paymentId={p.id}
+                  entityKind="payment"
+                  hasScreenshot={p.hasPaymentScreenshot}
+                  allowRemove={false}
+                  onChanged={() => void load()}
+                />
               </div>
               {p.status === "active" ? (
                 <Button size="sm" variant="ghost" onClick={() => void voidPayment(p)}>
@@ -268,6 +277,8 @@ function BookingPaymentFields({
     notes: "",
   });
   const [errors, setErrors] = useState<Partial<Record<keyof FormState, string>>>({});
+  const [paymentScreenshot, setPaymentScreenshot] = useState<Uint8Array | null>(null);
+  const [screenshotError, setScreenshotError] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   const set = <K extends keyof FormState>(key: K, value: FormState[K]) =>
@@ -279,21 +290,26 @@ function BookingPaymentFields({
     if (form.amount === "" || Number(form.amount) <= 0)
       next.amount = "Enter an amount greater than zero.";
     if (!form.receivedDate) next.receivedDate = "Received date is required.";
+    const nextScreenshotError = paymentScreenshot ? null : "A payment screenshot is required.";
     setErrors(next);
-    if (Object.keys(next).length > 0) return;
+    setScreenshotError(nextScreenshotError);
+    if (Object.keys(next).length > 0 || nextScreenshotError) return;
 
     setSubmitError(null);
     await submit.run(async () => {
       try {
-        await createBookingPayment({
-          bookingId,
-          amount: Number(form.amount),
-          receivedDate: form.receivedDate,
-          method: form.method,
-          reference: form.reference.trim(),
-          notes: form.notes.trim(),
-          createdBy: user?.name ?? "Unknown",
-        });
+        await createBookingPayment(
+          {
+            bookingId,
+            amount: Number(form.amount),
+            receivedDate: form.receivedDate,
+            method: form.method,
+            reference: form.reference.trim(),
+            notes: form.notes.trim(),
+            createdBy: user?.name ?? "Unknown",
+          },
+          paymentScreenshot!,
+        );
         await onSaved();
       } catch {
         setSubmitError("Couldn't save this payment. Please try again.");
@@ -365,6 +381,23 @@ function BookingPaymentFields({
             />
           )}
         </Field>
+
+        <div className="sm:col-span-2">
+          <ImageUploadField
+            label="Payment screenshot"
+            required
+            hint="Upload the receipt for this specific payment. It will be compressed automatically."
+            onChange={(bytes) => {
+              setPaymentScreenshot(bytes);
+              if (bytes) setScreenshotError(null);
+            }}
+          />
+          {screenshotError ? (
+            <p role="alert" className="mt-1 text-xs text-red-600">
+              {screenshotError}
+            </p>
+          ) : null}
+        </div>
       </div>
 
       {overpaying ? (

@@ -221,6 +221,10 @@ model BookingPayment {
   /// searching it is how the reconciliation workspace finds candidates.
   reference    String               @default("")
   notes        String               @default("")
+  /// Proof for this specific receipt. Nullable so payments recorded before
+  /// per-payment proof was introduced remain readable and can be backfilled.
+  paymentScreenshot     Bytes?
+  paymentScreenshotMime String?
   status       BookingPaymentStatus @default(ACTIVE)
   /// Display label from the identity picker, matching `createdBy` on Booking.
   /// Deliberately not a User FK — see the User model comment.

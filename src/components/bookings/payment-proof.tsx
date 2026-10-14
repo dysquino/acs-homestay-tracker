@@ -25,20 +25,27 @@ import { imageActions, type EntityKind } from "./image-actions";
 export function PaymentProof({
   requestId,
   bookingId,
+  paymentId,
   entityKind = "request",
   hasScreenshot,
+  allowRemove = true,
   onChanged,
 }: {
   /** Used when `entityKind === "request"` (the default). */
   requestId?: string;
   /** Used when `entityKind === "booking"`. */
   bookingId?: string;
+  /** Used when `entityKind === "payment"`. */
+  paymentId?: string;
   entityKind?: EntityKind;
   hasScreenshot: boolean;
+  /** Payment rows keep their proof as part of the receipt audit trail. */
+  allowRemove?: boolean;
   /** Called after attach/clear so the parent can re-fetch the list. */
   onChanged: () => void;
 }) {
-  const entityId = entityKind === "booking" ? bookingId! : requestId!;
+  const entityId =
+    entityKind === "payment" ? paymentId! : entityKind === "booking" ? bookingId! : requestId!;
   const actions = imageActions(entityKind, "screenshot");
 
   const [viewerOpen, setViewerOpen] = useState(false);
@@ -136,7 +143,9 @@ export function PaymentProof({
             <UploadIcon className="h-3.5 w-3.5" />
             <span className="ml-1">Replace</span>
           </Button>
-          <RemoveButton actions={actions} entityId={entityId} onChanged={onChanged} />
+          {allowRemove ? (
+            <RemoveButton actions={actions} entityId={entityId} onChanged={onChanged} />
+          ) : null}
         </div>
       ) : (
         <Button
@@ -157,7 +166,11 @@ export function PaymentProof({
         open={viewerOpen}
         onClose={() => setViewerOpen(false)}
         title="Payment screenshot"
-        description="Screenshot uploaded by the guest (or attached by an owner) with this booking."
+        description={
+          entityKind === "payment"
+            ? "Proof attached to this individual payment."
+            : "Screenshot uploaded by the guest (or attached by an owner) with this booking."
+        }
         wide
       >
         {viewerOpen ? (
@@ -210,7 +223,7 @@ export function PaymentProof({
           {preview ? (
             <div className="space-y-2">
               <p className="text-xs text-slate-500">
-                {name} — will be attached to this {entityKind === "booking" ? "booking" : "request"}.
+                {name} — will be attached to this {entityKind === "payment" ? "payment" : entityKind}.
               </p>
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img

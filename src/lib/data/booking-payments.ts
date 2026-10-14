@@ -5,6 +5,7 @@ import { derivePaymentStatus } from "@/lib/payment-status";
 import { requireReconciliationEnabled } from "./reconciliation-status";
 import type { BookingPayment, BookingPaymentInput } from "@/lib/types";
 import { ValidationError, validateBookingPayment } from "@/lib/validation";
+import { validatePaymentScreenshot } from "@/lib/payment-screenshot";
 
 import { requireSiteAccess } from "./access";
 import {
@@ -33,6 +34,7 @@ export async function listBookingPayments(bookingId: string): Promise<BookingPay
   const rows = await prisma.bookingPayment.findMany({
     where: { bookingId },
     orderBy: { receivedDate: "desc" },
+    omit: { paymentScreenshot: true },
   });
   return rows.map(bookingPaymentFromDb);
 }
@@ -43,21 +45,77 @@ export async function listAllBookingPayments(): Promise<BookingPayment[]> {
   await requireReconciliationEnabled();
   const rows = await prisma.bookingPayment.findMany({
     orderBy: { receivedDate: "desc" },
+    omit: { paymentScreenshot: true },
   });
   return rows.map(bookingPaymentFromDb);
 }
 
-export async function createBookingPayment(input: BookingPaymentInput): Promise<BookingPayment> {
+export async function createBookingPayment(
+  input: BookingPaymentInput,
+  paymentScreenshot: Uint8Array,
+): Promise<BookingPayment> {
   await requireSiteAccess();
   await requireReconciliationEnabled();
   validateBookingPayment(input);
+  const screenshot = validatePaymentScreenshot(paymentScreenshot);
+  if (!screenshot.ok) throw new ValidationError(screenshot.error);
   const row = await prisma.$transaction(async (tx) => {
     const booking = await tx.booking.findUniqueOrThrow({ where: { id: input.bookingId } });
-    const created = await tx.bookingPayment.create({ data: bookingPaymentToDb(input) });
+    const created = await tx.bookingPayment.create({
+      data: {
+        ...bookingPaymentToDb(input),
+        paymentScreenshot: Buffer.from(paymentScreenshot),
+        paymentScreenshotMime: screenshot.mime,
+      },
+    });
     await refreshPaymentStatus(tx, booking.id);
     return created;
   });
   return bookingPaymentFromDb(row);
+}
+
+export type BookingPaymentScreenshotData = { mime: string; bytes: Uint8Array };
+
+/** Fetch proof only when the owner opens it; payment lists return only a flag. */
+export async function getBookingPaymentScreenshot(
+  paymentId: string,
+): Promise<BookingPaymentScreenshotData | null> {
+  await requireSiteAccess();
+  await requireReconciliationEnabled();
+  const row = await prisma.bookingPayment.findUnique({
+    where: { id: paymentId },
+    select: { paymentScreenshot: true, paymentScreenshotMime: true },
+  });
+  if (!row?.paymentScreenshot || !row.paymentScreenshotMime) return null;
+  return { mime: row.paymentScreenshotMime, bytes: row.paymentScreenshot };
+}
+
+/** Attach or replace proof, including on a historical payment. */
+export async function attachBookingPaymentScreenshot(
+  paymentId: string,
+  bytes: Uint8Array,
+): Promise<{ mime: string } | { error: string }> {
+  await requireSiteAccess();
+  await requireReconciliationEnabled();
+  const validation = validatePaymentScreenshot(bytes);
+  if (!validation.ok) return { error: validation.error };
+  await prisma.bookingPayment.update({
+    where: { id: paymentId },
+    data: {
+      paymentScreenshot: Buffer.from(bytes),
+      paymentScreenshotMime: validation.mime,
+    },
+  });
+  return { mime: validation.mime };
+}
+
+export async function clearBookingPaymentScreenshot(paymentId: string): Promise<void> {
+  await requireSiteAccess();
+  await requireReconciliationEnabled();
+  await prisma.bookingPayment.update({
+    where: { id: paymentId },
+    data: { paymentScreenshot: null, paymentScreenshotMime: null },
+  });
 }
 
 /**

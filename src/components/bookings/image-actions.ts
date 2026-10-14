@@ -23,8 +23,13 @@ import {
   clearBookingRequestScreenshot,
   getBookingRequestScreenshot,
 } from "@/lib/data/payment-screenshot";
+import {
+  attachBookingPaymentScreenshot,
+  clearBookingPaymentScreenshot,
+  getBookingPaymentScreenshot,
+} from "@/lib/data/booking-payments";
 
-export type EntityKind = "request" | "booking";
+export type EntityKind = "request" | "booking" | "payment";
 export type ImageKind = "screenshot" | "idPhoto";
 
 type ImageActions = {
@@ -59,6 +64,20 @@ const ACTIONS: Record<EntityKind, Record<ImageKind, ImageActions>> = {
       get: getBookingIdPhoto,
       attach: attachBookingIdPhoto,
       clear: clearBookingIdPhoto,
+    },
+  },
+  payment: {
+    screenshot: {
+      get: getBookingPaymentScreenshot,
+      attach: attachBookingPaymentScreenshot,
+      clear: clearBookingPaymentScreenshot,
+    },
+    // Payment rows never use ID photos. This keeps the lookup type exhaustive;
+    // callers can only select `screenshot` for this entity kind.
+    idPhoto: {
+      get: async () => null,
+      attach: async () => ({ error: "ID photos are not supported for payments." }),
+      clear: async () => undefined,
     },
   },
 };
