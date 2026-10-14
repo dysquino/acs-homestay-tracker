@@ -2,32 +2,24 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { Button } from "@/components/ui/button";
+import { Button, LinkButton } from "@/components/ui/button";
 import { Card, CardHeader } from "@/components/ui/card";
-import { Field, Input, Textarea } from "@/components/ui/field";
+import { Input, Textarea } from "@/components/ui/field";
 import {
   CalendarIcon,
   CheckIcon,
   CopyIcon,
-  PlusIcon,
-  SettingsIcon,
-  TrashIcon,
 } from "@/components/ui/icons";
 import { Modal } from "@/components/ui/modal";
 import {
-  createGuestMessageTemplate,
-  deleteGuestMessageTemplate,
   listStayPreparation,
   saveDoorPasscode,
-  saveStayMessageSettings,
-  updateGuestMessageTemplate,
 } from "@/lib/data/stay-preparation";
 import { today } from "@/lib/dates";
 import { formatDateRange } from "@/lib/format";
 import { useIdentity } from "@/lib/identity";
 import { knownCleaners } from "@/lib/selectors";
 import {
-  MESSAGE_VARIABLES,
   messageVariables,
   renderGuestMessage,
   suggestDoorPasscode,
@@ -43,6 +35,7 @@ const EMPTY: StayPreparationData = {
   wifiPassword: "",
   checkInTime: "2:00 PM",
   checkOutTime: "11:00 AM",
+  hostSignature: "The ACs",
   templates: [],
 };
 const COLLAPSED = 5;
@@ -54,7 +47,6 @@ export function UpcomingStays() {
   const [loadError, setLoadError] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [selected, setSelected] = useState<Booking | null>(null);
-  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -100,11 +92,6 @@ export function UpcomingStays() {
           icon={CalendarIcon}
           title={`Upcoming stays${upcoming.length ? ` (${upcoming.length})` : ""}`}
           description="Add arrival details, prepare guest messages, and assign the turnover cleaner."
-          action={
-            <Button size="sm" onClick={() => setSettingsOpen(true)}>
-              <SettingsIcon className="h-3.5 w-3.5" /> Templates
-            </Button>
-          }
         />
 
         {loading ? (
@@ -141,13 +128,18 @@ export function UpcomingStays() {
           </ul>
         )}
 
-        {upcoming.length > COLLAPSED ? (
-          <div className="border-t border-slate-100 px-5 py-2">
-            <button type="button" onClick={() => setExpanded((value) => !value)} className="text-xs font-medium text-brand-700 hover:underline pointer-coarse:py-2">
-              {expanded ? "Show fewer" : `Show all (${upcoming.length})`}
-            </button>
+        <div className="flex items-center justify-between gap-3 border-t border-slate-100 px-5 py-2">
+          <div>
+            {upcoming.length > COLLAPSED ? (
+              <button type="button" onClick={() => setExpanded((value) => !value)} className="text-xs font-medium text-brand-700 hover:underline pointer-coarse:py-2">
+                {expanded ? "Show fewer" : `Show all (${upcoming.length})`}
+              </button>
+            ) : null}
           </div>
-        ) : null}
+          <LinkButton size="sm" variant="ghost" href="/payment-settings#guest-messages">
+            Message settings
+          </LinkButton>
+        </div>
       </Card>
 
       {selected ? (
@@ -161,17 +153,9 @@ export function UpcomingStays() {
           }
         />
       ) : null}
-      {settingsOpen ? (
-        <MessageSettingsModal
-          data={data}
-          onClose={() => setSettingsOpen(false)}
-          onChange={setData}
-        />
-      ) : null}
     </>
   );
 }
-
 function StatusPill({ complete, label }: { complete: boolean; label: string }) {
   return (
     <span className={`inline-flex items-center gap-1 rounded-full px-2 py-1 ${complete ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-800"}`}>
@@ -207,6 +191,7 @@ function StayPreparationModal({
       initialPasscode,
       data.checkInTime,
       data.checkOutTime,
+      data.hostSignature,
     );
     return Object.fromEntries(data.templates.map((template) => [template.id, renderGuestMessage(template.body, variables)]));
   });
@@ -261,6 +246,7 @@ function StayPreparationModal({
       passcode,
       data.checkInTime,
       data.checkOutTime,
+      data.hostSignature,
     );
     setDrafts((current) => ({ ...current, [template.id]: renderGuestMessage(template.body, variables) }));
     setEditedDrafts((current) => {
@@ -279,6 +265,7 @@ function StayPreparationModal({
       value,
       data.checkInTime,
       data.checkOutTime,
+      data.hostSignature,
     );
     setDrafts((current) => Object.fromEntries(data.templates.map((template) => [
       template.id,
@@ -375,166 +362,5 @@ function ChecklistSection({ number, title, complete, children }: { number: strin
       </div>
       <div className="ml-8">{children}</div>
     </section>
-  );
-}
-
-function MessageSettingsModal({ data, onClose, onChange }: { data: StayPreparationData; onClose: () => void; onChange: (data: StayPreparationData) => void }) {
-  const [wifiName, setWifiName] = useState(data.wifiName);
-  const [wifi, setWifi] = useState(data.wifiPassword);
-  const [checkInTime, setCheckInTime] = useState(data.checkInTime);
-  const [checkOutTime, setCheckOutTime] = useState(data.checkOutTime);
-  const [rows, setRows] = useState<Record<string, { name: string; body: string }>>(() =>
-    Object.fromEntries(data.templates.map((template) => [template.id, { name: template.name, body: template.body }])),
-  );
-  const [newName, setNewName] = useState("");
-  const [newBody, setNewBody] = useState("");
-  const [busy, setBusy] = useState<string | null>(null);
-  const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  async function saveSettings() {
-    setBusy("settings");
-    setError(null);
-    try {
-      await saveStayMessageSettings({
-        wifiName,
-        wifiPassword: wifi,
-        checkInTime,
-        checkOutTime,
-      });
-      onChange({
-        ...data,
-        wifiName: wifiName.trim(),
-        wifiPassword: wifi.trim(),
-        checkInTime: checkInTime.trim(),
-        checkOutTime: checkOutTime.trim(),
-      });
-    } catch {
-      setError("Couldn’t save the stay details.");
-    } finally {
-      setBusy(null);
-    }
-  }
-
-  async function saveTemplate(template: GuestMessageTemplate) {
-    const row = rows[template.id];
-    if (!row) return;
-    setBusy(template.id);
-    setError(null);
-    try {
-      const updated = await updateGuestMessageTemplate(template.id, row);
-      onChange({ ...data, templates: data.templates.map((item) => item.id === updated.id ? updated : item) });
-    } catch {
-      setError("Couldn’t save that template. Check that its name and message aren’t empty.");
-    } finally {
-      setBusy(null);
-    }
-  }
-
-  async function removeTemplate(id: string) {
-    setBusy(id);
-    setError(null);
-    try {
-      await deleteGuestMessageTemplate(id);
-      onChange({ ...data, templates: data.templates.filter((item) => item.id !== id) });
-      setConfirmRemove(null);
-    } catch {
-      setError("Couldn’t remove that template.");
-    } finally {
-      setBusy(null);
-    }
-  }
-
-  async function addTemplate() {
-    setBusy("new");
-    setError(null);
-    try {
-      const created = await createGuestMessageTemplate({ name: newName, body: newBody });
-      onChange({ ...data, templates: [...data.templates, created] });
-      setNewName("");
-      setNewBody("");
-    } catch {
-      setError("Couldn’t add the template. Add both a name and a message.");
-    } finally {
-      setBusy(null);
-    }
-  }
-
-  return (
-    <Modal open title="Guest message settings" description="Changes here apply to every upcoming stay." onClose={onClose} wide>
-      <div className="space-y-6">
-        <section>
-          <h3 className="text-sm font-semibold text-slate-900">Stay details</h3>
-          <div className="mt-2 grid gap-3 sm:grid-cols-2">
-            <Field label="Check-in time">
-              {(id) => <Input id={id} value={checkInTime} onChange={(event) => setCheckInTime(event.target.value)} placeholder="2:00 PM" />}
-            </Field>
-            <Field label="Check-out time">
-              {(id) => <Input id={id} value={checkOutTime} onChange={(event) => setCheckOutTime(event.target.value)} placeholder="11:00 AM" />}
-            </Field>
-            <Field label="Network name">
-              {(id) => <Input id={id} value={wifiName} onChange={(event) => setWifiName(event.target.value)} placeholder="Wi-Fi name" autoComplete="off" />}
-            </Field>
-            <Field label="Password">
-              {(id) => <Input id={id} value={wifi} onChange={(event) => setWifi(event.target.value)} placeholder="Wi-Fi password" autoComplete="off" />}
-            </Field>
-          </div>
-          <div className="mt-3 flex justify-end">
-            <Button
-              variant="primary"
-              disabled={
-                busy !== null ||
-                (wifiName.trim() === data.wifiName &&
-                  wifi.trim() === data.wifiPassword &&
-                  checkInTime.trim() === data.checkInTime &&
-                  checkOutTime.trim() === data.checkOutTime)
-              }
-              onClick={() => void saveSettings()}
-            >
-              {busy === "settings" ? "Saving…" : "Save stay details"}
-            </Button>
-          </div>
-        </section>
-
-        <section>
-          <h3 className="text-sm font-semibold text-slate-900">Message templates</h3>
-          <p className="mt-1 text-xs text-slate-500">Available variables: {MESSAGE_VARIABLES.map((name) => `{{${name}}}`).join(", ")}</p>
-          <div className="mt-3 space-y-3">
-            {data.templates.map((template) => {
-              const row = rows[template.id] ?? { name: template.name, body: template.body };
-              const unchanged = row.name === template.name && row.body === template.body;
-              return (
-                <div key={template.id} className="rounded-xl border border-slate-200 p-3">
-                  <Field label="Template name">{(id) => <Input id={id} value={row.name} onChange={(event) => setRows((current) => ({ ...current, [template.id]: { ...row, name: event.target.value } }))} />}</Field>
-                  <Field label="Message" className="mt-3">{(id) => <Textarea id={id} rows={5} value={row.body} onChange={(event) => setRows((current) => ({ ...current, [template.id]: { ...row, body: event.target.value } }))} />}</Field>
-                  <div className="mt-3 flex flex-wrap justify-end gap-2">
-                    {confirmRemove === template.id ? (
-                      <>
-                        <Button size="sm" onClick={() => setConfirmRemove(null)}>Cancel</Button>
-                        <Button size="sm" variant="danger" disabled={busy !== null} onClick={() => void removeTemplate(template.id)}>Confirm remove</Button>
-                      </>
-                    ) : (
-                      <Button size="sm" variant="ghost" disabled={busy !== null} onClick={() => setConfirmRemove(template.id)}><TrashIcon className="h-3.5 w-3.5" /> Remove</Button>
-                    )}
-                    <Button size="sm" variant="primary" disabled={busy !== null || unchanged} onClick={() => void saveTemplate(template)}>{busy === template.id ? "Saving…" : "Save template"}</Button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </section>
-
-        <section className="rounded-xl bg-slate-50 p-3">
-          <h3 className="flex items-center gap-1.5 text-sm font-semibold text-slate-900"><PlusIcon className="h-4 w-4" /> Add a template</h3>
-          <div className="mt-3 space-y-3">
-            <Field label="Template name">{(id) => <Input id={id} value={newName} onChange={(event) => setNewName(event.target.value)} placeholder="e.g. Day-before reminder" />}</Field>
-            <Field label="Message">{(id) => <Textarea id={id} rows={5} value={newBody} onChange={(event) => setNewBody(event.target.value)} placeholder="Hi {{guest_name}}…" />}</Field>
-            <div className="flex justify-end"><Button size="sm" variant="primary" disabled={busy !== null} onClick={() => void addTemplate()}>{busy === "new" ? "Adding…" : "Add template"}</Button></div>
-          </div>
-        </section>
-
-        {error ? <p role="alert" className="text-sm text-red-700">{error}</p> : null}
-      </div>
-    </Modal>
   );
 }

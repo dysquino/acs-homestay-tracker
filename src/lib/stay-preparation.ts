@@ -10,6 +10,7 @@ export const MESSAGE_VARIABLES = [
   "wifi_name",
   "wifi_password",
   "door_passcode",
+  "host_signature",
 ] as const;
 
 export type MessageVariable = (typeof MESSAGE_VARIABLES)[number];
@@ -27,6 +28,7 @@ export type StayPreparationData = {
   wifiPassword: string;
   checkInTime: string;
   checkOutTime: string;
+  hostSignature: string;
   templates: GuestMessageTemplate[];
 };
 
@@ -39,6 +41,7 @@ export function messageVariables(
   doorPasscode: string,
   checkInTime: string,
   checkOutTime: string,
+  hostSignature: string,
 ): MessageVariables {
   return {
     guest_name: booking.guestName,
@@ -49,6 +52,7 @@ export function messageVariables(
     wifi_name: wifiName || "[add Wi-Fi name]",
     wifi_password: wifiPassword || "[add Wi-Fi password]",
     door_passcode: doorPasscode || "[add door passcode]",
+    host_signature: hostSignature || "[add host signature]",
   };
 }
 

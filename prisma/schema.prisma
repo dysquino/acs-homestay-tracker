@@ -150,6 +150,7 @@ model HomestaySettings {
   wifiPassword                String   @default("")
   checkInTime                 String   @default("2:00 PM")
   checkOutTime                String   @default("11:00 AM")
+  hostSignature               String   @default("The ACs")
   messageTemplatesInitialized Boolean  @default(false)
   messageTemplatesVersion     Int      @default(0)
   updatedAt                   DateTime @updatedAt

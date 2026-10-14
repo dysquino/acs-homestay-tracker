@@ -12,13 +12,27 @@ const SETTINGS_ID = "default";
 const MAX_SHORT_TEXT = 200;
 const MAX_TEMPLATE_BODY = 4000;
 const MAX_TEMPLATES = 20;
-const MESSAGE_TEMPLATES_VERSION = 3;
+const MESSAGE_TEMPLATES_VERSION = 5;
 
 const DEFAULT_TEMPLATES = [
   {
+    id: "booking-confirmation-default",
+    name: "Booking confirmation and ID request",
+    sortOrder: 0,
+    body: `Hi {{guest_name}}, thanks for booking with us.
+
+Please send any valid ID for documentation purposes. I'll send your check-in details before your arrival. Check in starts at {{check_in_time}} onwards, and Check out is at {{check_out_time}}. Early Check in/Late Check out is subject for availability.
+
+In the meantime, if you have any questions or need any recommendations, feel free to reach out.
+Looking forward to hosting you!
+
+Sincerely,
+{{host_signature}}`,
+  },
+  {
     id: "arrival-default",
     name: "Welcome and house manual",
-    sortOrder: 0,
+    sortOrder: 1,
     body: `Hi {{guest_name}}, your stay is coming up soon. You can check in anytime after {{check_in_time}} on {{check_in}}.
 
 Please take time to read our house rules/manual.
@@ -79,7 +93,7 @@ Turn off appliances when not in use
 In emergencies, contact authorities first, then notify the host
 ⸻
 Need Help?
-Please message us via Airbnb for any concerns.
+Please message us for any concerns.
 
 Here’s the address:
 Unit: 29N15
@@ -97,18 +111,41 @@ Password: {{wifi_password}}
 
 If you have any questions, we are here to help. Hope you enjoy your stay!
 
-The ACs`,
+{{host_signature}}`,
   },
   {
     id: "checkout-default",
     name: "Check-out reminder",
-    sortOrder: 1,
+    sortOrder: 2,
     body: `Hi {{guest_name}},
 I hope you had a great stay!
 
-Check out time is {{check_out_time}} on {{check_out}}. I've attached the checkout instructions.
+Check out time is {{check_out_time}} on {{check_out}}. Here are the checkout instructions.
 
-Please let me know if there's anything I can help you with before you go.`,
+Please let me know if there's anything I can help you with before you go.
+
+Checkout instructions
+
+Gather used towels
+Please place all used towels in the bed.
+
+Throw trash away
+Please dispose of all trash in the designated bins near the elevators, facing the mountain view. Make sure no trash is left in the unit.
+
+Turn things off
+Before leaving, please turn off:
+• Lights
+• Air conditioning
+• Electric fans
+• Any appliances used
+
+Lock up
+Ensure all doors and windows are properly closed and locked.
+
+Additional requests
+If anything was damaged, lost, or needs attention, kindly let us know before check-out. Thank you for helping us keep the space clean and ready for our next guests. Safe travels!
+
+{{host_signature}}`,
   },
 ];
 
@@ -138,12 +175,15 @@ export async function listStayPreparation(): Promise<StayPreparationData> {
     });
 
     if (settings.messageTemplatesVersion < MESSAGE_TEMPLATES_VERSION) {
+      const previousTemplateVersion = settings.messageTemplatesVersion;
       await Promise.all(
         DEFAULT_TEMPLATES.map((template) =>
           tx.guestMessageTemplate.upsert({
             where: { id: template.id },
             create: template,
-            update: { name: template.name, body: template.body, sortOrder: template.sortOrder },
+            update: previousTemplateVersion >= 3
+              ? { body: template.body, sortOrder: template.sortOrder }
+              : { name: template.name, body: template.body, sortOrder: template.sortOrder },
           }),
         ),
       );
@@ -168,6 +208,7 @@ export async function listStayPreparation(): Promise<StayPreparationData> {
     wifiPassword: settings.wifiPassword,
     checkInTime: settings.checkInTime,
     checkOutTime: settings.checkOutTime,
+    hostSignature: settings.hostSignature,
     doorPasscodes: Object.fromEntries(preparations.map((item) => [item.bookingId, item.doorPasscode])),
     templates: templates.map(templateFromDb),
   };
@@ -189,12 +230,14 @@ export async function saveStayMessageSettings(input: {
   wifiPassword: string;
   checkInTime: string;
   checkOutTime: string;
+  hostSignature: string;
 }): Promise<void> {
   await requireSiteAccess();
   validateText(input.wifiName, "Wi-Fi name", MAX_SHORT_TEXT);
   validateText(input.wifiPassword, "Wi-Fi password", MAX_SHORT_TEXT);
   validateText(input.checkInTime, "Check-in time", MAX_SHORT_TEXT, true);
   validateText(input.checkOutTime, "Check-out time", MAX_SHORT_TEXT, true);
+  validateText(input.hostSignature, "Host signature", MAX_SHORT_TEXT, true);
   await prisma.homestaySettings.upsert({
     where: { id: SETTINGS_ID },
     create: {
@@ -203,12 +246,14 @@ export async function saveStayMessageSettings(input: {
       wifiPassword: input.wifiPassword.trim(),
       checkInTime: input.checkInTime.trim(),
       checkOutTime: input.checkOutTime.trim(),
+      hostSignature: input.hostSignature.trim(),
     },
     update: {
       wifiName: input.wifiName.trim(),
       wifiPassword: input.wifiPassword.trim(),
       checkInTime: input.checkInTime.trim(),
       checkOutTime: input.checkOutTime.trim(),
+      hostSignature: input.hostSignature.trim(),
     },
   });
 }
