@@ -12,6 +12,8 @@ import {
   listExpenseSettlements,
   voidExpenseSettlement,
 } from "@/lib/data/expense-settlements";
+import { expensePayoutSummary } from "@/lib/expense-payout";
+import { toCentavos } from "@/lib/finance";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { useSubmit } from "@/lib/use-submit";
 import {
@@ -78,24 +80,32 @@ export function ExpenseSettlements({
     }
   }
 
-  const active = (settlements ?? []).filter((s) => s.status === "active");
-  const settled = active.reduce((sum, s) => sum + s.amount, 0);
-  const unpaid = Math.round((expense.amount - settled) * 100) / 100;
+  const payout = settlements === null ? null : expensePayoutSummary(expense.amount, settlements);
 
   return (
     <div className="mt-3 rounded-lg border border-slate-200 bg-white p-3">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h3 className="text-sm font-semibold text-slate-900">Paid out</h3>
-        <Button size="sm" variant="primary" onClick={() => setFormOpen(true)}>
-          Record payout
+        <Button
+          size="sm"
+          variant="primary"
+          disabled={payout === null || payout.fullySettled}
+          onClick={() => setFormOpen(true)}
+        >
+          {payout?.fullySettled ? "Paid in full" : "Record payout"}
         </Button>
       </div>
 
       <p className="mt-1 text-xs text-slate-600">
-        {formatCurrency(settled)} of {formatCurrency(expense.amount)} left the bank
-        {unpaid > 0 ? ` · ${formatCurrency(unpaid)} not yet paid out` : null}
+        {payout === null
+          ? "Loading payout total…"
+          : `${formatCurrency(payout.settled)} of ${formatCurrency(expense.amount)} left the bank${
+              payout.outstanding > 0
+                ? ` · ${formatCurrency(payout.outstanding)} not yet paid out`
+                : " · fully paid"
+            }`}
       </p>
-      {expense.refundStatus === "owed" && settled === 0 ? (
+      {expense.refundStatus === "owed" && payout?.settled === 0 ? (
         <p className="mt-1 text-xs text-amber-700">
           Marked as owed to whoever fronted this — record the reimbursement when
           you pay them back.
@@ -147,6 +157,7 @@ export function ExpenseSettlements({
       <SettlementForm
         open={formOpen}
         expense={expense}
+        outstanding={payout?.outstanding ?? 0}
         onClose={() => setFormOpen(false)}
         onSaved={async () => {
           setFormOpen(false);
@@ -172,11 +183,13 @@ const FORM_ID = "expense-settlement-form";
 function SettlementForm({
   open,
   expense,
+  outstanding,
   onClose,
   onSaved,
 }: {
   open: boolean;
   expense: Expense;
+  outstanding: number;
   onClose: () => void;
   onSaved: () => Promise<void>;
 }) {
@@ -197,8 +210,9 @@ function SettlementForm({
       }
     >
       <SettlementFields
-        key={expense.id}
+        key={`${expense.id}-${outstanding}`}
         expense={expense}
+        outstanding={outstanding}
         onSaved={onSaved}
         submit={submit}
       />
@@ -208,10 +222,12 @@ function SettlementForm({
 
 function SettlementFields({
   expense,
+  outstanding,
   onSaved,
   submit,
 }: {
   expense: Expense;
+  outstanding: number;
   onSaved: () => Promise<void>;
   submit: ReturnType<typeof useSubmit>;
 }) {
@@ -219,7 +235,7 @@ function SettlementFields({
   // An expense marked "owed" is by definition waiting to be reimbursed, so
   // that's the sensible default rather than making the owner pick it again.
   const [form, setForm] = useState<FormState>({
-    amount: String(expense.amount),
+    amount: String(outstanding),
     paidDate: today(),
     settlementType: expense.refundStatus === "owed" ? "owner_reimbursement" : "direct_vendor_payment",
     reimbursedTo: expense.paidBy,
@@ -237,8 +253,17 @@ function SettlementFields({
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     const next: Partial<Record<keyof FormState, string>> = {};
-    if (form.amount === "" || Number(form.amount) <= 0)
+    if (form.amount === "" || Number(form.amount) <= 0) {
       next.amount = "Enter an amount greater than zero.";
+    } else {
+      try {
+        if (toCentavos(form.amount) > toCentavos(outstanding)) {
+          next.amount = `Cannot exceed the ${formatCurrency(outstanding)} remaining balance.`;
+        }
+      } catch {
+        next.amount = "Enter a valid amount with no more than two decimal places.";
+      }
+    }
     if (!form.paidDate) next.paidDate = "Paid date is required.";
     if (isReimbursement && !form.reimbursedTo.trim())
       next.reimbursedTo = "Say who was reimbursed.";
@@ -268,7 +293,12 @@ function SettlementFields({
   return (
     <form id={FORM_ID} onSubmit={onSubmit} className="space-y-4">
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Amount" required error={errors.amount}>
+        <Field
+          label="Installment amount"
+          required
+          error={errors.amount}
+          hint={`${formatCurrency(outstanding)} remaining`}
+        >
           {(id) => (
             <CurrencyInput
               id={id}
@@ -361,7 +391,7 @@ function SettlementFields({
       ) : null}
 
       <p className="text-xs text-slate-500">
-        For &ldquo;{expense.description}&rdquo; — {formatCurrency(expense.amount)}.
+        For &ldquo;{expense.description}&rdquo; — {formatCurrency(expense.amount)} total.
       </p>
     </form>
   );

@@ -94,8 +94,12 @@ async function assertNotOverSettled(
   // settling a whole ₱2,000 expense in one go would read as ₱4,000 against a
   // ₱2,000 cap.
   const outstanding = settleableAmount([expense.amount.toString()], settled);
-  // Nothing left to settle: already paid in full, or a rounding remainder.
-  if (outstanding === null) return;
+  // Nothing left to settle: already paid in full, overpaid legacy data, or only
+  // a one-centavo rounding remainder. In every case another payout would invent
+  // a bank outflow, so reject it rather than treating the missing cap as open.
+  if (outstanding === null) {
+    throw new ValidationError("This expense is already fully paid out.");
+  }
   if (sum([incoming.toString()]) > outstanding) {
     throw new ValidationError(
       `That is more than this expense has left to settle (₱${toAmount(outstanding).toFixed(2)} outstanding).`,
