@@ -5,30 +5,66 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import { today } from "@/lib/dates";
+import { formatDateRange } from "@/lib/format";
 import type { RoomStatus } from "@/lib/types";
 import { useStore } from "@/lib/store";
 
-const STATUS_CONFIG: Record<
-  RoomStatus,
-  { label: string; bg: string; text: string; ring: string }
-> = {
+type StatusConfig = {
+  label: string;
+  bg: string;
+  text: string;
+  ring: string;
+  iconBg: string;
+  icon: React.ReactNode;
+};
+
+const STATUS_CONFIG: Record<RoomStatus, StatusConfig> = {
   clean: {
     label: "Clean",
     bg: "bg-emerald-50",
     text: "text-emerald-700",
     ring: "ring-emerald-200",
+    iconBg: "bg-emerald-100",
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5" aria-hidden="true">
+        <path d="m12 3 1.9 4.6L18.5 9.5 13.9 11.4 12 16l-1.9-4.6L5.5 9.5l4.6-1.9L12 3Z" />
+        <path d="M18 15.5 18.8 17.6 21 18.5l-2.2.9-.8 2.1-.8-2.1-2.2-.9 2.2-.9.8-2.1Z" />
+      </svg>
+    ),
   },
   dirty: {
     label: "Dirty",
     bg: "bg-red-50",
     text: "text-red-700",
     ring: "ring-red-200",
+    iconBg: "bg-red-100",
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5" aria-hidden="true">
+        <path d="M3 22V11a2 2 0 0 1 2-2h2.5" />
+        <path d="M17.5 3.5 15 6l2 2" />
+        <path d="M20.5 6.5 18 9l2 2" />
+        <path d="M8 22v-7" />
+        <path d="M12 15V8" />
+        <path d="M5 22h14" />
+        <path d="M8 15H5l1-3" />
+        <path d="M16 15h3l-1-3" />
+        <path d="M9.5 8 8 9.5 10.5 12 9.5 15H6" />
+        <path d="M14.5 8 16 9.5 13.5 12 14.5 15H18" />
+      </svg>
+    ),
   },
   in_use: {
     label: "In-Use",
     bg: "bg-blue-50",
     text: "text-blue-700",
     ring: "ring-blue-200",
+    iconBg: "bg-blue-100",
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5" aria-hidden="true">
+        <path d="M3 10.5 12 3l9 7.5" />
+        <path d="M5 9.8V20a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1V9.8" />
+      </svg>
+    ),
   },
 };
 
@@ -44,9 +80,6 @@ function toggleTarget(current: RoomStatus): RoomStatus {
  * 1. Active booking (checkIn <= today < checkOut) → in_use (absolute).
  * 2. Checkout day AND room is currently clean → auto-mark dirty.
  * 3. Otherwise → whatever the owner has set (persisted roomStatus).
- *
- * Rule 2 means the auto-dirty only fires on the first checkout after the
- * room was cleaned; a manual dirty-from-owner is not overridden.
  */
 export function deriveRoomStatus(
   bookings: { checkIn: string; checkOut: string }[],
@@ -68,16 +101,19 @@ export function RoomStatusWidget() {
   const { bookings, roomStatus, setRoomStatus } = useStore();
   const t = today();
 
-  // The persisted status (owner override). The derived status tells us what the
-  // pill colour should actually be — in_use overrides everything.
   const current = deriveRoomStatus(bookings, t, roomStatus);
+  const cfg = STATUS_CONFIG[current];
 
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [pending, setPending] = useState<RoomStatus | null>(null);
   const [saving, setSaving] = useState(false);
 
-  const cfg = STATUS_CONFIG[current];
   const isReadOnly = current === "in_use";
+
+  // The active booking shown on the pill when in_use.
+  const activeBooking = bookings.find(
+    (b) => b.checkIn <= t && b.checkOut > t,
+  );
 
   function requestToggle() {
     if (isReadOnly) return;
@@ -101,27 +137,56 @@ export function RoomStatusWidget() {
 
   return (
     <>
-      <button
-        type="button"
-        onClick={requestToggle}
-        disabled={isReadOnly}
-        title={isReadOnly ? "Status is set automatically by an active booking" : "Tap to change status"}
+      <div
         className={`
-          inline-flex items-center gap-1.5 rounded-full px-4 py-1.5
-          ring-2 ring-inset transition-all text-sm font-semibold
-          ${cfg.bg} ${cfg.text} ${cfg.ring}
-          ${!isReadOnly ? "cursor-pointer hover:scale-105 active:scale-95" : "cursor-default opacity-90"}
+          w-full rounded-2xl ring-2 ring-inset ${cfg.bg} ${cfg.ring}
+          ${!isReadOnly ? "cursor-pointer hover:scale-[1.01] active:scale-[0.99] transition-transform" : ""}
         `}
+        onClick={requestToggle}
+        role={isReadOnly ? "status" : "button"}
+        aria-label={isReadOnly ? `Room status: ${cfg.label}` : `Room status: ${cfg.label}. Click to change.`}
+        aria-pressed={isReadOnly ? undefined : current === "dirty"}
+        tabIndex={isReadOnly ? undefined : 0}
+        onKeyDown={isReadOnly ? undefined : (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); requestToggle(); } }}
       >
-        <span
-          aria-hidden="true"
-          className={`h-2 w-2 rounded-full ${current === "clean" ? "bg-emerald-500" : current === "dirty" ? "bg-red-500" : "bg-blue-500"}`}
-        />
-        {cfg.label}
-        {!isReadOnly && (
-          <span aria-hidden="true" className="text-xs opacity-60">↻</span>
-        )}
-      </button>
+        <div className="flex items-center gap-3 px-5 py-3">
+          {/* Status icon */}
+          <div className={`shrink-0 rounded-full p-2 ${cfg.iconBg}`}>
+            <div className={cfg.text}>{cfg.icon}</div>
+          </div>
+
+          {/* Status + details */}
+          <div className="min-w-0 flex-1">
+            <p className={`text-sm font-semibold ${cfg.text}`}>{cfg.label}</p>
+            {current === "in_use" && activeBooking && (
+              <p className="mt-0.5 text-xs text-blue-600 truncate">
+                {activeBooking.guestName} · {formatDateRange(activeBooking.checkIn, activeBooking.checkOut)}
+              </p>
+            )}
+            {!isReadOnly && (
+              <p className="mt-0.5 text-xs text-slate-500">
+                {current === "dirty" ? "Needs cleaning — tap to mark clean" : "Ready for guests — tap to mark dirty"}
+              </p>
+            )}
+          </div>
+
+          {/* Toggle arrow */}
+          {!isReadOnly ? (
+            <div className="shrink-0 text-slate-400">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
+                <path d="m9 5 7 7-7 7" />
+              </svg>
+            </div>
+          ) : (
+            <div className="shrink-0 text-blue-300">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
+                <circle cx="12" cy="12" r="10" />
+                <path d="M12 6v6l4 2" />
+              </svg>
+            </div>
+          )}
+        </div>
+      </div>
 
       <Modal
         open={confirmOpen}
@@ -140,12 +205,8 @@ export function RoomStatusWidget() {
             >
               Cancel
             </Button>
-            <Button
-              variant="primary"
-              disabled={saving}
-              onClick={confirm}
-            >
-              {saving ? "Saving…" : `Confirm`}
+            <Button variant="primary" disabled={saving} onClick={confirm}>
+              {saving ? "Saving…" : "Confirm"}
             </Button>
           </>
         }

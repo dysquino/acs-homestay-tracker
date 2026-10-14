@@ -111,11 +111,11 @@ export default function DashboardPage() {
       </div>
 
       <div className="mb-5">
-        <UpcomingStays />
+        <RoomStatusWidget />
       </div>
 
-      <div className="flex justify-center mb-5">
-        <RoomStatusWidget />
+      <div className="mb-5">
+        <UpcomingStays />
       </div>
 
       <ActionItems />
