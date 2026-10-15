@@ -7,6 +7,7 @@ import type { CleaningRecord } from "@/lib/types";
 import { validateCleaning } from "@/lib/validation";
 
 import { requireSiteAccess } from "./access";
+import { loadCleaning } from "./loaders";
 import { syncCleaningExpense } from "./cleaning-expense";
 import {
   cleaningFromDb,
@@ -17,10 +18,7 @@ import {
 
 export async function listCleaning(): Promise<CleaningRecord[]> {
   await requireSiteAccess();
-  const rows = await prisma.cleaningSchedule.findMany({
-    orderBy: { date: "desc" },
-  });
-  return rows.map(cleaningFromDb);
+  return loadCleaning();
 }
 
 /**

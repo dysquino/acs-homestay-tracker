@@ -6,19 +6,16 @@ import type { Booking, BookingRequest } from "@/lib/types";
 import { ValidationError } from "@/lib/validation";
 
 import { requireSiteAccess } from "./access";
+import { loadPendingRequests } from "./loaders";
 import { assertNoAirbnbClash } from "./airbnb-calendar";
 import { createBookingWithTurnover } from "./booking-create";
-import { bookingFromDb, bookingRequestFromDb, dateToISO } from "./mappers";
+import { bookingFromDb, dateToISO } from "./mappers";
 
 /** Owner-side handling of guests' booking requests (behind the access code). */
 
 export async function listBookingRequests(): Promise<BookingRequest[]> {
   await requireSiteAccess();
-  const rows = await prisma.bookingRequest.findMany({
-    where: { status: "PENDING" },
-    orderBy: { createdAt: "asc" },
-  });
-  return rows.map(bookingRequestFromDb);
+  return loadPendingRequests();
 }
 
 export type DecideResult = { ok: true; booking?: Booking } | { ok: false; error: string };

@@ -1,0 +1,45 @@
+# Scheduled owner notifications (the instant "new booking request" alert is
+# sent by the app itself, not from here).
+#
+#   every hour   → new Airbnb reservations
+#   00:00 UTC    → the morning summary (08:00 in Manila)
+#
+# Calls POST /api/cron/notify on the live site. Needs one repository secret
+# (Settings → Secrets and variables → Actions):
+#   CRON_SECRET   the same value as CRON_SECRET in Vercel
+#
+# GitHub may start scheduled runs some minutes late, so the summary can arrive
+# a little after 8:00. Scheduled runs only happen from the default branch
+# (main), and pause after 60 days without repository activity.
+name: Notifications
+
+on:
+  schedule:
+    - cron: "5 * * * *" # hourly, a few minutes past to avoid GitHub's top-of-hour rush
+    - cron: "0 0 * * *" # 00:00 UTC = 08:00 in Manila
+  workflow_dispatch:
+    inputs:
+      job:
+        description: Which notification to run now
+        type: choice
+        options: [summary, airbnb]
+        default: summary
+
+permissions: {}
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Call the site
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          JOB: ${{ github.event_name == 'workflow_dispatch' && inputs.job || (github.event.schedule == '0 0 * * *' && 'summary' || 'airbnb') }}
+        run: |
+          if [ -z "$CRON_SECRET" ]; then echo "CRON_SECRET isn't set in this repository's secrets."; exit 1; fi
+          code=$(curl -sS -o response.json -w '%{http_code}' -X POST \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            "https://acs-homestay-tracker.vercel.app/api/cron/notify?job=$JOB")
+          echo "HTTP $code: $(cat response.json)"
+          [ "$code" = "200" ]
