@@ -1,7 +1,11 @@
 "use server";
 
+import { after } from "next/server";
+
 import { homestayToday, isValidBookingKey } from "@/lib/booking-link";
+import { requestNotification } from "@/lib/notifications";
 import { prisma } from "@/lib/prisma";
+import { notifyOwners } from "@/lib/push-server";
 import { validateIdPhoto, validatePaymentScreenshot } from "@/lib/payment-screenshot";
 import type { BookingRequestInput } from "@/lib/types";
 import { ValidationError, validateBookingRequest } from "@/lib/validation";
@@ -13,7 +17,8 @@ import { isoToDate } from "./mappers";
  * The ONE server action guests can call — from the private booking page,
  * without the site's access code. Instead of requireSiteAccess() it checks
  * the booking link's key, and it can only ever add a pending request: it
- * reads nothing back and touches no other table. Everything a guest sends is
+ * reads nothing back and touches no other table (besides telling the owners'
+ * phones, after the guest already has their answer). Everything a guest sends is
  * re-validated here; the form's own checks are just for a friendly UX.
  *
  * Returns a result instead of throwing, because production hides thrown
@@ -113,6 +118,15 @@ export async function submitBookingRequest(
       idPhoto: idPhoto ? Buffer.from(idPhoto.bytes) : undefined,
       idPhotoMime: idPhoto?.mime ?? null,
     },
+  });
+  // After the response: the guest never waits on, or sees a failure from,
+  // the owners' notification.
+  after(async () => {
+    try {
+      await notifyOwners("requests", requestNotification(request));
+    } catch (e) {
+      console.error("Booking request notification failed:", (e as Error).message);
+    }
   });
   return { ok: true };
 }

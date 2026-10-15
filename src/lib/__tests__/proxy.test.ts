@@ -42,4 +42,12 @@ describe("access gate matcher", () => {
       expect(gated(path), path).toBe(true);
     }
   });
+
+  it("opens the notification schedule endpoint and the service worker only", () => {
+    expect(gated("/api/cron/notify")).toBe(false);
+    expect(gated("/sw.js")).toBe(false);
+    for (const path of ["/api/cron", "/api/crons/x", "/sw.json", "/sw.js/x", "/bookings/sw.js"]) {
+      expect(gated(path), path).toBe(true);
+    }
+  });
 });

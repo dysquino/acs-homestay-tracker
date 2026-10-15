@@ -1,6 +1,7 @@
 import { PageHeader } from "@/components/layout/app-shell";
 import { Card } from "@/components/ui/card";
 import { GuestMessageSettings } from "@/components/settings/guest-message-settings";
+import { NotificationSettings } from "@/components/settings/notification-settings";
 import { getPaymentConfig } from "@/lib/data/payment-config";
 import { listStayPreparation } from "@/lib/data/stay-preparation";
 
@@ -22,10 +23,22 @@ export default async function PaymentSettingsPage() {
     <>
       <PageHeader
         title="Settings"
-        description="Manage payments and the reusable details sent to guests."
+        description="Notifications, payments, and the reusable details sent to guests."
       />
 
       <div className="space-y-8">
+        <section id="notifications" className="scroll-mt-24">
+          <div className="mb-3">
+            <h2 className="text-lg font-semibold text-slate-900">Notifications</h2>
+            <p className="mt-0.5 text-sm text-slate-500">
+              Alerts on this phone for booking requests, a morning summary, and new Airbnb reservations.
+            </p>
+          </div>
+          <Card className="max-w-xl">
+            <NotificationSettings />
+          </Card>
+        </section>
+
         <section id="payments" className="scroll-mt-24">
           <div className="mb-3">
             <h2 className="text-lg font-semibold text-slate-900">Payments</h2>

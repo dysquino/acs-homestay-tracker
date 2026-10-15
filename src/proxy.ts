@@ -60,7 +60,11 @@ export const config = {
   // origin without any gate cookie.
   // `api/calendar/` is the direct-bookings feed Airbnb imports; Airbnb can't
   // log in, so it checks the secret key in its own URL instead.
+  // `api/cron/` is called by the notification schedule (GitHub Actions),
+  // which checks CRON_SECRET itself. `sw.js$` is the service worker that
+  // shows notifications — a script with no data in it, which the browser
+  // re-fetches in the background without always sending cookies.
   matcher: [
-    "/((?!gate|book$|api/calendar/|_next/static|_next/image|favicon.ico|icon.jpg|apple-icon.png|manifest.webmanifest|icons/|acshomestay_logo.jpg|qr-code.JPG).*)",
+    "/((?!gate|book$|api/calendar/|api/cron/|sw.js$|_next/static|_next/image|favicon.ico|icon.jpg|apple-icon.png|manifest.webmanifest|icons/|acshomestay_logo.jpg|qr-code.JPG).*)",
   ],
 };

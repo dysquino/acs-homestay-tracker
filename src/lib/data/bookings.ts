@@ -10,14 +10,14 @@ import {
   isoToDate,
 } from "./mappers";
 import { requireSiteAccess } from "./access";
+import { loadBookings } from "./loaders";
 import { assertNoAirbnbClash } from "./airbnb-calendar";
 import { createBookingWithTurnover } from "./booking-create";
 import { assertNoOverlap, assertNotBlocked } from "./overlap";
 
 export async function listBookings(): Promise<Booking[]> {
   await requireSiteAccess();
-  const rows = await prisma.booking.findMany({ orderBy: { checkIn: "asc" } });
-  return rows.map(bookingFromDb);
+  return loadBookings();
 }
 
 /** A booking plus its turnover cleaning, in one transaction (see booking-create.ts). */
