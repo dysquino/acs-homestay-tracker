@@ -12,7 +12,7 @@ const SETTINGS_ID = "default";
 const MAX_SHORT_TEXT = 200;
 const MAX_TEMPLATE_BODY = 4000;
 const MAX_TEMPLATES = 20;
-const MESSAGE_TEMPLATES_VERSION = 5;
+const MESSAGE_TEMPLATES_VERSION = 6;
 
 const DEFAULT_TEMPLATES = [
   {
@@ -47,9 +47,8 @@ Check-out: {{check_out_time}}
 (Early / late requests subject to availability)
 ⸻
 Parking
-Free parking is available on a first come, first served basis.
-Please use only parking slots that are not privately owned or already sold.
-Availability is not guaranteed.
+Overnight parking is available at the JTower Residences parking area or at nearby SM JMall, approximately a one-minute walk from the property.
+Both locations charge an overnight parking fee of ₱200. Spaces are subject to availability.
 ⸻
 Wi-Fi
 Wi-Fi access is complimentary for your stay.
@@ -147,6 +146,22 @@ If anything was damaged, lost, or needs attention, kindly let us know before che
 
 {{host_signature}}`,
   },
+  {
+    id: "parking-default",
+    name: "Parking information",
+    sortOrder: 3,
+    body: `Hi {{guest_name}},
+
+For your convenience, overnight parking is available at either of these locations:
+• JTower Residences parking area
+• SM JMall, approximately a one-minute walk from the property
+
+The overnight parking fee is ₱200 at either location. Spaces are subject to availability, so we recommend allowing a little extra time when you arrive.
+
+If you would like directions or need any assistance with parking, please feel free to message us. We’re happy to help.
+
+{{host_signature}}`,
+  },
 ];
 
 function validateText(value: unknown, label: string, max: number, required = false): asserts value is string {
@@ -181,9 +196,11 @@ export async function listStayPreparation(): Promise<StayPreparationData> {
           tx.guestMessageTemplate.upsert({
             where: { id: template.id },
             create: template,
-            update: previousTemplateVersion >= 3
-              ? { body: template.body, sortOrder: template.sortOrder }
-              : { name: template.name, body: template.body, sortOrder: template.sortOrder },
+            update: previousTemplateVersion < 3
+              ? { name: template.name, body: template.body, sortOrder: template.sortOrder }
+              : previousTemplateVersion < 5 || template.id === "arrival-default"
+                ? { body: template.body, sortOrder: template.sortOrder }
+                : { sortOrder: template.sortOrder },
           }),
         ),
       );

@@ -7,6 +7,7 @@ import { CashFlowChart, type ChartRange } from "@/components/dashboard/cash-flow
 import { MoneyInBankCard } from "@/components/dashboard/money-in-bank-card";
 import { OccupancyCard } from "@/components/dashboard/occupancy-card";
 import { ProfitHero } from "@/components/dashboard/profit-hero";
+import { RoomStatusWidget } from "@/components/dashboard/room-status-widget";
 import { SettleCard } from "@/components/dashboard/settle-card";
 import { WeekStrip } from "@/components/dashboard/week-strip";
 import { UpcomingStays } from "@/components/dashboard/upcoming-stays";
@@ -87,7 +88,7 @@ export default function DashboardPage() {
         </div>
 
         {/* The one filter row: scopes every card below. */}
-        <div className="flex items-center gap-1 rounded-full bg-white p-1 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_8px_24px_rgba(15,23,42,0.06)]">
+        <div className="hidden sm:flex items-center gap-1 rounded-full bg-white p-1 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_8px_24px_rgba(15,23,42,0.06)]">
           <MonthStep label="Previous month" onClick={() => selectMonth(addMonths(monthCursor, -1))}>
             <ChevronLeftIcon className="h-4 w-4" />
           </MonthStep>
@@ -110,10 +111,36 @@ export default function DashboardPage() {
       </div>
 
       <div className="mb-5">
+        <RoomStatusWidget />
+      </div>
+
+      <div className="mb-5">
         <UpcomingStays />
       </div>
 
       <ActionItems />
+
+      {/* Mobile: month picker sits between summary widgets and the chart grid */}
+      <div className="flex sm:hidden items-center justify-center gap-1 rounded-full bg-white p-1 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_8px_24px_rgba(15,23,42,0.06)] mb-5">
+        <MonthStep label="Previous month" onClick={() => selectMonth(addMonths(monthCursor, -1))}>
+          <ChevronLeftIcon className="h-4 w-4" />
+        </MonthStep>
+        <span className="min-w-36 px-2 text-center text-sm font-semibold text-slate-900">
+          {formatMonth(monthCursor)}
+        </span>
+        <MonthStep label="Next month" onClick={() => selectMonth(addMonths(monthCursor, 1))}>
+          <ChevronRightIcon className="h-4 w-4" />
+        </MonthStep>
+        {!isCurrentMonth ? (
+          <button
+            type="button"
+            onClick={() => selectMonth(currentMonth)}
+            className="ml-1 rounded-full bg-brand-700 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-brand-800"
+          >
+            This month
+          </button>
+        ) : null}
+      </div>
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-12 [&>*]:min-w-0">
         <div className="lg:col-span-4">

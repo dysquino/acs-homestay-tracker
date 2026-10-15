@@ -47,6 +47,7 @@ import {
 } from "./data/expenses";
 import { importAirbnbBookings, type ImportInstruction, type ImportResult } from "./data/import";
 import { getReconciliationStatus } from "./data/reconciliation-status";
+import { getRoomStatus, setRoomStatus as setRoomStatusAction } from "./data/room-status";
 import { useIdentity } from "./identity";
 import type {
   Booking,
@@ -57,6 +58,7 @@ import type {
   DateBlockInput,
   Expense,
   ExpenseInput,
+  RoomStatus,
 } from "./types";
 
 export { DEFAULT_CLEANING_FEE } from "./constants";
@@ -102,6 +104,8 @@ type Data = {
    * rather than being shown and then rejecting the write.
    */
   reconciliationEnabled: boolean;
+  /** The physical room's readiness — shown as a colour-coded pill on the dashboard. */
+  roomStatus: RoomStatus;
 };
 
 type StoreValue = Data & {
@@ -148,6 +152,7 @@ type StoreValue = Data & {
   /** Resolves with the block, or an error to show (e.g. a booking is on those dates). */
   addDateBlock: (input: DateBlockInput) => Promise<BlockResult>;
   deleteDateBlock: (id: string) => Promise<void>;
+  setRoomStatus: (status: RoomStatus) => Promise<void>;
 };
 
 /** Background re-read while the app is open and visible (see StoreProvider). */
@@ -167,6 +172,7 @@ const EMPTY: Data = {
   airbnbStatus: { enabled: false, fetchedAt: null, error: null },
   dateBlocks: [],
   reconciliationEnabled: false,
+  roomStatus: "clean",
 };
 
 export function StoreProvider({ children }: { children: ReactNode }) {
@@ -212,6 +218,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     } catch {
       reconciliationEnabled = false;
     }
+    // Same safe fallback as reconciliationEnabled — the pill defaults to clean on read failure.
+    let roomStatus: RoomStatus = "clean";
+    try {
+      roomStatus = await getRoomStatus();
+    } catch {
+      roomStatus = "clean";
+    }
     setData({
       bookings,
       expenses,
@@ -222,6 +235,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       airbnbStatus: airbnb.status,
       dateBlocks,
       reconciliationEnabled,
+      roomStatus,
     });
     return true;
   }, []);
@@ -402,6 +416,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [refresh],
   );
 
+  const setRoomStatus = useCallback(
+    async (status: RoomStatus) => {
+      await setRoomStatusAction(status);
+      await refresh();
+    },
+    [refresh],
+  );
+
   const value = useMemo<StoreValue>(
     () => ({
       ...data,
@@ -424,6 +446,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       declineRequest,
       addDateBlock,
       deleteDateBlock,
+      setRoomStatus,
     }),
     [
       data,
@@ -446,6 +469,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       declineRequest,
       addDateBlock,
       deleteDateBlock,
+      setRoomStatus,
     ],
   );
 

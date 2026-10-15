@@ -183,10 +183,7 @@ function ExpensesPageContent() {
       </Link>
     ) : (
       <RowActions
-        onEdit={() => {
-          setEditing(e);
-          setFormOpen(true);
-        }}
+        onView={() => setSelected(e)}
         onDelete={() => setPendingDelete(e)}
         extra={
           e.refundStatus === "owed" ? <span className="mr-1">{markRefundedButton(e)}</span> : undefined
@@ -371,7 +368,11 @@ function ExpensesPageContent() {
                 </Thead>
                 <tbody className="divide-y divide-slate-100">
                   {paging.pageItems.map((e) => (
-                    <Tr key={e.id}>
+                    <Tr
+                      key={e.id}
+                      onOpen={() => setSelected(e)}
+                      openLabel={`View ${e.description}`}
+                    >
                       <Td className="whitespace-nowrap">{formatDate(e.date)}</Td>
                       <Td>
                         <Badge>

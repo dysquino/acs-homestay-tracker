@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 
 import { Button } from "./button";
 
@@ -54,9 +55,13 @@ export function Modal({
     };
   }, [open, onClose]);
 
-  if (!open) return null;
+  if (!open || typeof document === "undefined") return null;
 
-  return (
+  // A modal may be opened from inside another modal (for example, recording an
+  // expense payout from its detail sheet). Portalling to `body` keeps `fixed`
+  // positioning relative to the viewport and prevents the parent dialog's
+  // scroll/stacking context from clipping or offsetting the child on desktop.
+  return createPortal(
     <div
       // `print-root` so a dialog prints as normal document flow rather than a
       // viewport-height overlay that clips everything below the fold.
@@ -101,7 +106,8 @@ export function Modal({
           </footer>
         ) : null}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 

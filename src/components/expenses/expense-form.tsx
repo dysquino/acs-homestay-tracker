@@ -13,6 +13,8 @@ import {
 import { Modal } from "@/components/ui/modal";
 import { useIdentity } from "@/lib/identity";
 import { today } from "@/lib/dates";
+import { expenseOutstandingAmount } from "@/lib/expense-payout";
+import { formatCurrency } from "@/lib/format";
 import { useStore } from "@/lib/store";
 import { useSubmit, type Submit } from "@/lib/use-submit";
 import { payoutDateDiverges, payoutMonthLabel } from "@/lib/payout-date";
@@ -92,10 +94,9 @@ function ExpenseFields({
           amount: String(expense.amount),
           paidBy: expense.paidBy,
           refundStatus: expense.refundStatus,
-          // Pre-filled with today because the common case is "I just paid this".
-          // For an expense from an earlier month that default is likely wrong,
-          // which is what the divergence note under the field is for.
-          payoutDate: expense.amount - expense.settledAmount > 0 ? today() : "",
+          // Opt-in: pre-filling this would silently pay the whole remaining
+          // balance when someone edits the description of an installment plan.
+          payoutDate: "",
         }
       : {
           date: today(),
@@ -120,14 +121,14 @@ function ExpenseFields({
   const set = <K extends keyof FormState>(key: K, value: FormState[K]) =>
     setForm((f) => ({ ...f, [key]: value }));
 
-  const outstanding =
-    expense ? Math.round((expense.amount - expense.settledAmount) * 100) / 100 : 0;
+  const outstanding = expense
+    ? expenseOutstandingAmount(expense.amount, expense.settledAmount)
+    : 0;
   const showPayout = Boolean(expense) && outstanding > 0;
   /**
-   * The dangerous default: an expense from an earlier month stamped with
-   * today's date files the money in the wrong period, and reconciliation cannot
-   * detect it because a wrong date reconciles perfectly against itself. Same
-   * month is the ordinary case and stays silent — friction there is the enemy.
+   * A payout date from the wrong month files the money in the wrong period, and
+   * reconciliation cannot detect it because that incorrect date still agrees
+   * with itself. An empty date is intentionally silent and records no payout.
    */
   const payoutDiverges =
     showPayout && payoutDateDiverges(form.payoutDate, expense?.date ?? "");
@@ -243,7 +244,12 @@ function ExpenseFields({
           )}
         </Field>
 
-        <Field label="Amount" required error={errors.amount}>
+        <Field
+          label="Total expense amount"
+          required
+          error={errors.amount}
+          hint="For installments, enter the full purchase total."
+        >
           {(id) => (
             <CurrencyInput
               id={id}
@@ -278,11 +284,11 @@ function ExpenseFields({
 
         {showPayout ? (
           <Field
-            label="Payout date"
+            label="Full-balance payout date (optional)"
             hint={
               outstanding < (expense?.amount ?? 0)
-                ? `${outstanding.toFixed(2)} of this is still unrecorded.`
-                : "When this left the homestay account."
+                ? `${formatCurrency(outstanding)} remains. Leave blank to only save the expense changes.`
+                : "Choose a date only if the full amount left the homestay account."
             }
           >
             {(id) => (

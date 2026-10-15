@@ -12,6 +12,7 @@ import { useIdentity } from "@/lib/identity";
 import {
   createBookingPayment,
   listBookingPayments,
+  updateBookingPayment,
   voidBookingPayment,
 } from "@/lib/data/booking-payments";
 import { formatCurrency, formatDate } from "@/lib/format";
@@ -52,6 +53,7 @@ export function BookingPayments({
   const [payments, setPayments] = useState<BookingPayment[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [formOpen, setFormOpen] = useState(false);
+  const [editingPayment, setEditingPayment] = useState<BookingPayment | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -119,7 +121,7 @@ export function BookingPayments({
       ) : payments.length === 0 ? (
         <p className="mt-2 text-xs text-slate-500">
           Nothing recorded yet. Add each receipt separately — a deposit, an
-          instalment, and the final balance are three separate payments.
+          installment, and the final balance are three separate payments.
         </p>
       ) : (
         <ul className="mt-2 divide-y divide-slate-100">
@@ -148,9 +150,14 @@ export function BookingPayments({
                 />
               </div>
               {p.status === "active" ? (
-                <Button size="sm" variant="ghost" onClick={() => void voidPayment(p)}>
-                  Void
-                </Button>
+                <div className="flex gap-1">
+                  <Button size="sm" variant="ghost" onClick={() => { setEditingPayment(p); setFormOpen(true); }}>
+                    Edit
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={() => void voidPayment(p)}>
+                    Void
+                  </Button>
+                </div>
               ) : null}
             </li>
           ))}
@@ -163,9 +170,11 @@ export function BookingPayments({
         totalPayout={totalPayout}
         source={source}
         existing={active}
-        onClose={() => setFormOpen(false)}
+        editingPayment={editingPayment}
+        onClose={() => { setFormOpen(false); setEditingPayment(null); }}
         onSaved={async () => {
           setFormOpen(false);
+          setEditingPayment(null);
           await load();
           onChanged();
         }}
@@ -206,6 +215,7 @@ function BookingPaymentForm({
   totalPayout,
   source,
   existing,
+  editingPayment,
   onClose,
   onSaved,
 }: {
@@ -214,31 +224,34 @@ function BookingPaymentForm({
   totalPayout: number;
   source: "AIRBNB" | "DIRECT";
   existing: BookingPayment[];
+  editingPayment: BookingPayment | null;
   onClose: () => void;
   onSaved: () => Promise<void>;
 }) {
   const submit = useSubmit();
+  const isEditing = editingPayment !== null;
   return (
     <Modal
       open={open}
       onClose={onClose}
-      title="Record a payment"
+      title={isEditing ? "Edit payment" : "Record a payment"}
       description="When the money actually arrived, not when the stay is."
       footer={
         <>
           <Button onClick={onClose}>Cancel</Button>
           <Button type="submit" form={FORM_ID} variant="primary" disabled={submit.saving}>
-            {submit.saving ? "Saving…" : "Save payment"}
+            {submit.saving ? "Saving…" : isEditing ? "Save changes" : "Save payment"}
           </Button>
         </>
       }
     >
       <BookingPaymentFields
-        key={bookingId}
+        key={`${bookingId}-${editingPayment?.id ?? "new"}`}
         bookingId={bookingId}
         totalPayout={totalPayout}
         source={source}
         existing={existing}
+        editingPayment={editingPayment}
         onSaved={onSaved}
         submit={submit}
       />
@@ -251,6 +264,7 @@ function BookingPaymentFields({
   totalPayout,
   source,
   existing,
+  editingPayment,
   onSaved,
   submit,
 }: {
@@ -258,10 +272,12 @@ function BookingPaymentFields({
   totalPayout: number;
   source: "AIRBNB" | "DIRECT";
   existing: BookingPayment[];
+  editingPayment: BookingPayment | null;
   onSaved: () => Promise<void>;
   submit: ReturnType<typeof useSubmit>;
 }) {
   const { user } = useIdentity();
+  const isEditing = editingPayment !== null;
   const received = existing.reduce((s, p) => s + p.amount, 0);
   // What's still expected of this booking. The common case by far is one final
   // payment for the remainder — a direct booking's balance, or an Airbnb payout
@@ -269,13 +285,23 @@ function BookingPaymentFields({
   // figure the app already knows. Still editable, and the overpaid warning below
   // catches a pre-fill that's wrong for a split payment.
   const remaining = Math.round((totalPayout - received) * 100) / 100;
-  const [form, setForm] = useState<FormState>({
-    amount: remaining > 0 ? String(remaining) : "",
-    receivedDate: today(),
-    method: "bank_transfer",
-    reference: "",
-    notes: "",
-  });
+  const [form, setForm] = useState<FormState>(() =>
+    isEditing
+      ? {
+          amount: String(editingPayment.amount),
+          receivedDate: editingPayment.receivedDate,
+          method: editingPayment.method,
+          reference: editingPayment.reference ?? "",
+          notes: editingPayment.notes ?? "",
+        }
+      : {
+          amount: remaining > 0 ? String(remaining) : "",
+          receivedDate: today(),
+          method: "bank_transfer",
+          reference: "",
+          notes: "",
+        },
+  );
   const [errors, setErrors] = useState<Partial<Record<keyof FormState, string>>>({});
   const [paymentScreenshot, setPaymentScreenshot] = useState<Uint8Array | null>(null);
   const [screenshotError, setScreenshotError] = useState<string | null>(null);
@@ -298,18 +324,32 @@ function BookingPaymentFields({
     setSubmitError(null);
     await submit.run(async () => {
       try {
-        await createBookingPayment(
-          {
-            bookingId,
+        if (isEditing) {
+          await updateBookingPayment(editingPayment.id, {
             amount: Number(form.amount),
             receivedDate: form.receivedDate,
             method: form.method,
             reference: form.reference.trim(),
             notes: form.notes.trim(),
-            createdBy: user?.name ?? "Unknown",
-          },
-          paymentScreenshot!,
-        );
+          });
+        } else {
+          if (!paymentScreenshot) {
+            setScreenshotError("A payment screenshot is required.");
+            return;
+          }
+          await createBookingPayment(
+            {
+              bookingId,
+              amount: Number(form.amount),
+              receivedDate: form.receivedDate,
+              method: form.method,
+              reference: form.reference.trim(),
+              notes: form.notes.trim(),
+              createdBy: user?.name ?? "Unknown",
+            },
+            paymentScreenshot,
+          );
+        }
         await onSaved();
       } catch {
         setSubmitError("Couldn't save this payment. Please try again.");
@@ -317,7 +357,9 @@ function BookingPaymentFields({
     });
   }
 
-  const overpaying = form.amount !== "" && received + Number(form.amount) > totalPayout;
+  const overpaying =
+    form.amount !== "" &&
+    received - (isEditing ? editingPayment.amount : 0) + Number(form.amount) > totalPayout;
 
   return (
     <form id={FORM_ID} onSubmit={onSubmit} className="space-y-4">
@@ -383,20 +425,29 @@ function BookingPaymentFields({
         </Field>
 
         <div className="sm:col-span-2">
-          <ImageUploadField
-            label="Payment screenshot"
-            required
-            hint="Upload the receipt for this specific payment. It will be compressed automatically."
-            onChange={(bytes) => {
-              setPaymentScreenshot(bytes);
-              if (bytes) setScreenshotError(null);
-            }}
-          />
-          {screenshotError ? (
-            <p role="alert" className="mt-1 text-xs text-red-600">
-              {screenshotError}
+          {isEditing ? (
+            <p className="text-xs text-slate-500">
+              Screenshot is managed from the payment details below this form. Use{" "}
+              <strong>Replace</strong> there to attach a new one.
             </p>
-          ) : null}
+          ) : (
+            <>
+              <ImageUploadField
+                label="Payment screenshot"
+                required
+                hint="Upload the receipt for this specific payment. It will be compressed automatically."
+                onChange={(bytes) => {
+                  setPaymentScreenshot(bytes);
+                  if (bytes) setScreenshotError(null);
+                }}
+              />
+              {screenshotError ? (
+                <p role="alert" className="mt-1 text-xs text-red-600">
+                  {screenshotError}
+                </p>
+              ) : null}
+            </>
+          )}
         </div>
       </div>
 
@@ -414,7 +465,9 @@ function BookingPaymentFields({
       ) : null}
 
       <p className="text-xs text-slate-500">
-        Recorded payments add up to {formatCurrency(received)} of {formatCurrency(totalPayout)}.
+        {isEditing
+          ? `After this change payments will total ${formatCurrency(received - editingPayment.amount + Number(form.amount))} of ${formatCurrency(totalPayout)}.`
+          : `Recorded payments add up to ${formatCurrency(received)} of ${formatCurrency(totalPayout)}.`}
       </p>
     </form>
   );

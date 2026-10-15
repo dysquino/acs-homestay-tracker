@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 
 import { cn } from "@/lib/cn";
-import { ChevronRightIcon, EditIcon, TrashIcon } from "@/components/ui/icons";
+import { ChevronRightIcon, EditIcon, EyeIcon, TrashIcon } from "@/components/ui/icons";
 
 /**
  * Wraps a <Table>, shown only on wide (xl) screens. Below that — phones,
@@ -119,42 +119,98 @@ export function Thead({ children }: { children: ReactNode }) {
   );
 }
 
-/** A data row with alternating shading — easier to track across many columns. */
-export function Tr({ children }: { children: ReactNode }) {
+/**
+ * A data row with alternating shading. When `onOpen` is supplied, clicking the
+ * row's non-interactive surface (or pressing Enter/Space while it is focused)
+ * opens its detail view. Buttons and links inside the row keep their own action.
+ */
+export function Tr({
+  children,
+  onOpen,
+  openLabel,
+}: {
+  children: ReactNode;
+  onOpen?: () => void;
+  openLabel?: string;
+}) {
+  const interactiveSelector = "button, a, input, select, textarea, [role='button'], [role='link']";
+
   return (
-    <tr className="odd:bg-white even:bg-slate-50/60 hover:bg-brand-50/40">
+    <tr
+      tabIndex={onOpen ? 0 : undefined}
+      aria-label={onOpen ? openLabel : undefined}
+      onClick={
+        onOpen
+          ? (event) => {
+              if ((event.target as HTMLElement).closest(interactiveSelector)) return;
+              onOpen();
+            }
+          : undefined
+      }
+      onKeyDown={
+        onOpen
+          ? (event) => {
+              if (event.target !== event.currentTarget) return;
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                onOpen();
+              }
+            }
+          : undefined
+      }
+      className={`odd:bg-white even:bg-slate-50/60 hover:bg-brand-50/40 ${
+        onOpen
+          ? "cursor-pointer focus-visible:bg-brand-50/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-600"
+          : ""
+      }`}
+    >
       {children}
     </tr>
   );
 }
 
 /**
- * Compact icon-button row actions (Edit/Delete), used by every table and
+ * Compact icon-button row actions (View/Edit/Delete), used by every table and
  * card list instead of wordy text buttons — takes less space, reads faster
  * at a glance, and gives cleaner touch targets on mobile cards. `extra` can
  * hold a row-specific action (e.g. cleaning's "Mark paid") placed before it.
  */
 export function RowActions({
+  onView,
   onEdit,
   onDelete,
   extra,
 }: {
-  onEdit: () => void;
+  onView?: () => void;
+  onEdit?: () => void;
   onDelete: () => void;
   extra?: ReactNode;
 }) {
   return (
     <div className="flex items-center justify-end gap-1">
       {extra}
-      <button
-        type="button"
-        onClick={onEdit}
-        aria-label="Edit"
-        title="Edit"
-        className="rounded-md p-1.5 text-slate-500 transition-colors hover:bg-slate-200/70 hover:text-slate-900 pointer-coarse:p-2.5"
-      >
-        <EditIcon className="h-4 w-4" />
-      </button>
+      {onView ? (
+        <button
+          type="button"
+          onClick={onView}
+          aria-label="View"
+          title="View"
+          className="rounded-md p-1.5 text-slate-500 transition-colors hover:bg-brand-100 hover:text-brand-800 pointer-coarse:p-2.5"
+        >
+          <EyeIcon className="h-4 w-4" />
+        </button>
+      ) : null}
+      {onEdit ? (
+        <button
+          type="button"
+          onClick={onEdit}
+          aria-label="Edit"
+          title="Edit"
+          className="rounded-md p-1.5 text-slate-500 transition-colors hover:bg-slate-200/70 hover:text-slate-900 pointer-coarse:p-2.5"
+        >
+          <EditIcon className="h-4 w-4" />
+        </button>
+      ) : null}
       <button
         type="button"
         onClick={onDelete}

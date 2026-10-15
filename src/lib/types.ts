@@ -328,6 +328,15 @@ export const CLEANING_PAYMENT_STATUSES: {
   { value: "paid", label: "Paid" },
 ];
 
+/** The physical room's readiness — shown as a colour-coded pill on the dashboard. */
+export type RoomStatus = "clean" | "dirty" | "in_use";
+
+export const ROOM_STATUSES: { value: RoomStatus; label: string }[] = [
+  { value: "clean", label: "Clean" },
+  { value: "dirty", label: "Dirty" },
+  { value: "in_use", label: "In-Use" },
+];
+
 export const BOOKING_PAYMENT_METHODS: {
   value: BookingPaymentMethod;
   label: string;
