@@ -1,5 +1,7 @@
 import type { AirbnbReservation } from "./airbnb-ical";
 import { addDays, daysBetween } from "./dates";
+import { formatCurrency } from "./format";
+import { payablesSummary } from "./selectors";
 import type { Booking, BookingRequest, CleaningRecord, Expense, ISODate } from "./types";
 
 /**
@@ -49,7 +51,12 @@ export type ActionInput = {
 };
 
 const RANK: Record<Urgency, number> = { overdue: 0, soon: 1, later: 2 };
-const peso = (n: number) => `₱${n.toLocaleString("en-PH", { maximumFractionDigits: 2 })}`;
+/**
+ * Amounts here are the same ones the dashboard's "Money to settle" card and
+ * the Expenses page's "Still payable" banner show, so they are formatted the
+ * same way: whole pesos when there are no centavos, exact when there are.
+ */
+const peso = (n: number) => formatCurrency(n);
 const shortDate = (iso: ISODate) =>
   new Date(`${iso}T00:00:00`).toLocaleDateString("en-PH", { month: "short", day: "numeric" });
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
@@ -164,27 +171,21 @@ export function buildActionItems(input: ActionInput): ActionItem[] {
     }
   }
 
-  // 7. Owners waiting to be paid back — one row per person.
-  const owed = new Map<string, Expense[]>();
-  for (const e of expenses) {
-    if (e.refundStatus !== "owed") continue;
-    const who = e.paidBy.trim() || "Unknown";
-    owed.set(who, [...(owed.get(who) ?? []), e]);
-  }
-  for (const [who, list] of owed) {
-    const oldest = list.reduce((a, b) => (a.date < b.date ? a : b)).date;
-    const total = list.reduce((s, e) => s + e.amount, 0);
+  // 7. Owners waiting to be paid back — one row per person. The same
+  // payables figure the Expenses page and the dashboard show, so the amount
+  // on this action item is the amount the owner will find there.
+  for (const p of payablesSummary(expenses).byPayer) {
     items.push({
-      id: `refund-${who}`,
-      urgency: daysBetween(oldest, today) > REFUND_SOON_DAYS ? "soon" : "later",
-      title: `Refund ${who} ${peso(total)}`,
-      detail: `${plural(list.length, "expense")} not yet refunded · oldest ${shortDate(oldest)}`,
+      id: `refund-${p.who}`,
+      urgency: daysBetween(p.oldest, today) > REFUND_SOON_DAYS ? "soon" : "later",
+      title: `Refund ${p.who} ${peso(p.total)}`,
+      detail: `${plural(p.count, "expense")} not yet refunded · oldest ${shortDate(p.oldest)}`,
       action: {
         type: "link",
-        href: `/expenses?refund=owed${who === "Unknown" ? "" : `&paidBy=${encodeURIComponent(who)}`}`,
+        href: `/expenses?refund=owed${p.who === "Unknown" ? "" : `&paidBy=${encodeURIComponent(p.who)}`}`,
         label: "Review",
       },
-      sortKey: oldest,
+      sortKey: p.oldest,
     });
   }
 

@@ -121,7 +121,7 @@ const SETTLEMENT_TYPE_TO_DB: Record<SettlementType, DbSettlementType> = {
   guest_refund: "GUEST_REFUND",
   other: "OTHER",
 };
-const SETTLEMENT_TYPE_FROM_DB: Record<DbSettlementType, SettlementType> = {
+export const SETTLEMENT_TYPE_FROM_DB: Record<DbSettlementType, SettlementType> = {
   DIRECT_VENDOR_PAYMENT: "direct_vendor_payment",
   OWNER_REIMBURSEMENT: "owner_reimbursement",
   CLEANER_PAYMENT: "cleaner_payment",
@@ -178,7 +178,7 @@ const CLEANING_PAYMENT_STATUS_FROM_DB: Record<
   UNPAID: "unpaid",
 };
 
-const EXPENSE_REFUND_STATUS_TO_DB: Record<ExpenseRefundStatus, DbExpenseRefundStatus> = {
+export const EXPENSE_REFUND_STATUS_TO_DB: Record<ExpenseRefundStatus, DbExpenseRefundStatus> = {
   refunded: "REFUNDED",
   owed: "OWED",
 };

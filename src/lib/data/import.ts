@@ -24,7 +24,15 @@ export type ImportInstruction = {
   platformFee: number;
 };
 
-export type ImportResult = { created: number; updated: number; skipped: number };
+export type AirbnbImportStatus = {
+  importedAt: string;
+  importedBy: string;
+  created: number;
+  updated: number;
+  skipped: number;
+};
+
+export type ImportResult = AirbnbImportStatus;
 
 const MAX_ROWS = 500;
 const CODE = /^[A-Za-z0-9]{6,32}$/;
@@ -160,8 +168,29 @@ export async function importAirbnbBookings(
         });
       }
 
-      return { created: toCreate.length, updated, skipped };
+      const importedAt = new Date();
+      const summary = { created: toCreate.length, updated, skipped };
+      await tx.airbnbCsvImport.upsert({
+        where: { id: "latest" },
+        create: { id: "latest", importedAt, importedBy: actor.trim(), ...summary },
+        update: { importedAt, importedBy: actor.trim(), ...summary },
+      });
+
+      return { ...summary, importedAt: importedAt.toISOString(), importedBy: actor.trim() };
     },
     { timeout: 60_000, maxWait: 10_000 },
   );
+}
+
+/** The last completed CSV import, or null before the first one. */
+export async function getLatestAirbnbImport(): Promise<AirbnbImportStatus | null> {
+  await requireSiteAccess();
+  try {
+    const row = await prisma.airbnbCsvImport.findUnique({ where: { id: "latest" } });
+    return row ? { ...row, importedAt: row.importedAt.toISOString() } : null;
+  } catch {
+    // Keep the rest of the app usable while a deployment's schema update is
+    // still catching up. The first successful import will require the table.
+    return null;
+  }
 }

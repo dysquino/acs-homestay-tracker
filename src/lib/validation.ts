@@ -8,6 +8,7 @@ import {
   EXPENSE_REFUND_STATUSES,
   PAYMENT_STATUSES,
   SETTLEMENT_TYPES,
+  isBankPayer,
   type BookingInput,
   type BookingPaymentInput,
   type BookingRequestInput,
@@ -164,6 +165,13 @@ export function validateExpense(e: ExpenseInput): void {
   text(e.receiptUrl, "Receipt", { max: MAX_TEXT });
   text(e.createdBy, "Created by", { max: MAX_NAME });
   oneOf(e.refundStatus, EXPENSE_REFUND_STATUSES, "Refund status");
+  // The bank account paid it, so there is nobody to pay back — "not yet
+  // refunded" on a bank-paid expense is a contradiction. Checked here as well
+  // as in the form because server actions are plain endpoints, and a phantom
+  // "Refund Bank" action item on the dashboard is worse than a rejected write.
+  if (isBankPayer(e.paidBy) && e.refundStatus !== "refunded") {
+    fail("An expense paid by the bank account is settled — it can't be waiting for a refund.");
+  }
 }
 
 export function validateCleaning(c: Omit<CleaningRecord, "id">): void {

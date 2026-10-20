@@ -9,6 +9,7 @@ import { validateCleaning } from "@/lib/validation";
 import { requireSiteAccess } from "./access";
 import { loadCleaning } from "./loaders";
 import { syncCleaningExpense } from "./cleaning-expense";
+import { syncExpenseRefundStatus } from "./expense-refund";
 import {
   cleaningFromDb,
   cleaningPatchToDb,
@@ -88,6 +89,16 @@ async function recordCleanerPayout(
       notes: "",
       createdBy: actor,
     }),
+  });
+
+  // Every payout that settles an expense re-checks what that leaves the
+  // expense owed. A cleaning expense is always `REFUNDED` — the shared fund
+  // paid the cleaner directly, so nobody is owed — but the rule is applied
+  // here too rather than assumed, so a cleaning paid by someone who fronted
+  // it cannot slip past it.
+  await syncExpenseRefundStatus(tx, expense.id, {
+    before: expense.settlements.map((s) => s.amount.toString()),
+    settlementType: "cleaner_payment",
   });
 }
 

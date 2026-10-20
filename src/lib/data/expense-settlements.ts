@@ -9,7 +9,9 @@ import { ValidationError, validateExpenseSettlement } from "@/lib/validation";
 
 import { requireSiteAccess } from "./access";
 import { dateToISO } from "./mappers";
+import { syncExpenseRefundStatus } from "./expense-refund";
 import {
+  SETTLEMENT_TYPE_FROM_DB,
   expenseSettlementFromDb,
   expenseSettlementPatchToDb,
   expenseSettlementToDb,
@@ -56,10 +58,40 @@ export async function createExpenseSettlement(
   validateExpenseSettlement(input);
   await assertSourceExists(input);
   const row = await prisma.$transaction(async (tx) => {
+    // Read before the write: the sync needs to know what the expense looked
+    // like before this payout, to see whether this one is what settled it.
+    const before = input.expenseId ? await activeSettlementAmounts(tx, input.expenseId) : [];
     if (input.expenseId) await assertNotOverSettled(tx, input.expenseId, input.amount);
-    return tx.expenseSettlement.create({ data: expenseSettlementToDb(input) });
+    const created = await tx.expenseSettlement.create({ data: expenseSettlementToDb(input) });
+    if (input.expenseId) {
+      // A payout paid in full leaves nobody to reimburse, so the expense says
+      // so too — rather than going on claiming money is owed after it has
+      // been paid back.
+      await syncExpenseRefundStatus(tx, input.expenseId, {
+        before,
+        settlementType: input.settlementType,
+      });
+    }
+    return created;
   });
   return expenseSettlementFromDb(row);
+}
+
+/**
+ * The amounts of an expense's active settlements.
+ *
+ * Active only: a voided one released its amount back, and counting it would
+ * say the expense was paid out when it wasn't.
+ */
+async function activeSettlementAmounts(
+  tx: Prisma.TransactionClient,
+  expenseId: string,
+): Promise<string[]> {
+  const rows = await tx.expenseSettlement.findMany({
+    where: { expenseId, status: "ACTIVE" },
+    select: { amount: true },
+  });
+  return rows.map((row) => row.amount.toString());
 }
 
 /**
@@ -128,10 +160,19 @@ export async function updateExpenseSettlement(
     }
     const merged = { ...expenseSettlementFromDb(existing), ...patch };
     validateExpenseSettlement(merged);
+    const before = existing.expenseId ? await activeSettlementAmounts(tx, existing.expenseId) : [];
     await tx.expenseSettlement.update({
       where: { id },
       data: expenseSettlementPatchToDb(patch),
     });
+    if (existing.expenseId) {
+      // Shrinking a payout that had settled the expense puts the claim back:
+      // whatever was left out of it has not been paid after all.
+      await syncExpenseRefundStatus(tx, existing.expenseId, {
+        before,
+        settlementType: SETTLEMENT_TYPE_FROM_DB[existing.settlementType],
+      });
+    }
   });
 }
 
@@ -142,9 +183,21 @@ export async function voidExpenseSettlement(id: string, voidedBy: string): Promi
   if (!voidedBy.trim()) throw new ValidationError("Voided by is required.");
   const existing = await prisma.expenseSettlement.findUniqueOrThrow({ where: { id } });
   if (existing.status === "VOIDED") return; // idempotent
-  await prisma.expenseSettlement.update({
-    where: { id },
-    data: { status: "VOIDED", voidedAt: new Date(), voidedBy },
+  await prisma.$transaction(async (tx) => {
+    const before = existing.expenseId ? await activeSettlementAmounts(tx, existing.expenseId) : [];
+    await tx.expenseSettlement.update({
+      where: { id },
+      data: { status: "VOIDED", voidedAt: new Date(), voidedBy },
+    });
+    if (existing.expenseId) {
+      // Taking back a reimbursement means whoever fronted the cost has not
+      // been paid back, so the claim comes back with it. Without this the row
+      // would go on saying "refunded" for money that never left the account.
+      await syncExpenseRefundStatus(tx, existing.expenseId, {
+        before,
+        settlementType: SETTLEMENT_TYPE_FROM_DB[existing.settlementType],
+      });
+    }
   });
 }
 

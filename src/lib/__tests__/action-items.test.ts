@@ -134,7 +134,7 @@ describe("action items", () => {
       ],
     });
     expect(items.map((i) => `${i.id}:${i.urgency}`)).toEqual(["refund-DK:soon", "refund-Kalur:later"]);
-    expect(items[0].title).toBe("Refund DK ₱1,000.5");
+    expect(items[0].title).toBe("Refund DK ₱1,000.50");
     expect(items[0].action).toEqual({ type: "link", href: "/expenses?refund=owed&paidBy=DK", label: "Review" });
   });
 

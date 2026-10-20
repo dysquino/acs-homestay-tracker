@@ -211,6 +211,31 @@ export const PAID_BY: { value: string; label: string }[] = [
   { value: "DK", label: "DK" },
 ];
 
+/**
+ * The homestay bank account, as a payer in its own right — money that left the
+ * account directly, so nobody fronted it and nobody is owed back.
+ */
+export const BANK_PAYER = "Bank";
+
+/**
+ * Who an expense can be recorded as paid by: the five people, plus the bank
+ * account.
+ *
+ * Bank is deliberately kept out of `PAID_BY` above. That list is also the
+ * roster of people who use this tracker (identity.tsx) and the only ones who
+ * can be reimbursed (the "who was paid" pickers) — a bank account is neither a
+ * user nor someone to hand money back to.
+ */
+export const PAID_BY_OPTIONS: { value: string; label: string }[] = [
+  ...PAID_BY,
+  { value: BANK_PAYER, label: BANK_PAYER },
+];
+
+/** Whether this payer is the bank account rather than one of the people. */
+export function isBankPayer(paidBy: string): boolean {
+  return paidBy.trim() === BANK_PAYER;
+}
+
 export type CleaningStatus = "scheduled" | "completed";
 export type CleaningPaymentStatus = "paid" | "unpaid";
 

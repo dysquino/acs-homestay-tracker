@@ -21,7 +21,8 @@ import { payoutDateDiverges, payoutMonthLabel } from "@/lib/payout-date";
 import {
   EXPENSE_CATEGORIES,
   EXPENSE_REFUND_STATUSES,
-  PAID_BY,
+  PAID_BY_OPTIONS,
+  isBankPayer,
   type Expense,
   type ExpenseCategory,
   type ExpenseRefundStatus,
@@ -126,6 +127,30 @@ function ExpenseFields({
     : 0;
   const showPayout = Boolean(expense) && outstanding > 0;
   /**
+   * The bank account paid it, so nobody fronted it and nobody is owed back.
+   * Derived rather than stored, so switching the payer back to a person
+   * restores that person's own refund status instead of leaving it clobbered.
+   */
+  const paidByIsBank = isBankPayer(form.paidBy);
+  /**
+   * Whether whoever fronted the cost is still waiting to be paid back.
+   *
+   * Kept apart from the status below because the two answer different things:
+   * this one decides what KIND of payout a date records (money going back to
+   * whoever fronted it is a reimbursement, anything else paid a vendor), while
+   * the status below says whether anyone is still owed.
+   */
+  const owesSomeone = !paidByIsBank && form.refundStatus === "owed";
+  /**
+   * A payout date means the money left the account — and for an expense someone
+   * fronted, that means they were paid back. So entering one settles the claim
+   * and the status follows the money, instead of the form recording a
+   * reimbursement and then claiming the money is still owed.
+   */
+  const payoutSettles = form.payoutDate !== "";
+  const refundStatus: ExpenseRefundStatus =
+    paidByIsBank || payoutSettles ? "refunded" : form.refundStatus;
+  /**
    * A payout date from the wrong month files the money in the wrong period, and
    * reconciliation cannot detect it because that incorrect date still agrees
    * with itself. An empty date is intentionally silent and records no payout.
@@ -151,7 +176,7 @@ function ExpenseFields({
       paidBy: form.paidBy.trim(),
       receiptUrl: expense?.receiptUrl ?? "",
       createdBy: expense?.createdBy ?? user?.name ?? "Unknown",
-      refundStatus: form.refundStatus,
+      refundStatus,
     };
 
     setSubmitError(null);
@@ -170,11 +195,10 @@ function ExpenseFields({
             form.payoutDate
               ? {
                   paidDate: form.payoutDate,
-                  settlementType:
-                    form.refundStatus === "owed"
-                      ? "owner_reimbursement"
-                      : "direct_vendor_payment",
-                  reimbursedTo: form.refundStatus === "owed" ? form.paidBy.trim() : "",
+                  settlementType: owesSomeone
+                    ? "owner_reimbursement"
+                    : "direct_vendor_payment",
+                  reimbursedTo: owesSomeone ? form.paidBy.trim() : "",
                 }
               : undefined,
           );
@@ -270,10 +294,10 @@ function ExpenseFields({
               <option value="">Select who paid</option>
               {/* A record from before this fixed roster keeps showing its
                   original name, instead of silently losing it. */}
-              {form.paidBy && !PAID_BY.some((p) => p.value === form.paidBy) ? (
+              {form.paidBy && !PAID_BY_OPTIONS.some((p) => p.value === form.paidBy) ? (
                 <option value={form.paidBy}>{form.paidBy}</option>
               ) : null}
-              {PAID_BY.map((p) => (
+              {PAID_BY_OPTIONS.map((p) => (
                 <option key={p.value} value={p.value}>
                   {p.label}
                 </option>
@@ -304,12 +328,19 @@ function ExpenseFields({
 
         <Field
           label="Refund status"
-          hint="Has the person above been paid back for fronting this?"
+          hint={
+            paidByIsBank
+              ? "Paid straight from the bank account — nobody fronted this, so nobody is owed back."
+              : payoutSettles
+                ? "A payout date means the money was paid back, so nobody is owed any more."
+                : "Has the person above been paid back for fronting this?"
+          }
         >
           {(id) => (
             <Select
               id={id}
-              value={form.refundStatus}
+              value={refundStatus}
+              disabled={paidByIsBank || payoutSettles}
               onChange={(e) => set("refundStatus", e.target.value as ExpenseRefundStatus)}
             >
               {EXPENSE_REFUND_STATUSES.map((s) => (

@@ -7,6 +7,7 @@ import { ValidationError, validateExpense } from "@/lib/validation";
 
 import { requireSiteAccess } from "./access";
 import { loadExpenses } from "./loaders";
+import { syncExpenseRefundStatus } from "./expense-refund";
 import {
   expenseFromDb,
   expensePatchToDb,
@@ -91,6 +92,16 @@ export async function updateExpense(
         notes: payout.notes ?? "",
         createdBy: actor,
       }),
+    });
+
+    // The payout may have been the thing that paid the expense back in full,
+    // in which case nobody is owed any more. The amount the expense had before
+    // this save is what "before" is measured against, since the patch may have
+    // moved it.
+    await syncExpenseRefundStatus(tx, id, {
+      before: expense.settlements.map((s) => s.amount.toString()),
+      previousAmount: existing.amount.toString(),
+      settlementType: payout.settlementType,
     });
   });
 }

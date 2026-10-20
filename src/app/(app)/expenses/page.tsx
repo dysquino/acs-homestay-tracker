@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation";
 
 import { PageHeader } from "@/components/layout/app-shell";
 import { ExpenseForm } from "@/components/expenses/expense-form";
+import { PayablesBanner } from "@/components/expenses/payables-banner";
 import { ReimbursementPayout } from "@/components/expenses/reimbursement-payout";
 import { ExpenseSettlements } from "@/components/expenses/expense-settlements";
 import { Badge, RefundBadge } from "@/components/ui/badge";
@@ -37,13 +38,13 @@ import {
 import { today } from "@/lib/dates";
 import { formatCurrency, formatDate, formatMonth, formatWhole } from "@/lib/format";
 import { inPeriod, periodLabel, periodRange, presetPeriod, type Period, type PresetKey } from "@/lib/period";
-import { expensesByMonth, groupByDay, rangeSummary } from "@/lib/selectors";
+import { expensesByMonth, groupByDay, payablesSummary, rangeSummary } from "@/lib/selectors";
 import { useStore } from "@/lib/store";
 import { usePagination } from "@/lib/use-pagination";
 import {
   EXPENSE_CATEGORIES,
   EXPENSE_REFUND_STATUSES,
-  PAID_BY,
+  PAID_BY_OPTIONS,
   labelFor,
   type Expense,
   type ExpenseCategory,
@@ -132,16 +133,35 @@ function ExpensesPageContent() {
 
   const filteredTotal = filtered.reduce((s, e) => s + e.amount, 0);
   const byMonth = useMemo(() => expensesByMonth(expenses), [expenses]);
+  // What is still owed to whoever fronted an expense. All time, like the
+  // dashboard's "Owed for expenses" figure — the same selector, so the two
+  // can never show different numbers.
+  const payables = useMemo(() => payablesSummary(expenses), [expenses]);
   const filtersActive = category !== "all" || refund !== "all" || paidBy !== "all";
-  // The fixed roster, plus any older name still on an expense.
+  // The fixed roster (plus the bank account), plus any older name still on an expense.
   const payers = useMemo(
-    () => [...new Set([...PAID_BY.map((p) => p.value), ...expenses.map((e) => e.paidBy.trim()).filter(Boolean)])],
+    () => [...new Set([...PAID_BY_OPTIONS.map((p) => p.value), ...expenses.map((e) => e.paidBy.trim()).filter(Boolean)])],
     [expenses],
   );
 
   function openAdd() {
     setEditing(null);
     setFormOpen(true);
+  }
+
+  /**
+   * Jumps the list to the expenses that are still owed.
+   *
+   * The period moves to all time with it: a payable is a standing debt, so
+   * filtering it by whatever month the list happened to be showing would hide
+   * the very expenses the button is for. The dashboard's "Refund <name>" link
+   * does the same.
+   */
+  function showOwed() {
+    setCategory("all");
+    setRefund("owed");
+    setPaidBy("all");
+    setPeriod({ kind: "all" });
   }
 
   function toggleSort(key: SortKey) {
@@ -227,6 +247,8 @@ function ExpensesPageContent() {
           hint={summary.net >= 0 ? "In the black" : "Spending exceeds income"}
         />
       </div>
+
+      <PayablesBanner payables={payables} onShow={showOwed} />
 
       <div className="grid gap-5 2xl:grid-cols-[minmax(0,1fr)_22rem] 2xl:items-start">
         {/* overflow-clip, not -hidden: hidden would stop the day headings sticking. */}

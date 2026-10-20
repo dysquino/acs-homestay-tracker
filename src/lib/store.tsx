@@ -45,7 +45,13 @@ import {
   updateExpense as updateExpenseAction,
   type ExpensePayout,
 } from "./data/expenses";
-import { importAirbnbBookings, type ImportInstruction, type ImportResult } from "./data/import";
+import {
+  getLatestAirbnbImport,
+  importAirbnbBookings,
+  type AirbnbImportStatus,
+  type ImportInstruction,
+  type ImportResult,
+} from "./data/import";
 import { getReconciliationStatus } from "./data/reconciliation-status";
 import { getRoomStatus, setRoomStatus as setRoomStatusAction } from "./data/room-status";
 import { useIdentity } from "./identity";
@@ -95,6 +101,8 @@ type Data = {
   /** Airbnb stays that ended but were never imported (payout missing). */
   airbnbFinished: AirbnbReservation[];
   airbnbStatus: AirbnbSyncStatus;
+  /** The most recent successful Airbnb CSV import, distinct from calendar sync. */
+  latestAirbnbImport: AirbnbImportStatus | null;
   /** Dates the owners closed with no guest (maintenance, own use). */
   dateBlocks: DateBlock[];
   /**
@@ -170,6 +178,7 @@ const EMPTY: Data = {
   airbnbBlocks: [],
   airbnbFinished: [],
   airbnbStatus: { enabled: false, fetchedAt: null, error: null },
+  latestAirbnbImport: null,
   dateBlocks: [],
   reconciliationEnabled: false,
   roomStatus: "clean",
@@ -201,13 +210,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         listBookingRequests(),
         listAirbnbBlocks(),
         listDateBlocks(),
+        getLatestAirbnbImport(),
       ]);
     } catch (error) {
       if (request !== latest.current) return false;
       throw error;
     }
     if (request !== latest.current) return false;
-    const [bookings, expenses, cleaning, bookingRequests, airbnb, dateBlocks] = lists;
+    const [bookings, expenses, cleaning, bookingRequests, airbnb, dateBlocks, latestAirbnbImport] = lists;
     // Read separately from the lists above: if this call were to fail the whole
     // load would fail, and losing the entire app over a toggle read would be a
     // poor trade. Fall back to "off", which hides the panels — the safe
@@ -233,6 +243,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       airbnbBlocks: airbnb.blocks,
       airbnbFinished: airbnb.finished,
       airbnbStatus: airbnb.status,
+      latestAirbnbImport,
       dateBlocks,
       reconciliationEnabled,
       roomStatus,
