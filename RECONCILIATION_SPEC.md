@@ -131,6 +131,11 @@ Profitability reporting and bank reconciliation therefore remain related but sep
 - If an owner pays personally, the expense exists but does not affect the bank until reimbursement.
 - Reimbursement to the owner becomes an expense settlement on the bank payment date.
 - If the homestay pays the vendor directly, the settlement may occur on the same date as the expense.
+- `refundStatus` answers "is whoever fronted this still owed a reimbursement?" — a different question from "has the money left the bank?", which the settlements answer (§4.5). It follows the money rather than being remembered separately:
+  - An expense paid out in full is `REFUNDED`. There is provably nobody left to reimburse, whatever the row said before.
+  - Taking back an `OWNER_REIMBURSEMENT` that had settled the expense restores `OWED`, because whoever fronted the cost has not been paid back after all.
+  - A part-paid expense keeps the status it has. `OWED` with money outstanding is a real claim; `REFUNDED` with money outstanding is an expense whose payout date is missing, which the outstanding-outflows worklist chases in its own words.
+  - An expense paid by the bank account is never `OWED` — the bank paid it, so there is nobody to pay back.
 
 ### 4.6 Cleaning payments
 
