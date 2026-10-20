@@ -12,9 +12,9 @@ import {
   monthSeries,
   monthSummary,
   occupancyInMonth,
+  payablesSummary,
   pendingGuestPayments,
   unpaidCleanings,
-  unrefundedExpenses,
   upcomingEvents,
 } from "../selectors";
 import type { Booking, CleaningRecord, Expense } from "../types";
@@ -178,14 +178,59 @@ describe("guest payments", () => {
   });
 });
 
-describe("unrefunded expenses", () => {
-  it("lists only expenses someone is still owed for, oldest first", () => {
-    const list = unrefundedExpenses([
-      expense({ id: "later", date: "2026-05-01", refundStatus: "owed" }),
-      expense({ id: "settled", refundStatus: "refunded" }),
-      expense({ id: "earlier", date: "2026-01-01", refundStatus: "owed" }),
+describe("payables", () => {
+  it("counts what's still owed, not what the expense cost", () => {
+    // A ₱1,000 expense already reimbursed to the tune of ₱400 still owes
+    // ₱600. Counting the whole expense would overstate the debt.
+    const p = payablesSummary([
+      expense({ id: "1", refundStatus: "owed", paidBy: "DK", amount: 1000, settledAmount: 400 }),
     ]);
-    expect(list.map((e) => e.id)).toEqual(["earlier", "later"]);
+    expect(p.total).toBe(600);
+    expect(p.count).toBe(1);
+  });
+
+  it("groups by payer, biggest first, and names the oldest claim", () => {
+    const p = payablesSummary([
+      expense({ id: "1", date: "2026-05-01", refundStatus: "owed", paidBy: "Kalur", amount: 100 }),
+      expense({ id: "2", date: "2026-03-01", refundStatus: "owed", paidBy: "DK", amount: 500 }),
+      expense({ id: "3", date: "2026-04-01", refundStatus: "owed", paidBy: "DK", amount: 200 }),
+    ]);
+    expect(p.total).toBe(800);
+    expect(p.count).toBe(3);
+    expect(p.byPayer.map((b) => b.who)).toEqual(["DK", "Kalur"]);
+    expect(p.byPayer[0]).toMatchObject({ who: "DK", count: 2, total: 700, oldest: "2026-03-01" });
+  });
+
+  it("ignores expenses that have already been paid back", () => {
+    const p = payablesSummary([
+      expense({ id: "1", refundStatus: "refunded", paidBy: "DK", amount: 999 }),
+    ]);
+    expect(p.total).toBe(0);
+    expect(p.count).toBe(0);
+    expect(p.byPayer).toEqual([]);
+  });
+
+  it("ignores an expense that is owed but has nothing left to pay", () => {
+    // The row says owed but the money has already gone out — there is
+    // nothing left to owe, so it must not inflate the figure.
+    const p = payablesSummary([
+      expense({ id: "1", refundStatus: "owed", paidBy: "DK", amount: 500, settledAmount: 500 }),
+    ]);
+    expect(p.total).toBe(0);
+    expect(p.count).toBe(0);
+  });
+
+  it("calls an expense with nobody on it Unknown", () => {
+    const p = payablesSummary([expense({ refundStatus: "owed", paidBy: "", amount: 100 })]);
+    expect(p.byPayer.map((b) => b.who)).toEqual(["Unknown"]);
+  });
+
+  it("stays exact where float addition would drift", () => {
+    const p = payablesSummary([
+      expense({ id: "1", refundStatus: "owed", paidBy: "DK", amount: 0.1 }),
+      expense({ id: "2", refundStatus: "owed", paidBy: "DK", amount: 0.2 }),
+    ]);
+    expect(p.total).toBe(0.3);
   });
 });
 

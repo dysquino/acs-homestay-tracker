@@ -136,6 +136,8 @@ Profitability reporting and bank reconciliation therefore remain related but sep
   - Taking back an `OWNER_REIMBURSEMENT` that had settled the expense restores `OWED`, because whoever fronted the cost has not been paid back after all.
   - A part-paid expense keeps the status it has. `OWED` with money outstanding is a real claim; `REFUNDED` with money outstanding is an expense whose payout date is missing, which the outstanding-outflows worklist chases in its own words.
   - An expense paid by the bank account is never `OWED` — the bank paid it, so there is nobody to pay back.
+- What the homestay still owes is the balance left on those expenses — the amount less what has already been reimbursed — not the expenses' own amount. An expense paid back in instalments still owes only what is left of it. The Expenses page's "Still payable" figure, the dashboard's "Owed for expenses" row and the "Refund <name>" action item are all this one figure, so they cannot disagree.
+- A payable is a standing debt, not a month's figure. An expense from last month that is still unpaid is still owed today, so it is not filtered by the period a list happens to be showing.
 
 ### 4.6 Cleaning payments
 

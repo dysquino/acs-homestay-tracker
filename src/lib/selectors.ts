@@ -8,6 +8,8 @@ import {
   startOfMonth,
   today,
 } from "./dates";
+import { expenseOutstandingAmount } from "./expense-payout";
+import { sum, toAmount } from "./finance";
 import type { Booking, CleaningRecord, Expense, ISODate } from "./types";
 
 /** Bookings whose dates clash with the given range, ignoring `excludeId`. */
@@ -231,14 +233,72 @@ export function pendingGuestPayments(bookings: Booking[]): Booking[] {
     .sort((a, b) => a.checkIn.localeCompare(b.checkIn));
 }
 
+export type Payable = {
+  /** Who fronted the cost and is waiting to be paid back. */
+  who: string;
+  /** How many expenses are waiting on them. */
+  count: number;
+  /** How much is left to pay them. */
+  total: number;
+  /** The oldest one still owed — the claim that has waited longest. */
+  oldest: ISODate;
+};
+
+export type Payables = {
+  /** Everything still owed, in total. */
+  total: number;
+  /** How many expenses are waiting to be paid back. */
+  count: number;
+  /** Who is owed it, biggest first. */
+  byPayer: Payable[];
+};
+
 /**
- * Expenses someone paid for personally and hasn't been paid back for yet —
- * oldest first, so the longest-outstanding one leads.
+ * What the homestay still owes to whoever fronted an expense.
+ *
+ * The balance left, not the expense's own amount: an expense can be paid back
+ * in instalments, and only what is left is still payable. Counting the whole
+ * expense would overstate the debt by whatever has already been reimbursed —
+ * and this figure is what the dashboard's "Owed for expenses" row and the
+ * "Refund <name>" action items show, so the three have to be the same number.
+ *
+ * All time, deliberately. A payable is a standing debt rather than a month's
+ * figure — an expense from last month that is still unpaid is still owed
+ * today — so it is not filtered by the period a list happens to be showing.
  */
-export function unrefundedExpenses(expenses: Expense[]): Expense[] {
-  return expenses
-    .filter((e) => e.refundStatus === "owed")
-    .sort((a, b) => a.date.localeCompare(b.date));
+export function payablesSummary(expenses: Expense[]): Payables {
+  const perPayer = new Map<string, { count: number; amounts: number[]; oldest: ISODate }>();
+
+  for (const e of expenses) {
+    if (e.refundStatus !== "owed") continue;
+    const outstanding = expenseOutstandingAmount(e.amount, e.settledAmount);
+    // Nothing left to pay back: the row still says owed, but the money has
+    // already gone out. There is nothing to owe.
+    if (outstanding <= 0) continue;
+    const who = e.paidBy.trim() || "Unknown";
+    const entry = perPayer.get(who) ?? { count: 0, amounts: [], oldest: e.date };
+    entry.count += 1;
+    entry.amounts.push(outstanding);
+    if (e.date < entry.oldest) entry.oldest = e.date;
+    perPayer.set(who, entry);
+  }
+
+  const byPayer: Payable[] = [...perPayer.entries()]
+    .map(([who, entry]) => ({
+      who,
+      count: entry.count,
+      oldest: entry.oldest,
+      // Summed in centavos: a peso of this and a peso of that is two pesos,
+      // not 2.0000000000000004.
+      total: toAmount(sum(entry.amounts)),
+    }))
+    .sort((a, b) => b.total - a.total);
+
+  return {
+    total: toAmount(sum(byPayer.map((p) => p.total))),
+    count: byPayer.reduce((n, p) => n + p.count, 0),
+    byPayer,
+  };
 }
 
 /**
