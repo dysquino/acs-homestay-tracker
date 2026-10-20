@@ -43,7 +43,7 @@ import { usePagination } from "@/lib/use-pagination";
 import {
   EXPENSE_CATEGORIES,
   EXPENSE_REFUND_STATUSES,
-  PAID_BY,
+  PAID_BY_OPTIONS,
   labelFor,
   type Expense,
   type ExpenseCategory,
@@ -133,9 +133,9 @@ function ExpensesPageContent() {
   const filteredTotal = filtered.reduce((s, e) => s + e.amount, 0);
   const byMonth = useMemo(() => expensesByMonth(expenses), [expenses]);
   const filtersActive = category !== "all" || refund !== "all" || paidBy !== "all";
-  // The fixed roster, plus any older name still on an expense.
+  // The fixed roster (plus the bank account), plus any older name still on an expense.
   const payers = useMemo(
-    () => [...new Set([...PAID_BY.map((p) => p.value), ...expenses.map((e) => e.paidBy.trim()).filter(Boolean)])],
+    () => [...new Set([...PAID_BY_OPTIONS.map((p) => p.value), ...expenses.map((e) => e.paidBy.trim()).filter(Boolean)])],
     [expenses],
   );
 

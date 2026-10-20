@@ -80,6 +80,14 @@ describe("expenses", () => {
   it("accepts a good expense", () => {
     expect(() => validateExpense(expense)).not.toThrow();
   });
+  it("accepts an expense paid straight from the bank account", () => {
+    expect(() => validateExpense({ ...expense, paidBy: "Bank" })).not.toThrow();
+  });
+  it("rejects a bank-paid expense waiting for a refund — nobody is owed", () => {
+    expect(() =>
+      validateExpense({ ...expense, paidBy: "Bank", refundStatus: "owed" }),
+    ).toThrow();
+  });
   it.each([
     ["zero amount", { amount: 0 }],
     ["negative amount", { amount: -10 }],
