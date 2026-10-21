@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { expenseOutstandingAmount, expensePayoutSummary } from "../expense-payout";
+import {
+  expenseOutstandingAmount,
+  expensePayoutSummary,
+  expensePayoutView,
+} from "../expense-payout";
 
 describe("expenseOutstandingAmount", () => {
   it("calculates the exact balance after prior installments", () => {
@@ -72,6 +76,50 @@ describe("expensePayoutSummary", () => {
       settled: 0.2,
       outstanding: 0.1,
       fullySettled: false,
+    });
+  });
+});
+
+describe("expensePayoutView", () => {
+  it("says a bank-paid expense left the bank in full, even with nothing recorded", () => {
+    // The bank paid it, so the money went. What is missing is the date it
+    // went on — not the money.
+    expect(expensePayoutView(7_242.64, [], "Bank")).toEqual({
+      leftTheBank: 7_242.64,
+      outstanding: 7_242.64,
+      paidByBank: true,
+      recorded: false,
+      fullySettled: false,
+    });
+  });
+
+  it("still offers the amount to date for a bank-paid expense", () => {
+    // Zeroing the outstanding would make the payout form offer ₱0.
+    expect(expensePayoutView(7_242.64, [], "Bank").outstanding).toBe(7_242.64);
+  });
+
+  it("keeps an owner-fronted expense on what its settlements say", () => {
+    expect(
+      expensePayoutView(1_000, [{ amount: 400, status: "active" }], "DK"),
+    ).toEqual({
+      leftTheBank: 400,
+      outstanding: 600,
+      paidByBank: false,
+      recorded: true,
+      fullySettled: false,
+    });
+  });
+
+  it("does not count a voided payout as recorded", () => {
+    const view = expensePayoutView(1_000, [{ amount: 1_000, status: "voided" }], "Bank");
+    expect(view.recorded).toBe(false);
+    expect(view.fullySettled).toBe(false);
+  });
+
+  it("calls a bank-paid expense with a recorded payout fully settled", () => {
+    expect(expensePayoutView(1_000, [{ amount: 1_000, status: "active" }], "Bank")).toMatchObject({
+      fullySettled: true,
+      recorded: true,
     });
   });
 });

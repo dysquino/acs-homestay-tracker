@@ -138,6 +138,7 @@ Profitability reporting and bank reconciliation therefore remain related but sep
   - An expense paid by the bank account is never `OWED` — the bank paid it, so there is nobody to pay back.
 - What the homestay still owes is the balance left on those expenses — the amount less what has already been reimbursed — not the expenses' own amount. An expense paid back in instalments still owes only what is left of it. The Expenses page's "Still payable" figure, the dashboard's "Owed for expenses" row and the "Refund <name>" action item are all this one figure, so they cannot disagree.
 - A payable is a standing debt, not a month's figure. An expense from last month that is still unpaid is still owed today, so it is not filtered by the period a list happens to be showing.
+- An expense paid by the bank account has already left the account in full — the bank paid it, so nobody is owed and nothing is outstanding. What a settlement adds on top is the DATE it left, which is what reconciliation files the outflow by. Its money must never be described as still unpaid or as never having left the bank, however few payouts it has.
 
 ### 4.6 Cleaning payments
 
