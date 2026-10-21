@@ -134,7 +134,11 @@ type StoreValue = Data & {
   /** `withCleanings` also deletes cleanings a plain delete would keep. */
   deleteBooking: (id: string, options?: { withCleanings?: boolean }) => Promise<void>;
   importBookings: (items: ImportInstruction[]) => Promise<ImportResult>;
-  addExpense: (input: ExpenseInput) => Promise<Expense>;
+  addExpense: (
+    input: ExpenseInput,
+    /** When the money left. Creates the settlement in the same write. */
+    payout?: ExpensePayout,
+  ) => Promise<Expense>;
   updateExpense: (
     id: string,
     patch: Partial<ExpenseInput>,
@@ -343,12 +347,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   );
 
   const addExpense = useCallback(
-    async (input: ExpenseInput) => {
-      const expense = await createExpense(input);
+    async (input: ExpenseInput, payout?: ExpensePayout) => {
+      const expense = await createExpense(input, payout, actor);
       await refresh();
       return expense;
     },
-    [refresh],
+    [refresh, actor],
   );
 
   const updateExpense = useCallback(

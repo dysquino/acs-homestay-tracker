@@ -1,7 +1,7 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
-import { settleableAmount, toAmount } from "@/lib/finance";
+import { settleableAmount, toAmount, toCentavos } from "@/lib/finance";
 import type { Expense, ExpenseInput, SettlementType } from "@/lib/types";
 import { ValidationError, validateExpense } from "@/lib/validation";
 
@@ -24,11 +24,42 @@ export async function listExpenses(): Promise<Expense[]> {
 
 export async function createExpense(
   input: ExpenseInput,
+  payout?: ExpensePayout,
+  actor = "Unknown",
 ): Promise<Expense> {
   await requireSiteAccess();
   validateExpense(input);
-  // expenseToDb never writes cleaningId, so a client can't forge the link.
-  const row = await prisma.expense.create({ data: expenseToDb(input) });
+  // The expense and the payout that dates the money leaving the account are
+  // written together. Saved apart, a failure between the two leaves an expense
+  // that reads as paid out with no settlement — the state the month's outflow
+  // pool can't see, so the month would close short with nothing to show for it.
+  const row = await prisma.$transaction(async (tx) => {
+    const created = await tx.expense.create({ data: expenseToDb(input) });
+    if (!payout) return created;
+
+    await tx.expenseSettlement.create({
+      data: expenseSettlementToDb({
+        expenseId: created.id,
+        // A brand-new expense has nothing settled against it, so the payout
+        // covers the whole amount.
+        amount: toAmount(toCentavos(input.amount)),
+        paidDate: payout.paidDate,
+        settlementType: payout.settlementType,
+        reimbursedTo: payout.reimbursedTo ?? "",
+        reference: payout.reference ?? "",
+        notes: payout.notes ?? "",
+        createdBy: actor,
+      }),
+    });
+
+    // The payout may have been the thing that paid the expense back in full,
+    // in which case nobody is owed any more.
+    await syncExpenseRefundStatus(tx, created.id, {
+      before: [],
+      settlementType: payout.settlementType,
+    });
+    return created;
+  });
   return expenseFromDb(row);
 }
 
