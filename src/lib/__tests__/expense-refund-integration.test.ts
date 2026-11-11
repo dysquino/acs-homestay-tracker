@@ -6,7 +6,7 @@ import {
   updateExpenseSettlement,
   voidExpenseSettlement,
 } from "../data/expense-settlements";
-import { updateExpense } from "../data/expenses";
+import { createExpense as createExpenseAction, updateExpense } from "../data/expenses";
 
 /**
  * Integration tests for the refund status that follows a payout.
@@ -191,5 +191,51 @@ describe.skipIf(!HAS_DATABASE)("expense refund status follows the payout (integr
     await createExpenseSettlement({ expenseId: expense.id, ...settlementInput(1000) });
     await updateExpense(expense.id, { amount: 1500 }, undefined, "INTEGRATION");
     expect(await refundStatusOf(expense.id)).toBe("REFUNDED");
+  });
+
+  it("records the payout date with a new bank-paid expense, in the same write", async () => {
+    // The whole point of asking for the date on the form: the expense and the
+    // record of the money leaving the account are written together, so the
+    // expense never sits in the worklist chasing a date it should have had.
+    const created = await createExpenseAction(
+      {
+        date: "2099-01-05",
+        category: "utility",
+        description: MARKER,
+        amount: 500,
+        paidBy: "Bank",
+        receiptUrl: "",
+        createdBy: "INTEGRATION",
+        refundStatus: "refunded",
+      },
+      { paidDate: "2099-01-06", settlementType: "direct_vendor_payment" },
+      "INTEGRATION",
+    );
+
+    const settlements = await makeClient().expenseSettlement.findMany({
+      where: { expenseId: created.id },
+    });
+    expect(settlements).toHaveLength(1);
+    expect(settlements[0].paidDate).toEqual(new Date("2099-01-06T00:00:00.000Z"));
+    expect(settlements[0].settlementType).toBe("DIRECT_VENDOR_PAYMENT");
+    expect(Number(settlements[0].amount)).toBe(500);
+    expect(await refundStatusOf(created.id)).toBe("REFUNDED");
+  });
+
+  it("creates a new expense with no settlement when no payout date is given", async () => {
+    const created = await createExpenseAction({
+      date: "2099-01-05",
+      category: "utility",
+      description: MARKER,
+      amount: 500,
+      paidBy: "Bank",
+      receiptUrl: "",
+      createdBy: "INTEGRATION",
+      refundStatus: "refunded",
+    });
+    const settlements = await makeClient().expenseSettlement.findMany({
+      where: { expenseId: created.id },
+    });
+    expect(settlements).toHaveLength(0);
   });
 });

@@ -13,13 +13,14 @@ import {
   updateExpenseSettlement,
   voidExpenseSettlement,
 } from "@/lib/data/expense-settlements";
-import { expensePayoutSummary } from "@/lib/expense-payout";
+import { expensePayoutView } from "@/lib/expense-payout";
 import { toCentavos } from "@/lib/finance";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { useSubmit } from "@/lib/use-submit";
 import {
   PAID_BY,
   SETTLEMENT_TYPES,
+  isBankPayer,
   labelFor,
   type Expense,
   type ExpenseSettlement,
@@ -82,7 +83,10 @@ export function ExpenseSettlements({
     }
   }
 
-  const payout = settlements === null ? null : expensePayoutSummary(expense.amount, settlements);
+  const payout =
+    settlements === null
+      ? null
+      : expensePayoutView(expense.amount, settlements, expense.paidBy);
 
   return (
     <div className="mt-3 rounded-lg border border-slate-200 bg-white p-3">
@@ -94,20 +98,34 @@ export function ExpenseSettlements({
           disabled={payout === null || payout.fullySettled}
           onClick={() => setFormOpen(true)}
         >
-          {payout?.fullySettled ? "Paid in full" : "Record payout"}
+          {payout?.fullySettled
+            ? "Paid in full"
+            : payout?.paidByBank
+              ? "Record payout date"
+              : "Record payout"}
         </Button>
       </div>
 
       <p className="mt-1 text-xs text-slate-600">
         {payout === null
           ? "Loading payout total…"
-          : `${formatCurrency(payout.settled)} of ${formatCurrency(expense.amount)} left the bank${
-              payout.outstanding > 0
-                ? ` · ${formatCurrency(payout.outstanding)} not yet paid out`
-                : " · fully paid"
-            }`}
+          : payout.paidByBank
+            ? // The bank paid this, so the money left in full. What's missing
+              // is the date it left on, which is what reconciliation files the
+              // outflow by — saying "₱0 left the bank" here would be the
+              // opposite of the truth.
+              `${formatCurrency(payout.leftTheBank)} left the bank${
+                payout.recorded
+                  ? " · fully paid"
+                  : " · the date it went out isn't recorded yet"
+              }`
+            : `${formatCurrency(payout.leftTheBank)} of ${formatCurrency(expense.amount)} left the bank${
+                payout.outstanding > 0
+                  ? ` · ${formatCurrency(payout.outstanding)} not yet paid out`
+                  : " · fully paid"
+              }`}
       </p>
-      {expense.refundStatus === "owed" && payout?.settled === 0 ? (
+      {expense.refundStatus === "owed" && payout?.leftTheBank === 0 ? (
         <p className="mt-1 text-xs text-amber-700">
           Marked as owed to whoever fronted this — record the reimbursement when
           you pay them back.
@@ -124,8 +142,9 @@ export function ExpenseSettlements({
         <p className="mt-2 text-xs text-slate-500">Loading…</p>
       ) : settlements.length === 0 ? (
         <p className="mt-2 text-xs text-slate-500">
-          Nothing recorded yet. Only add a payout here when money actually leaves
-          the homestay account.
+          {payout?.paidByBank
+            ? "Paid by the bank account, so the money left the account in full. Record the date it went out so it files in the right month."
+            : "Nothing recorded yet. Only add a payout here when money actually leaves the homestay account."}
         </p>
       ) : (
         <ul className="mt-2 divide-y divide-slate-100">
@@ -276,6 +295,10 @@ function SettlementFields({
     setForm((f) => ({ ...f, [key]: value }));
 
   const isReimbursement = form.settlementType === "owner_reimbursement";
+  // A bank-paid expense was paid by the account itself: the money left in
+  // full, and what this form records is the date it left on — not an
+  // installment of something still to pay.
+  const paidByBank = isBankPayer(expense.paidBy);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -332,10 +355,14 @@ function SettlementFields({
     <form id={FORM_ID} onSubmit={onSubmit} className="space-y-4">
       <div className="grid gap-4 sm:grid-cols-2">
         <Field
-          label="Installment amount"
+          label={paidByBank ? "Amount" : "Installment amount"}
           required
           error={errors.amount}
-          hint={`${formatCurrency(outstanding)} remaining`}
+          hint={
+            paidByBank
+              ? "what left the account"
+              : `${formatCurrency(outstanding)} remaining`
+          }
         >
           {(id) => (
             <CurrencyInput

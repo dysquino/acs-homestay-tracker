@@ -17,46 +17,30 @@ import { blockAsBooking } from "@/lib/airbnb-ical";
 import { dateBlockAsBooking } from "@/lib/date-blocks";
 import { findConflicts } from "@/lib/selectors";
 import { useStore } from "@/lib/store";
-import type { Booking, BookingRequest } from "@/lib/types";
+import type { BookingRequest } from "@/lib/types";
 
 const sentAt = new Intl.DateTimeFormat("en-PH", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 
 /**
- * Guests' requests from the booking link, waiting for an owner. Approving
- * one creates a Direct booking (payment pending) through the same path as
- * adding one by hand — `onApproved` then opens it so the payout can be
- * filled in. Hidden when there's nothing waiting.
+ * Guests' requests from the booking link, waiting for an owner. Approving one
+ * opens the approval modal, which sets what the stay is worth and records the
+ * deposit in the same step. Hidden when there's nothing waiting.
  */
-export function BookingRequests({ onApproved }: { onApproved: (booking: Booking) => void }) {
-  const { bookingRequests, bookings, airbnbBlocks, dateBlocks, approveRequest, declineRequest, resync } = useStore();
+export function BookingRequests({ onApprove }: { onApprove: (request: BookingRequest) => void }) {
+  const { bookingRequests, bookings, airbnbBlocks, dateBlocks, declineRequest, resync } = useStore();
   // Requests become direct bookings, so unimported Airbnb reservations count too.
   const taken = [...bookings, ...airbnbBlocks.map(blockAsBooking), ...dateBlocks.map(dateBlockAsBooking)];
-  const [busy, setBusy] = useState<string | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [toDecline, setToDecline] = useState<BookingRequest | null>(null);
 
   if (bookingRequests.length === 0) return null;
-
-  async function approve(r: BookingRequest) {
-    setBusy(r.id);
-    setErrors((e) => ({ ...e, [r.id]: "" }));
-    try {
-      const result = await approveRequest(r.id);
-      if (result.ok && result.booking) onApproved(result.booking);
-      else if (!result.ok) setErrors((e) => ({ ...e, [r.id]: result.error }));
-    } catch {
-      setErrors((e) => ({ ...e, [r.id]: "Couldn't approve this request. Please try again." }));
-    } finally {
-      setBusy(null);
-    }
-  }
 
   return (
     <Card className="mb-5 ring-2 ring-brand-200">
       <CardHeader
         icon={CalendarIcon}
         title={`Booking requests (${bookingRequests.length})`}
-        description="Sent by guests through your booking link. Approving adds a Direct booking — then fill in the payout."
+        description="Sent by guests through your booking link. Approving asks what the stay is worth and whether the payment has landed."
       />
       <ul className="divide-y divide-slate-100">
         {bookingRequests.map((r) => {
@@ -95,15 +79,13 @@ export function BookingRequests({ onApproved }: { onApproved: (booking: Booking)
                   <p className="mt-1.5 text-xs text-slate-400">Sent {sentAt.format(new Date(r.createdAt))}</p>
                 </div>
                 <div className="flex shrink-0 gap-2">
-                  <Button onClick={() => setToDecline(r)} disabled={busy === r.id}>
-                    Decline
-                  </Button>
+                  <Button onClick={() => setToDecline(r)}>Decline</Button>
                   <Button
                     variant="primary"
-                    onClick={() => approve(r)}
-                    disabled={busy === r.id || clashes.length > 0}
+                    onClick={() => onApprove(r)}
+                    disabled={clashes.length > 0}
                   >
-                    {busy === r.id ? "Approving…" : "Approve"}
+                    Approve
                   </Button>
                 </div>
               </div>

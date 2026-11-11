@@ -16,6 +16,8 @@ const booking: BookingInput = {
   checkOut: "2026-03-04",
   guestsCount: 2,
   totalPayout: 3000,
+  nightlyRate: null,
+  cleaningFee: null,
   platformFee: 100,
   paymentStatus: "pending",
   contactInfo: "",

@@ -12,7 +12,14 @@ const SETTINGS_ID = "default";
 const MAX_SHORT_TEXT = 200;
 const MAX_TEMPLATE_BODY = 4000;
 const MAX_TEMPLATES = 20;
-const MESSAGE_TEMPLATES_VERSION = 6;
+const MESSAGE_TEMPLATES_VERSION = 7;
+
+// Bumping MESSAGE_TEMPLATES_VERSION re-seeds the templates below into the
+// database. The body of every template listed here is rewritten on each bump,
+// so the standard copy the guests receive stays in sync with this file (this
+// is what carries the parking rates). Every other template keeps whatever body
+// the owner edited in the app.
+const ALWAYS_REFRESHED_TEMPLATE_IDS = ["arrival-default", "parking-default"];
 
 const DEFAULT_TEMPLATES = [
   {
@@ -47,8 +54,11 @@ Check-out: {{check_out_time}}
 (Early / late requests subject to availability)
 ⸻
 Parking
-Overnight parking is available at the JTower Residences parking area or at nearby SM JMall, approximately a one-minute walk from the property.
-Both locations charge an overnight parking fee of ₱200. Spaces are subject to availability.
+Parking is available at the JTower Residences parking area, right at the condo.
+• Cars: ₱50 per hour, with a maximum of ₱200 per day
+• Motorcycles: ₱30 per hour, with a maximum of ₱100 per day
+Alternatively, you may also park at SM J Mall, which is just across the condo, approximately a 1-minute walk away. 😊
+Spaces are subject to availability.
 ⸻
 Wi-Fi
 Wi-Fi access is complimentary for your stay.
@@ -152,11 +162,13 @@ If anything was damaged, lost, or needs attention, kindly let us know before che
     sortOrder: 3,
     body: `Hi {{guest_name}},
 
-For your convenience, overnight parking is available at either of these locations:
-• JTower Residences parking area
-• SM JMall, approximately a one-minute walk from the property
+For your convenience, parking is available at the JTower Residences parking area, right at the condo:
+• Cars: ₱50 per hour, with a maximum of ₱200 per day
+• Motorcycles: ₱30 per hour, with a maximum of ₱100 per day
 
-The overnight parking fee is ₱200 at either location. Spaces are subject to availability, so we recommend allowing a little extra time when you arrive.
+Alternatively, you may also park at SM J Mall, which is just across the condo, approximately a 1-minute walk away. 😊
+
+Spaces are subject to availability, so we recommend allowing a little extra time when you arrive.
 
 If you would like directions or need any assistance with parking, please feel free to message us. We’re happy to help.
 
@@ -198,7 +210,7 @@ export async function listStayPreparation(): Promise<StayPreparationData> {
             create: template,
             update: previousTemplateVersion < 3
               ? { name: template.name, body: template.body, sortOrder: template.sortOrder }
-              : previousTemplateVersion < 5 || template.id === "arrival-default"
+              : previousTemplateVersion < 5 || ALWAYS_REFRESHED_TEMPLATE_IDS.includes(template.id)
                 ? { body: template.body, sortOrder: template.sortOrder }
                 : { sortOrder: template.sortOrder },
           }),

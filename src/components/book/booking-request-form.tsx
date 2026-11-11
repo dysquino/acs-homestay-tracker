@@ -4,7 +4,8 @@ import { useMemo, useState, useTransition } from "react";
 
 import { IdPhotoUpload } from "@/components/payment/id-photo-upload";
 import { PaymentInfo } from "@/components/payment/payment-info";
-import { PriceBreakdown, type PricingConfig } from "@/components/payment/price-breakdown";
+import { PriceBreakdown } from "@/components/payment/price-breakdown";
+import type { PricingConfig } from "@/lib/pricing";
 import { ScreenshotUpload } from "@/components/payment/screenshot-upload";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Textarea } from "@/components/ui/field";

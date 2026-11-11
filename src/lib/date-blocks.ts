@@ -21,6 +21,9 @@ export function dateBlockAsBooking(b: DateBlock): Booking {
     checkOut: b.checkOut,
     guestsCount: 0,
     totalPayout: 0,
+    // A blocked date isn't a booked stay — it has no rate of its own.
+    nightlyRate: null,
+    cleaningFee: null,
     platformFee: 0,
     paymentStatus: "paid",
     contactInfo: "",

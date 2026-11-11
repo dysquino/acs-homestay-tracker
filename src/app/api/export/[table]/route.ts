@@ -50,8 +50,8 @@ async function buildCsv(table: Table): Promise<string> {
     return toCsv(
       [
         "Guest Name", "Source", "Check-in", "Check-out", "Nights", "Guests",
-        "Total Payout", "Platform Fee (ref only)", "Payment Status",
-        "Contact Info", "Notes", "Confirmation Code",
+        "Total Payout", "Nightly Rate", "Cleaning Fee", "Platform Fee (ref only)",
+        "Payment Status", "Contact Info", "Notes", "Confirmation Code",
       ],
       bookings.map((b) => [
         b.guestName,
@@ -61,6 +61,11 @@ async function buildCsv(table: Table): Promise<string> {
         nightCount(b.checkIn, b.checkOut),
         b.guestsCount,
         b.totalPayout,
+        // The rates this booking was agreed at, when it carries its own.
+        // Empty for a booking that has none — and for an Airbnb stay, where
+        // the owner doesn't set the rate.
+        b.nightlyRate ?? "",
+        b.cleaningFee ?? "",
         b.platformFee,
         labelFor(PAYMENT_STATUSES, b.paymentStatus),
         b.contactInfo,

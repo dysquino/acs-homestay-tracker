@@ -15,6 +15,8 @@ const booking: Booking = {
   checkOut: "2026-10-23",
   guestsCount: 2,
   totalPayout: 5000,
+  nightlyRate: null,
+  cleaningFee: null,
   platformFee: 0,
   paymentStatus: "paid",
   contactInfo: "",

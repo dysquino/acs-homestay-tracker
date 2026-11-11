@@ -104,6 +104,19 @@ model Booking {
   checkOut              DateTime
   guestsCount           Int
   totalPayout           Decimal             @db.Decimal(10, 2)
+  /// The per-night rate this booking was agreed at, when it has one of its
+  /// own. Null = the booking carries no rate of its own (a row created
+  /// before per-booking rates existed), and the owner's standard rate is
+  /// shown as a suggestion instead.
+  ///
+  /// Set whenever the owner approves or edits a direct stay, so the rate
+  /// card of a booked stay stays true even after the standard rate in
+  /// Payment Settings changes. Airbnb bookings don't use it: there the
+  /// owner doesn't set the rate, Airbnb does.
+  nightlyRate           Decimal?            @db.Decimal(10, 2)
+  /// The cleaning fee this booking was agreed at, on the same terms as
+  /// `nightlyRate`. Null = no fee of its own.
+  cleaningFee           Decimal?            @db.Decimal(10, 2)
   platformFee           Decimal             @default(0) @db.Decimal(10, 2)
   paymentStatus         PaymentStatus
   contactInfo           String              @default("")

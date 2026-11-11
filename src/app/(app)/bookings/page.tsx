@@ -15,6 +15,7 @@ import {
 import { BookingForm } from "@/components/bookings/booking-form";
 import { AirbnbSyncStatus } from "@/components/bookings/airbnb-sync";
 import { BookingRequests, ShareBookingLink } from "@/components/bookings/booking-requests";
+import { ApproveBookingModal } from "@/components/bookings/approve-booking-modal";
 import { Card } from "@/components/ui/card";
 import { Field, Select } from "@/components/ui/field";
 import { FilterBar } from "@/components/ui/filter-bar";
@@ -33,6 +34,7 @@ import {
   type DateBlock,
   PAYMENT_STATUSES,
   type Booking,
+  type BookingRequest,
   type BookingSource,
   type PaymentStatus,
 } from "@/lib/types";
@@ -62,6 +64,7 @@ function BookingsPageContent() {
   const [formOpen, setFormOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(() => params.get("import") === "1");
   const [editing, setEditing] = useState<Booking | null>(null);
+  const [approving, setApproving] = useState<BookingRequest | null>(null);
   const [blockOpen, setBlockOpen] = useState(false);
   const [viewingBlock, setViewingBlock] = useState<DateBlock | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Booking | null>(null);
@@ -131,7 +134,7 @@ function BookingsPageContent() {
 
       <AirbnbSyncStatus />
 
-      <BookingRequests onApproved={openEdit} />
+      <BookingRequests onApprove={setApproving} />
 
       <BlockedDatesList />
 
@@ -223,6 +226,17 @@ function BookingsPageContent() {
         booking={editing}
         onClose={() => setFormOpen(false)}
       />
+
+      {/* Mounted per request so its pre-filled amounts always start from a
+          clean copy of that request's numbers. */}
+      {approving ? (
+        <ApproveBookingModal
+          key={approving.id}
+          request={approving}
+          onClose={() => setApproving(null)}
+          onApproved={() => setApproving(null)}
+        />
+      ) : null}
 
       <ConfirmDialog
         open={pendingDelete !== null}

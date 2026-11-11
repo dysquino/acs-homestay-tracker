@@ -196,6 +196,8 @@ export function bookingFromDb(row: DbBooking): Booking {
     checkOut: dateToISO(row.checkOut),
     guestsCount: row.guestsCount,
     totalPayout: decimalToNumber(row.totalPayout),
+    nightlyRate: row.nightlyRate === null ? null : decimalToNumber(row.nightlyRate),
+    cleaningFee: row.cleaningFee === null ? null : decimalToNumber(row.cleaningFee),
     platformFee: decimalToNumber(row.platformFee),
     paymentStatus: PAYMENT_STATUS_FROM_DB[row.paymentStatus],
     contactInfo: row.contactInfo,
@@ -221,6 +223,8 @@ export function bookingToDb(input: BookingInput) {
     checkOut: isoToDate(input.checkOut),
     guestsCount: input.guestsCount,
     totalPayout: input.totalPayout,
+    nightlyRate: input.nightlyRate,
+    cleaningFee: input.cleaningFee,
     platformFee: input.platformFee,
     paymentStatus: PAYMENT_STATUS_TO_DB[input.paymentStatus],
     contactInfo: input.contactInfo,
@@ -237,6 +241,8 @@ export function bookingPatchToDb(patch: Partial<BookingInput>) {
   if (patch.checkOut !== undefined) out.checkOut = isoToDate(patch.checkOut);
   if (patch.guestsCount !== undefined) out.guestsCount = patch.guestsCount;
   if (patch.totalPayout !== undefined) out.totalPayout = patch.totalPayout;
+  if (patch.nightlyRate !== undefined) out.nightlyRate = patch.nightlyRate;
+  if (patch.cleaningFee !== undefined) out.cleaningFee = patch.cleaningFee;
   if (patch.platformFee !== undefined) out.platformFee = patch.platformFee;
   if (patch.paymentStatus !== undefined)
     out.paymentStatus = PAYMENT_STATUS_TO_DB[patch.paymentStatus];

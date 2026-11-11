@@ -98,6 +98,7 @@ Profitability reporting and bank reconciliation therefore remain related but sep
 ### 4.2 Booking income
 
 - A booking's `totalPayout` is the expected amount the homestay ultimately receives.
+- A booking may also carry its own `nightlyRate` and `cleaningFee` — the breakdown behind that amount. They document how the price was made up and never change what is expected; the expected amount is `totalPayout` alone.
 - Airbnb platform fees must not be subtracted again when `totalPayout` already represents the net payout.
 - Every actual receipt must be represented by a booking-payment record.
 - A booking can have zero, one, or many booking-payment records.
@@ -138,6 +139,8 @@ Profitability reporting and bank reconciliation therefore remain related but sep
   - An expense paid by the bank account is never `OWED` — the bank paid it, so there is nobody to pay back.
 - What the homestay still owes is the balance left on those expenses — the amount less what has already been reimbursed — not the expenses' own amount. An expense paid back in instalments still owes only what is left of it. The Expenses page's "Still payable" figure, the dashboard's "Owed for expenses" row and the "Refund <name>" action item are all this one figure, so they cannot disagree.
 - A payable is a standing debt, not a month's figure. An expense from last month that is still unpaid is still owed today, so it is not filtered by the period a list happens to be showing.
+- An expense paid by the bank account has already left the account in full — the bank paid it, so nobody is owed and nothing is outstanding. What a settlement adds on top is the DATE it left, which is what reconciliation files the outflow by. Its money must never be described as still unpaid or as never having left the bank, however few payouts it has.
+- A bank-paid expense is asked for that date as it is written, not chased afterwards: the form offers a payout date pre-filled with the expense's own date, and the expense and its settlement are written together. The pre-fill follows the expense's date until the owner overrides it, and the owner can always change it — a date the app settled on its own would be invisible once it disagreed with the month the money actually left, and a wrong month reconciles against itself perfectly. Nothing historical is backfilled this way (§12.3).
 
 ### 4.6 Cleaning payments
 
@@ -994,6 +997,8 @@ Status mapping:
 - `OVERPAID` — received exceeds `totalPayout`. The homestay must investigate and either refund the excess (an `ExpenseSettlement` of type `GUEST_REFUND`) or record an `Adjustment` explaining the overage; reconciliation surfaces `OVERPAID` on the booking card until either path is taken.
 
 The cached column exists only to avoid aggregate queries on every booking list render. Reconciliation must always recompute the value from authoritative payment rows and must surface the cache versus derived value in any debug view. The `PaymentStatus` enum gains the `OVERPAID` value alongside the existing `PAID | PENDING | PARTIAL`.
+
+Approvals follow the same rule: when an owner confirms "yes, the money is in the bank" while approving a guest's request, that answer becomes a `BookingPayment` row rather than a hand-set `paymentStatus`. This write is deliberately **not** gated by the reconciliation feature toggle — whether the guest paid is core booking data, and the toggle governs the matching workspace, not what may be recorded against a booking. The owner's upload, or the guest's own payment screenshot when there is one, is stored as the receipt's proof.
 
 ### 12.2 Existing paid bookings migration
 

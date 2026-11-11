@@ -15,9 +15,10 @@ import type { AirbnbReservation } from "./airbnb-ical";
 import { listAirbnbBlocks } from "./data/airbnb";
 import type { AirbnbSyncStatus } from "./data/airbnb-calendar";
 import {
-  approveBookingRequest,
+  approveBookingRequestWithPayment,
   declineBookingRequest,
   listBookingRequests,
+  type ApproveWithPaymentInput,
   type DecideResult,
 } from "./data/booking-requests";
 import {
@@ -53,8 +54,10 @@ import {
   type ImportResult,
 } from "./data/import";
 import { getReconciliationStatus } from "./data/reconciliation-status";
+import { getPricingConfig } from "./data/payment-config";
 import { getRoomStatus, setRoomStatus as setRoomStatusAction } from "./data/room-status";
 import { useIdentity } from "./identity";
+import type { RateConfig } from "./pricing";
 import type {
   Booking,
   BookingInput,
@@ -112,6 +115,13 @@ type Data = {
    * rather than being shown and then rejecting the write.
    */
   reconciliationEnabled: boolean;
+  /**
+   * The owner's rates (per-night, cleaning fees, long-stay threshold). Used to
+   * compute what a stay is worth — the approval modal pre-fills the total with
+   * it, and the edit-booking modal offers it as a starting point. The owner's
+   * own number always wins; this is only the suggestion.
+   */
+  pricing: RateConfig;
   /** The physical room's readiness — shown as a colour-coded pill on the dashboard. */
   roomStatus: RoomStatus;
 };
@@ -134,7 +144,11 @@ type StoreValue = Data & {
   /** `withCleanings` also deletes cleanings a plain delete would keep. */
   deleteBooking: (id: string, options?: { withCleanings?: boolean }) => Promise<void>;
   importBookings: (items: ImportInstruction[]) => Promise<ImportResult>;
-  addExpense: (input: ExpenseInput) => Promise<Expense>;
+  addExpense: (
+    input: ExpenseInput,
+    /** When the money left. Creates the settlement in the same write. */
+    payout?: ExpensePayout,
+  ) => Promise<Expense>;
   updateExpense: (
     id: string,
     patch: Partial<ExpenseInput>,
@@ -155,7 +169,10 @@ type StoreValue = Data & {
   ) => Promise<void>;
   deleteCleaning: (id: string) => Promise<void>;
   /** Resolves with the created booking, or an error to show (e.g. dates taken). */
-  approveRequest: (id: string) => Promise<DecideResult>;
+  approveRequestWithPayment: (
+    id: string,
+    input: ApproveWithPaymentInput,
+  ) => Promise<DecideResult>;
   declineRequest: (id: string) => Promise<DecideResult>;
   /** Resolves with the block, or an error to show (e.g. a booking is on those dates). */
   addDateBlock: (input: DateBlockInput) => Promise<BlockResult>;
@@ -181,6 +198,7 @@ const EMPTY: Data = {
   latestAirbnbImport: null,
   dateBlocks: [],
   reconciliationEnabled: false,
+  pricing: { nightlyRate: 0, cleaningFee: 0, cleaningFeeLong: 0, longStayThresholdNights: 5 },
   roomStatus: "clean",
 };
 
@@ -211,13 +229,23 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         listAirbnbBlocks(),
         listDateBlocks(),
         getLatestAirbnbImport(),
+        getPricingConfig(),
       ]);
     } catch (error) {
       if (request !== latest.current) return false;
       throw error;
     }
     if (request !== latest.current) return false;
-    const [bookings, expenses, cleaning, bookingRequests, airbnb, dateBlocks, latestAirbnbImport] = lists;
+    const [
+      bookings,
+      expenses,
+      cleaning,
+      bookingRequests,
+      airbnb,
+      dateBlocks,
+      latestAirbnbImport,
+      pricing,
+    ] = lists;
     // Read separately from the lists above: if this call were to fail the whole
     // load would fail, and losing the entire app over a toggle read would be a
     // poor trade. Fall back to "off", which hides the panels — the safe
@@ -246,6 +274,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       latestAirbnbImport,
       dateBlocks,
       reconciliationEnabled,
+      pricing,
       roomStatus,
     });
     return true;
@@ -343,12 +372,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   );
 
   const addExpense = useCallback(
-    async (input: ExpenseInput) => {
-      const expense = await createExpense(input);
+    async (input: ExpenseInput, payout?: ExpensePayout) => {
+      const expense = await createExpense(input, payout, actor);
       await refresh();
       return expense;
     },
-    [refresh],
+    [refresh, actor],
   );
 
   const updateExpense = useCallback(
@@ -392,9 +421,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [refresh],
   );
 
-  const approveRequest = useCallback(
-    async (id: string) => {
-      const result = await approveBookingRequest(id, actor);
+  const approveRequestWithPayment = useCallback(
+    async (id: string, input: ApproveWithPaymentInput) => {
+      const result = await approveBookingRequestWithPayment(id, actor, input);
       await refresh();
       return result;
     },
@@ -453,7 +482,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       addCleaning,
       updateCleaning,
       deleteCleaning,
-      approveRequest,
+      approveRequestWithPayment,
       declineRequest,
       addDateBlock,
       deleteDateBlock,
@@ -476,7 +505,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       addCleaning,
       updateCleaning,
       deleteCleaning,
-      approveRequest,
+      approveRequestWithPayment,
       declineRequest,
       addDateBlock,
       deleteDateBlock,

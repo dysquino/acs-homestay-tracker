@@ -17,7 +17,9 @@ import { PaymentProof } from "@/components/bookings/payment-proof";
 import { BookingPayments } from "@/components/bookings/booking-payments";
 import { useIdentity } from "@/lib/identity";
 import { addDays, nightCount, today } from "@/lib/dates";
-import { formatDateRange } from "@/lib/format";
+import { formatCurrency, formatDateRange } from "@/lib/format";
+import { calculateBookingPrice, calculateStayPrice } from "@/lib/pricing";
+import { RateCardBreakdown } from "@/components/bookings/rate-card";
 import { blockAsBooking, isAirbnbBlock } from "@/lib/airbnb-ical";
 import { dateBlockAsBooking } from "@/lib/date-blocks";
 import { findConflicts } from "@/lib/selectors";
@@ -36,6 +38,13 @@ type FormState = {
   checkOut: string;
   guestsCount: string;
   totalPayout: string;
+  /**
+   * The per-booking rates, as the owner typed them. `null` means "not
+   * touched" — the booking keeps whatever it already had, so editing a
+   * booking for an unrelated reason never pins a rate onto it.
+   */
+  nightlyRate: string | null;
+  cleaningFee: string | null;
   notes: string;
 };
 
@@ -48,6 +57,8 @@ function initialState(booking: Booking | null): FormState {
       checkOut: addDays(today(), 2),
       guestsCount: "2",
       totalPayout: "",
+      nightlyRate: null,
+      cleaningFee: null,
       notes: "",
     };
   }
@@ -58,6 +69,8 @@ function initialState(booking: Booking | null): FormState {
     checkOut: booking.checkOut,
     guestsCount: String(booking.guestsCount),
     totalPayout: String(booking.totalPayout),
+    nightlyRate: null,
+    cleaningFee: null,
     notes: booking.notes,
   };
 }
@@ -133,7 +146,7 @@ function BookingFields({
   submit: Submit;
   onBlockedChange: (blocked: boolean) => void;
 }) {
-  const { bookings, airbnbBlocks, dateBlocks, addBooking, updateBooking, resync } = useStore();
+  const { bookings, airbnbBlocks, dateBlocks, addBooking, updateBooking, resync, pricing } = useStore();
   const { user } = useIdentity();
   const [form, setForm] = useState<FormState>(() => initialState(booking));
   const [errors, setErrors] = useState<Partial<Record<keyof FormState, string>>>(
@@ -179,6 +192,34 @@ function BookingFields({
   );
 
   const nights = nightCount(form.checkIn, form.checkOut);
+  // What this stay comes to at the owner's standard rates — where the rate
+  // fields start. Not shown for Airbnb bookings: there the owner doesn't set
+  // the rate, Airbnb does, and the payout is what Airbnb transfers.
+  const standardRate = useMemo(() => calculateStayPrice(pricing, nights), [pricing, nights]);
+  const showRates = form.source === "direct";
+
+  // The rates as they stand: the booking's own where it has them, the
+  // standard where it doesn't, and whatever the owner typed on top.
+  const nightlyRate =
+    form.nightlyRate ?? String(booking?.nightlyRate ?? standardRate.nightlyRate);
+  const cleaningFee =
+    form.cleaningFee ?? String(booking?.cleaningFee ?? standardRate.cleaningFee);
+  const rateCard = useMemo(
+    () =>
+      calculateBookingPrice(
+        pricing,
+        { nightlyRate: Number(nightlyRate) || 0, cleaningFee: Number(cleaningFee) || 0 },
+        nights,
+      ),
+    [pricing, nightlyRate, cleaningFee, nights],
+  );
+  // The booking's payout is the authoritative amount; the rates are the
+  // breakdown behind it. They can differ — a negotiated stay, say — and the
+  // form says so rather than quietly re-pricing the stay. An empty payout
+  // says nothing yet, so there's nothing to disagree with.
+  const totalPayout = Number(form.totalPayout) || 0;
+  const cardDiffers =
+    showRates && form.totalPayout !== "" && rateCard.total !== totalPayout;
 
   function validate(): boolean {
     const next: Partial<Record<keyof FormState, string>> = {};
@@ -191,6 +232,10 @@ function BookingFields({
       next.guestsCount = "Enter a whole number of at least 1.";
     if (form.totalPayout !== "" && Number(form.totalPayout) < 0)
       next.totalPayout = "Cannot be negative.";
+    if (form.nightlyRate !== null && Number(form.nightlyRate) < 0)
+      next.nightlyRate = "Cannot be negative.";
+    if (form.cleaningFee !== null && Number(form.cleaningFee) < 0)
+      next.cleaningFee = "Cannot be negative.";
     setErrors(next);
     return Object.keys(next).length === 0;
   }
@@ -206,6 +251,13 @@ function BookingFields({
       checkOut: form.checkOut,
       guestsCount: Number(form.guestsCount) || 1,
       totalPayout: Number(form.totalPayout) || 0,
+      // The per-booking rates. An untouched field keeps whatever the booking
+      // already had — including "no rate of its own", so editing a booking
+      // for an unrelated reason never pins a rate onto it.
+      nightlyRate:
+        form.nightlyRate === null ? (booking?.nightlyRate ?? null) : Number(form.nightlyRate) || 0,
+      cleaningFee:
+        form.cleaningFee === null ? (booking?.cleaningFee ?? null) : Number(form.cleaningFee) || 0,
       // No longer on the form; an edit keeps whatever the booking already has
       // (e.g. the service fee an Airbnb import recorded).
       platformFee: booking?.platformFee ?? 0,
@@ -343,6 +395,61 @@ function BookingFields({
           )}
         </Field>
 
+        {/* The rate card: the per-night rate and the cleaning fee for this
+            particular stay, each editable. Only for direct bookings — on an
+            Airbnb stay the owner doesn't set the rate, Airbnb does. */}
+        {showRates ? (
+          <div className="sm:col-span-2 space-y-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <p className="text-xs font-medium text-slate-700">This stay&apos;s rates</p>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                className="px-2 py-1 text-xs"
+                onClick={() => {
+                  set("nightlyRate", String(standardRate.nightlyRate));
+                  set("cleaningFee", String(standardRate.cleaningFee));
+                }}
+              >
+                Use your standard rate
+              </Button>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label="Nightly rate" error={errors.nightlyRate} hint="Per night for this stay">
+                {(id) => (
+                  <CurrencyInput
+                    id={id}
+                    value={nightlyRate}
+                    onChange={(e) => set("nightlyRate", e.target.value)}
+                    placeholder="0.00"
+                  />
+                )}
+              </Field>
+              <Field label="Cleaning fee" error={errors.cleaningFee} hint="One-off fee for this stay">
+                {(id) => (
+                  <CurrencyInput
+                    id={id}
+                    value={cleaningFee}
+                    onChange={(e) => set("cleaningFee", e.target.value)}
+                    placeholder="0.00"
+                  />
+                )}
+              </Field>
+            </div>
+
+            <RateCardBreakdown
+              nightlyRate={rateCard.nightlyRate}
+              nights={rateCard.nights}
+              subtotal={rateCard.subtotal}
+              cleaningFee={rateCard.cleaningFee}
+              tierLabel={rateCard.tierLabel}
+              total={rateCard.total}
+            />
+          </div>
+        ) : null}
+
         <Field
           label="Total payout"
           hint={
@@ -351,6 +458,7 @@ function BookingFields({
               : "What you actually receive"
           }
           error={errors.totalPayout}
+          className={showRates ? "sm:col-span-2" : undefined}
         >
           {(id) => (
             <CurrencyInput
@@ -361,6 +469,13 @@ function BookingFields({
             />
           )}
         </Field>
+
+        {cardDiffers ? (
+          <p className="sm:col-span-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+            These rates come to {formatCurrency(rateCard.total)}, but this stay is charged{" "}
+            {formatCurrency(totalPayout)}.
+          </p>
+        ) : null}
 
         <Field label="Notes" className="sm:col-span-2">
           {(id) => (

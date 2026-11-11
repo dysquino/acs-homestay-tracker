@@ -125,13 +125,30 @@ function ExpenseFields({
   const outstanding = expense
     ? expenseOutstandingAmount(expense.amount, expense.settledAmount)
     : 0;
-  const showPayout = Boolean(expense) && outstanding > 0;
   /**
    * The bank account paid it, so nobody fronted it and nobody is owed back.
    * Derived rather than stored, so switching the payer back to a person
    * restores that person's own refund status instead of leaving it clobbered.
    */
   const paidByIsBank = isBankPayer(form.paidBy);
+  /**
+   * Whether the payout date is still the one the app put there for the owner,
+   * rather than one they typed. The app's guess follows the expense's own date
+   * until the owner overrides it — after which it must not be dragged along
+   * behind a later date change.
+   */
+  const payoutFollowsExpense = form.payoutDate === form.date;
+  /**
+   * When the payout date field is offered.
+   *
+   * An expense someone fronted shows it only once there is a balance to pay
+   * out. An expense the bank paid always shows it: the money left the account,
+   * and the date it left on is the one thing reconciliation still needs — so
+   * it gets asked for while the expense is being written, rather than chased
+   * afterwards from the worklist.
+   */
+  const showPayout =
+    (Boolean(expense) && outstanding > 0) || (!expense && paidByIsBank);
   /**
    * Whether whoever fronted the cost is still waiting to be paid back.
    *
@@ -156,7 +173,7 @@ function ExpenseFields({
    * with itself. An empty date is intentionally silent and records no payout.
    */
   const payoutDiverges =
-    showPayout && payoutDateDiverges(form.payoutDate, expense?.date ?? "");
+    showPayout && payoutDateDiverges(form.payoutDate, expense?.date ?? form.date);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -182,26 +199,24 @@ function ExpenseFields({
     setSubmitError(null);
     await submit.run(async () => {
       try {
+        // The payout rides along with the expense save rather than following
+        // it, so there's no window where the expense reads as paid out but
+        // carries no settlement — a state the month's outflow pool can't see.
+        // The server settles only what's still outstanding.
+        const payout = form.payoutDate
+          ? {
+              paidDate: form.payoutDate,
+              settlementType: owesSomeone
+                ? ("owner_reimbursement" as const)
+                : ("direct_vendor_payment" as const),
+              reimbursedTo: owesSomeone ? form.paidBy.trim() : "",
+            }
+          : undefined;
+
         if (!expense) {
-          await addExpense(payload);
+          await addExpense(payload, payout);
         } else {
-          // The payout rides along with the expense save rather than following
-          // it, so there's no window where the expense reads as paid out but
-          // carries no settlement — a state the month's outflow pool can't see.
-          // The server settles only what's still outstanding.
-          await updateExpense(
-            expense.id,
-            payload,
-            form.payoutDate
-              ? {
-                  paidDate: form.payoutDate,
-                  settlementType: owesSomeone
-                    ? "owner_reimbursement"
-                    : "direct_vendor_payment",
-                  reimbursedTo: owesSomeone ? form.paidBy.trim() : "",
-                }
-              : undefined,
-          );
+          await updateExpense(expense.id, payload, payout);
         }
         onClose();
       } catch {
@@ -219,7 +234,14 @@ function ExpenseFields({
               id={id}
               type="date"
               value={form.date}
-              onChange={(e) => set("date", e.target.value)}
+              onChange={(e) => {
+                const next = e.target.value;
+                // While the payout date is still the app's guess, it follows the
+                // expense's own date. Once the owner has typed one of their own,
+                // it stays theirs.
+                set("date", next);
+                if (payoutFollowsExpense) set("payoutDate", next);
+              }}
             />
           )}
         </Field>
@@ -289,7 +311,17 @@ function ExpenseFields({
             <Select
               id={id}
               value={form.paidBy}
-              onChange={(e) => set("paidBy", e.target.value)}
+              onChange={(e) => {
+                const next = e.target.value;
+                set("paidBy", next);
+                // A bank-paid expense's money has already left the account, so
+                // it needs a date; one someone fronted may not have left yet, so
+                // it doesn't get one. Switching between the two carries the
+                // date across and takes it back again.
+                if (isBankPayer(next) !== paidByIsBank) {
+                  set("payoutDate", isBankPayer(next) ? form.date : "");
+                }
+              }}
             >
               <option value="">Select who paid</option>
               {/* A record from before this fixed roster keeps showing its
@@ -308,11 +340,13 @@ function ExpenseFields({
 
         {showPayout ? (
           <Field
-            label="Full-balance payout date (optional)"
+            label={paidByIsBank ? "Payout date" : "Full-balance payout date (optional)"}
             hint={
-              outstanding < (expense?.amount ?? 0)
-                ? `${formatCurrency(outstanding)} remains. Leave blank to only save the expense changes.`
-                : "Choose a date only if the full amount left the homestay account."
+              paidByIsBank
+                ? "When the money left the homestay account. Pre-filled with the date above — change it if the money left in a different month."
+                : outstanding < (expense?.amount ?? 0)
+                  ? `${formatCurrency(outstanding)} remains. Leave blank to only save the expense changes.`
+                  : "Choose a date only if the full amount left the homestay account."
             }
           >
             {(id) => (

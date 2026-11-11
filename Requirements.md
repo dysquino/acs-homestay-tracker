@@ -70,6 +70,16 @@
 - Add / edit / delete a booking.
 - Simple conflict warning if a new booking's dates overlap an existing one.
 
+**Approving a guest's request (booking link):**
+- Approving opens a single modal that does the whole job: what the stay is worth, and whether the payment has landed.
+- **Nightly rate** and **cleaning fee** start from the owner's standard rates (Payment Settings) and are editable, as is the **total amount due**. Changing a rate re-prices the stay; changing the total overrides the rates. The owner's number always wins: the total is the authoritative amount and the rate card is the breakdown behind it.
+- The rates are stored against the booking, so the breakdown of an agreed stay stays true even after the owner's standard rates change. A booking that carries no rate of its own (one created before per-booking rates existed) shows the owner's standard rate as a suggestion instead.
+- The rate card applies to direct bookings only — on an Airbnb stay the owner doesn't set the rate, Airbnb does, and the payout is what Airbnb transfers.
+- **Have you received the payment?** — "Not yet" creates the booking unpaid; "Yes" also records the deposit (amount, date received, method, optional bank reference) against the booking.
+- The deposit is written as a receipt on the booking, so the payment status is derived from real receipts rather than set by hand. It is recorded whether or not the reconciliation feature is switched on.
+- The guest's own payment screenshot is reused as the deposit's proof when they sent one; the owner can attach a different one, or none.
+- The same rate card is in the edit-booking modal, so any booking's rates can be changed or overridden later. Editing a booking never re-prices it: the payout only changes when the owner changes it.
+
 ### 4.2 Expenses Module
 
 **Purpose:** Track all outgoing costs related to the condo.
