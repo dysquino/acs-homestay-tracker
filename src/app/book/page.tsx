@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Image from "next/image";
 
 import { BookingRequestForm } from "@/components/book/booking-request-form";
-import type { PricingConfig } from "@/components/payment/price-breakdown";
+import type { PricingConfig } from "@/lib/pricing";
 import { homestayToday, isValidBookingKey } from "@/lib/booking-link";
 import { getBookedRanges } from "@/lib/data/availability";
 import { getPublicPaymentConfig } from "@/lib/data/payment-config";

@@ -1,36 +1,7 @@
 "use client";
 
+import { calculateStayPrice, type RateConfig } from "@/lib/pricing";
 import { formatCurrency, formatWhole } from "@/lib/format";
-
-/** Default long-stay threshold when the owner hasn't configured one. */
-export const DEFAULT_LONG_STAY_THRESHOLD = 5;
-
-export type PricingConfig = {
-  /** Per-night rate (peso). 0 means "not configured". */
-  nightlyRate: number;
-  /** Cleaning fee for short stays (< threshold nights). 0 means "not set". */
-  cleaningFee: number;
-  /**
-   * Cleaning fee for long stays (>= threshold nights). 0 falls back to the
-   * short-stay fee when the stay would have used this tier.
-   */
-  cleaningFeeLong: number;
-  /**
-   * Nights at which a stay flips to the long-stay fee. Owner-tunable from
-   * Payment Settings; defaults to 5 to preserve the original behavior.
-   */
-  longStayThresholdNights: number;
-  /**
-   * Whether the ID photo is required on the form. When false, the field
-   * is shown as optional and the form doesn't block submission for it.
-   */
-  idPhotoRequired: boolean;
-  /**
-   * Whether the payment screenshot is required on the form. When true,
-   * the form blocks submission until a screenshot is attached.
-   */
-  paymentScreenshotRequired: boolean;
-};
 
 /**
  * The price estimate shown between the calendar and the form on /book.
@@ -43,23 +14,23 @@ export type PricingConfig = {
  *
  * Hidden entirely when no rates are configured.
  *
- * The totals here are informational; the owner still sets totalPayout on the
- * actual Booking after approving the request, and may differ if the stay is
- * custom-priced.
+ * The arithmetic lives in `@/lib/pricing`, shared with the owner's approval
+ * modal, so the estimate a guest sees and the total the owner computes are
+ * the same calculation. The totals here are informational; the owner still
+ * sets totalPayout on the actual Booking after approving the request, and may
+ * differ if the stay is custom-priced.
  */
 export function PriceBreakdown({
   pricing,
   nights,
 }: {
-  pricing: PricingConfig;
+  pricing: RateConfig;
   nights: number;
 }) {
   const { nightlyRate, cleaningFee, cleaningFeeLong } = pricing;
-  // Defensive default — the server is the source of truth, but if a caller
-  // forgets to pass the field the old behavior (5 nights) is preserved.
-  const longStayThreshold = pricing.longStayThresholdNights || DEFAULT_LONG_STAY_THRESHOLD;
-  const configured = nightlyRate > 0 || cleaningFee > 0 || cleaningFeeLong > 0;
-  if (!configured) return null;
+  const price = calculateStayPrice(pricing, nights);
+  const longStayThreshold = pricing.longStayThresholdNights || 5;
+  if (!price.configured) return null;
 
   // Dates not picked yet — show the static per-night + cleaning rates.
   if (nights === 0) {
@@ -91,19 +62,8 @@ export function PriceBreakdown({
     );
   }
 
-  // Dates picked — full breakdown. The tier label only differs when the two
-  // fees are non-zero AND the long tier is being applied.
-  const isLongStay = nights >= longStayThreshold;
-  const shortFee = cleaningFee > 0 ? cleaningFee : cleaningFeeLong;
-  const longFee = cleaningFeeLong > 0 ? cleaningFeeLong : cleaningFee;
-  const effectiveFee = isLongStay ? longFee : shortFee;
-  const tierLabel =
-    isLongStay && cleaningFeeLong > 0 && cleaningFeeLong !== cleaningFee
-      ? `Cleaning fee (${longStayThreshold}+ nights)`
-      : "Cleaning fee";
-
-  const subtotal = nightlyRate * nights;
-  const total = subtotal + effectiveFee;
+  // Dates picked — full breakdown.
+  const { subtotal, cleaningFee: effectiveFee, total, tierLabel } = price;
 
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
@@ -111,7 +71,7 @@ export function PriceBreakdown({
       <dl className="mt-3 space-y-1.5 text-sm">
         <div className="flex items-baseline justify-between gap-3">
           <dt className="text-slate-600">
-            {formatCurrency(nightlyRate)} × {nights} night{nights === 1 ? "" : "s"}
+            {formatCurrency(nightlyRate)} × {price.nights} night{price.nights === 1 ? "" : "s"}
           </dt>
           <dd className="font-medium text-slate-900 tabular-nums">{formatWhole(subtotal)}</dd>
         </div>

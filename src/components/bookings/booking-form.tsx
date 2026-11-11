@@ -17,7 +17,8 @@ import { PaymentProof } from "@/components/bookings/payment-proof";
 import { BookingPayments } from "@/components/bookings/booking-payments";
 import { useIdentity } from "@/lib/identity";
 import { addDays, nightCount, today } from "@/lib/dates";
-import { formatDateRange } from "@/lib/format";
+import { formatCurrency, formatDateRange } from "@/lib/format";
+import { calculateStayPrice } from "@/lib/pricing";
 import { blockAsBooking, isAirbnbBlock } from "@/lib/airbnb-ical";
 import { dateBlockAsBooking } from "@/lib/date-blocks";
 import { findConflicts } from "@/lib/selectors";
@@ -133,7 +134,7 @@ function BookingFields({
   submit: Submit;
   onBlockedChange: (blocked: boolean) => void;
 }) {
-  const { bookings, airbnbBlocks, dateBlocks, addBooking, updateBooking, resync } = useStore();
+  const { bookings, airbnbBlocks, dateBlocks, addBooking, updateBooking, resync, pricing } = useStore();
   const { user } = useIdentity();
   const [form, setForm] = useState<FormState>(() => initialState(booking));
   const [errors, setErrors] = useState<Partial<Record<keyof FormState, string>>>(
@@ -179,6 +180,12 @@ function BookingFields({
   );
 
   const nights = nightCount(form.checkIn, form.checkOut);
+  // What this stay would come to at the owner's standard rates. Only a
+  // starting point — the payout stays whatever the owner set. Not shown for
+  // Airbnb bookings: there the payout is what Airbnb transfers, which is not
+  // the guest-facing rate the standard rate is built from.
+  const standardRate = useMemo(() => calculateStayPrice(pricing, nights), [pricing, nights]);
+  const showStandardRate = form.source === "direct" && standardRate.configured;
 
   function validate(): boolean {
     const next: Partial<Record<keyof FormState, string>> = {};
@@ -361,6 +368,52 @@ function BookingFields({
             />
           )}
         </Field>
+
+        {/* The owner's rate card, offered as a starting point — never applied
+            on its own, so a deliberately-set payout is never overwritten. */}
+        {showStandardRate ? (
+          <div className="sm:col-span-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <p className="text-xs font-medium text-slate-700">Your standard rate</p>
+              {standardRate.total !== Number(form.totalPayout) ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => set("totalPayout", String(standardRate.total))}
+                  className="px-2 py-1 text-xs"
+                >
+                  Use {formatCurrency(standardRate.total)}
+                </Button>
+              ) : null}
+            </div>
+            <dl className="mt-1.5 space-y-1 text-sm">
+              <div className="flex items-baseline justify-between gap-3">
+                <dt className="text-slate-600">
+                  {formatCurrency(pricing.nightlyRate)} × {standardRate.nights} night
+                  {standardRate.nights === 1 ? "" : "s"}
+                </dt>
+                <dd className="font-medium text-slate-900 tabular-nums">
+                  {formatCurrency(standardRate.subtotal)}
+                </dd>
+              </div>
+              {standardRate.cleaningFee > 0 ? (
+                <div className="flex items-baseline justify-between gap-3">
+                  <dt className="text-slate-600">{standardRate.tierLabel}</dt>
+                  <dd className="font-medium text-slate-900 tabular-nums">
+                    {formatCurrency(standardRate.cleaningFee)}
+                  </dd>
+                </div>
+              ) : null}
+              <div className="flex items-baseline justify-between gap-3 border-t border-slate-200 pt-1.5">
+                <dt className="font-medium text-slate-700">Total</dt>
+                <dd className="font-semibold text-slate-900 tabular-nums">
+                  {formatCurrency(standardRate.total)}
+                </dd>
+              </div>
+            </dl>
+          </div>
+        ) : null}
 
         <Field label="Notes" className="sm:col-span-2">
           {(id) => (

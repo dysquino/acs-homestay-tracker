@@ -70,6 +70,14 @@
 - Add / edit / delete a booking.
 - Simple conflict warning if a new booking's dates overlap an existing one.
 
+**Approving a guest's request (booking link):**
+- Approving opens a single modal that does the whole job: what the stay is worth, and whether the payment has landed.
+- **Total amount due** is computed from the owner's rates — per-night rate × nights, plus the cleaning fee (the long-stay tier for stays at or above the configured threshold) — and pre-filled into an editable field. The owner's number always wins: the computed breakdown is a starting point, never the source of truth.
+- **Have you received the payment?** — "Not yet" creates the booking unpaid; "Yes" also records the deposit (amount, date received, method, optional bank reference) against the booking.
+- The deposit is written as a receipt on the booking, so the payment status is derived from real receipts rather than set by hand. It is recorded whether or not the reconciliation feature is switched on.
+- The guest's own payment screenshot is reused as the deposit's proof when they sent one; the owner can attach a different one, or none.
+- The same computed breakdown is offered in the edit-booking modal, so any booking's total can be recomputed or overridden later. It is not shown for Airbnb bookings, where the payout is what Airbnb transfers rather than the guest-facing rate.
+
 ### 4.2 Expenses Module
 
 **Purpose:** Track all outgoing costs related to the condo.

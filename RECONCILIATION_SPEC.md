@@ -997,6 +997,8 @@ Status mapping:
 
 The cached column exists only to avoid aggregate queries on every booking list render. Reconciliation must always recompute the value from authoritative payment rows and must surface the cache versus derived value in any debug view. The `PaymentStatus` enum gains the `OVERPAID` value alongside the existing `PAID | PENDING | PARTIAL`.
 
+Approvals follow the same rule: when an owner confirms "yes, the money is in the bank" while approving a guest's request, that answer becomes a `BookingPayment` row rather than a hand-set `paymentStatus`. This write is deliberately **not** gated by the reconciliation feature toggle — whether the guest paid is core booking data, and the toggle governs the matching workspace, not what may be recorded against a booking. The owner's upload, or the guest's own payment screenshot when there is one, is stored as the receipt's proof.
+
 ### 12.2 Existing paid bookings migration
 
 For existing bookings marked paid:

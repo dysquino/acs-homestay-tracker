@@ -6,6 +6,7 @@ import type { Decimal } from "@prisma/client/runtime/library";
 
 import { prisma } from "@/lib/prisma";
 import { validatePaymentScreenshot } from "@/lib/payment-screenshot";
+import { DEFAULT_LONG_STAY_THRESHOLD } from "@/lib/pricing";
 
 import { requireSiteAccess } from "./access";
 
@@ -99,6 +100,43 @@ export async function getPublicPaymentConfig(): Promise<PaymentConfigData | null
 export async function getPaymentConfig(): Promise<PaymentConfigData | null> {
   await requireSiteAccess();
   return getPublicPaymentConfig();
+}
+
+/** Just the rates, without the bank details or the QR image. */
+export type PricingData = {
+  nightlyRate: number;
+  cleaningFee: number;
+  cleaningFeeLong: number;
+  longStayThresholdNights: number;
+};
+
+/**
+ * The owner's rates on their own, without the QR bytes.
+ *
+ * The owners' app needs the rates on every page — the approval modal and the
+ * edit-booking modal both compute a stay's total from them — and the full
+ * `getPaymentConfig()` would drag the bank details and the QR image down with
+ * them on every load.
+ *
+ * No access gate: these are the same numbers the public /book page shows the
+ * guest.
+ */
+export async function getPricingConfig(): Promise<PricingData> {
+  const row = await prisma.paymentConfig.findUnique({
+    where: { id: "singleton" },
+    select: {
+      nightlyRate: true,
+      cleaningFee: true,
+      cleaningFeeLong: true,
+      longStayThresholdNights: true,
+    },
+  });
+  return {
+    nightlyRate: Number(row?.nightlyRate ?? 0),
+    cleaningFee: Number(row?.cleaningFee ?? 0),
+    cleaningFeeLong: Number(row?.cleaningFeeLong ?? 0),
+    longStayThresholdNights: row?.longStayThresholdNights ?? DEFAULT_LONG_STAY_THRESHOLD,
+  };
 }
 
 export type SetPaymentConfigInput = {
