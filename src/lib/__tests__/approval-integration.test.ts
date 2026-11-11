@@ -274,6 +274,52 @@ describe.skipIf(!HAS_DATABASE)("approveBookingRequestWithPayment", () => {
     expect(result.ok).toBe(false);
   });
 
+  it("stores the rates the owner set for the stay", async () => {
+    const request = await makeRequest(false);
+
+    const booking = await approveSuccessfully(request.id, {
+      totalPayout: 3300,
+      nightlyRate: 1000,
+      cleaningFee: 300,
+      paymentReceived: false,
+    });
+
+    const db = makeClient();
+    const row = await db.booking.findUniqueOrThrow({ where: { id: booking.id } });
+    expect(Number(row.nightlyRate)).toBe(1000);
+    expect(Number(row.cleaningFee)).toBe(300);
+    expect(Number(row.totalPayout)).toBe(3300);
+  });
+
+  it("stores no rate of its own when the owner doesn't set one", async () => {
+    const request = await makeRequest(false);
+
+    const booking = await approveSuccessfully(request.id, {
+      totalPayout: 5000,
+      nightlyRate: null,
+      cleaningFee: null,
+      paymentReceived: false,
+    });
+
+    const db = makeClient();
+    const row = await db.booking.findUniqueOrThrow({ where: { id: booking.id } });
+    expect(row.nightlyRate).toBeNull();
+    expect(row.cleaningFee).toBeNull();
+  });
+
+  it("refuses a negative rate", async () => {
+    const request = await makeRequest(false);
+
+    const result = await approveBookingRequestWithPayment(request.id, ACTOR, {
+      totalPayout: 5000,
+      nightlyRate: -100,
+      cleaningFee: 300,
+      paymentReceived: false,
+    });
+
+    expect(result.ok).toBe(false);
+  });
+
   it("refuses to approve the same request twice", async () => {
     const request = await makeRequest(false);
 

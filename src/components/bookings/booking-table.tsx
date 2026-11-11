@@ -295,6 +295,24 @@ export function BookingTable({
                 { label: "Nights", value: nightCount(selected.checkIn, selected.checkOut) },
                 { label: "Guests", value: selected.guestsCount },
                 { label: "Payout", value: <span className="font-semibold">{formatCurrency(bookingNetIncome(selected))}</span> },
+                // The rate card, when this booking carries rates of its own.
+                // A booking without them has no rate card to show — the
+                // owner's standard rate isn't the same thing as what this
+                // stay was agreed at.
+                ...(selected.source === "direct" && selected.nightlyRate !== null
+                  ? [
+                      {
+                        label: "Rate card",
+                        value: (
+                          <span className="tabular-nums">
+                            {formatCurrency(selected.nightlyRate)} × {nightCount(selected.checkIn, selected.checkOut)} night
+                            {nightCount(selected.checkIn, selected.checkOut) === 1 ? "" : "s"}
+                            {selected.cleaningFee ? ` + ${formatCurrency(selected.cleaningFee)}` : ""}
+                          </span>
+                        ),
+                      },
+                    ]
+                  : []),
                 ...(selected.platformFee
                   ? [{ label: "Airbnb service fee", value: `${formatCurrency(selected.platformFee)} (already deducted)` }]
                   : []),

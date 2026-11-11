@@ -69,6 +69,10 @@ export async function importAirbnbBookings(
       checkOut: item.checkOut,
       guestsCount: 1, // the export doesn't include a guest count
       totalPayout: item.totalPayout,
+      // An Airbnb stay has no rate of its own: the owner doesn't set the
+      // rate, Airbnb does.
+      nightlyRate: null,
+      cleaningFee: null,
       platformFee: item.platformFee,
       paymentStatus: "paid",
       contactInfo: "",

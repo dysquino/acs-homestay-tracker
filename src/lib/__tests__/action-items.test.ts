@@ -14,6 +14,8 @@ const booking = (o: Partial<Booking>): Booking => ({
   checkOut: "2026-10-22",
   guestsCount: 2,
   totalPayout: 3000,
+  nightlyRate: null,
+  cleaningFee: null,
   platformFee: 0,
   paymentStatus: "paid",
   contactInfo: "",

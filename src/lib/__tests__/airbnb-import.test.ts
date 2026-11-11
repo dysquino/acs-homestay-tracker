@@ -13,7 +13,7 @@ const csv = (...lines: string[]) => [HEADER, ...lines].join("\n");
 
 const stored = (o: Partial<Booking>): Booking => ({
   id: "b1", guestName: "Test Guest", source: "airbnb", checkIn: "2026-08-28", checkOut: "2026-09-14",
-  guestsCount: 2, totalPayout: 20502.98, platformFee: 0, paymentStatus: "paid", contactInfo: "", notes: "",
+  guestsCount: 2, totalPayout: 20502.98, nightlyRate: null, cleaningFee: null, platformFee: 0, paymentStatus: "paid", contactInfo: "", notes: "",
   createdBy: "Owner", confirmationCode: null,
   hasPaymentScreenshot: false, paymentScreenshotMime: null,
   hasIdPhoto: false, idPhotoMime: null,

@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { calculateStayPrice, DEFAULT_LONG_STAY_THRESHOLD, type RateConfig } from "../pricing";
+import {
+  calculateBookingPrice,
+  calculateStayPrice,
+  DEFAULT_LONG_STAY_THRESHOLD,
+  resolveBookingRates,
+  type RateConfig,
+} from "../pricing";
 
 /** The owner's standard rates: ₱1,500 a night, ₱500 cleaning, ₱300 for 5+ nights. */
 const RATES: RateConfig = {
@@ -73,6 +79,73 @@ describe("calculateStayPrice", () => {
     // total is exactly what §8.6 refuses to reconcile.
     const price = calculateStayPrice(
       { nightlyRate: 0.1, cleaningFee: 0.2, cleaningFeeLong: 0, longStayThresholdNights: 5 },
+      3,
+    );
+    expect(price.subtotal).toBe(0.3);
+    expect(price.total).toBe(0.5);
+  });
+});
+
+describe("resolveBookingRates", () => {
+  it("uses the standard rates when the booking has none of its own", () => {
+    const resolved = resolveBookingRates(RATES, { nightlyRate: null, cleaningFee: null }, 3);
+    expect(resolved.nightlyRate).toBe(1500);
+    expect(resolved.cleaningFee).toBe(500);
+    expect(resolved.own).toBe(false);
+  });
+
+  it("uses the booking's own rates when it has them", () => {
+    const resolved = resolveBookingRates(RATES, { nightlyRate: 900, cleaningFee: 0 }, 3);
+    expect(resolved.nightlyRate).toBe(900);
+    expect(resolved.cleaningFee).toBe(0);
+    expect(resolved.own).toBe(true);
+  });
+
+  it("keeps the standard for whichever rate the booking doesn't override", () => {
+    const nightlyOnly = resolveBookingRates(RATES, { nightlyRate: 900, cleaningFee: null }, 3);
+    expect(nightlyOnly.nightlyRate).toBe(900);
+    expect(nightlyOnly.cleaningFee).toBe(500);
+
+    const cleaningOnly = resolveBookingRates(RATES, { nightlyRate: null, cleaningFee: 250 }, 3);
+    expect(cleaningOnly.nightlyRate).toBe(1500);
+    expect(cleaningOnly.cleaningFee).toBe(250);
+  });
+
+  it("labels a booking's own cleaning fee plainly, not by tier", () => {
+    // The tier only decides which standard fee to start from, so an override
+    // isn't "the long-stay fee" — it's just this stay's fee.
+    const resolved = resolveBookingRates(RATES, { nightlyRate: null, cleaningFee: 350 }, 10);
+    expect(resolved.tierLabel).toBe("Cleaning fee");
+  });
+});
+
+describe("calculateBookingPrice", () => {
+  it("prices a booking with its own rates", () => {
+    const price = calculateBookingPrice(RATES, { nightlyRate: 1000, cleaningFee: 300 }, 3);
+    expect(price.subtotal).toBe(3000);
+    expect(price.cleaningFee).toBe(300);
+    expect(price.total).toBe(3300);
+  });
+
+  it("falls back to the standard for a booking with no rates", () => {
+    const price = calculateBookingPrice(RATES, { nightlyRate: null, cleaningFee: null }, 3);
+    expect(price.total).toBe(5000);
+  });
+
+  it("treats a booking with its own rates as configured even when no standard is set", () => {
+    const price = calculateBookingPrice(
+      { nightlyRate: 0, cleaningFee: 0, cleaningFeeLong: 0, longStayThresholdNights: 5 },
+      { nightlyRate: 1000, cleaningFee: 0 },
+      2,
+    );
+    expect(price.configured).toBe(true);
+    expect(price.total).toBe(2000);
+  });
+
+  it("keeps the booking's total exact where float addition would drift", () => {
+    const price = calculateBookingPrice(
+      RATES,
+      { nightlyRate: 0.1, cleaningFee: 0.2 },
       3,
     );
     expect(price.subtotal).toBe(0.3);

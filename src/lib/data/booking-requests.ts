@@ -34,6 +34,16 @@ export type DecideResult = { ok: true; booking?: Booking } | { ok: false; error:
 export type ApproveWithPaymentInput = {
   /** What the stay is worth. Zero or more. */
   totalPayout: number;
+  /**
+   * The per-night rate for this stay. Null = use the owner's standard rate.
+   * Set when the owner overrides the rate for this particular booking.
+   */
+  nightlyRate?: number | null;
+  /**
+   * The cleaning fee for this stay. Null = use the owner's standard fee for
+   * this length of stay.
+   */
+  cleaningFee?: number | null;
   /** Whether the owner confirmed the money reached the bank. */
   paymentReceived: boolean;
   /** How much was deposited. Required when `paymentReceived` is true. */
@@ -85,6 +95,22 @@ export async function approveBookingRequestWithPayment(
       throw new ValidationError("Total payout must be zero or more.");
     }
 
+    // The rate card for this stay. Null means "use the owner's standard
+    // rate" — the modal resolves that before it sends, so a null here is
+    // only ever a deliberate choice.
+    const nightlyRate = input.nightlyRate === null || input.nightlyRate === undefined
+      ? null
+      : Number(input.nightlyRate);
+    const cleaningFee = input.cleaningFee === null || input.cleaningFee === undefined
+      ? null
+      : Number(input.cleaningFee);
+    if (nightlyRate !== null && (!Number.isFinite(nightlyRate) || nightlyRate < 0)) {
+      throw new ValidationError("Nightly rate must be zero or more.");
+    }
+    if (cleaningFee !== null && (!Number.isFinite(cleaningFee) || cleaningFee < 0)) {
+      throw new ValidationError("Cleaning fee must be zero or more.");
+    }
+
     // Proof for the deposit: the modal's upload wins; otherwise the guest's
     // own screenshot is reused (it's the picture of what they sent).
     let uploaded: { bytes: Uint8Array; mime: string } | null = null;
@@ -110,6 +136,8 @@ export async function approveBookingRequestWithPayment(
         checkOut: dateToISO(req.checkOut),
         guestsCount: req.guestsCount,
         totalPayout,
+        nightlyRate,
+        cleaningFee,
         platformFee: 0,
         // A cache of the payment rows — recomputed below once the deposit
         // exists, and left as "pending" when there is no deposit yet.

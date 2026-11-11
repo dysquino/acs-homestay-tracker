@@ -98,6 +98,7 @@ Profitability reporting and bank reconciliation therefore remain related but sep
 ### 4.2 Booking income
 
 - A booking's `totalPayout` is the expected amount the homestay ultimately receives.
+- A booking may also carry its own `nightlyRate` and `cleaningFee` — the breakdown behind that amount. They document how the price was made up and never change what is expected; the expected amount is `totalPayout` alone.
 - Airbnb platform fees must not be subtracted again when `totalPayout` already represents the net payout.
 - Every actual receipt must be represented by a booking-payment record.
 - A booking can have zero, one, or many booking-payment records.

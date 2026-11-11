@@ -122,6 +122,9 @@ export function blockAsBooking(r: AirbnbReservation): Booking {
     checkOut: r.checkOut,
     guestsCount: 0,
     totalPayout: 0,
+    // A calendar block isn't a booked stay — it has no rate of its own.
+    nightlyRate: null,
+    cleaningFee: null,
     platformFee: 0,
     paymentStatus: "pending",
     contactInfo: "",

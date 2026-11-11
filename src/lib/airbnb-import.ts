@@ -215,6 +215,10 @@ export function planImport(rows: ImportRow[], existing: Booking[]): PlannedRow[]
       checkOut: row.checkOut,
       guestsCount: 1,
       totalPayout: row.totalPayout,
+      // An Airbnb stay has no rate of its own: the owner doesn't set the
+      // rate, Airbnb does.
+      nightlyRate: null,
+      cleaningFee: null,
       platformFee: row.platformFee,
       paymentStatus: "paid",
       contactInfo: "",

@@ -22,6 +22,21 @@ export type Booking = {
   checkOut: ISODate;
   guestsCount: number;
   totalPayout: number;
+  /**
+   * The per-night rate this booking was agreed at, when it has one of its
+   * own. Null = the booking carries no rate of its own (a row created
+   * before per-booking rates existed) and the owner's standard rate from
+   * Payment Settings is shown as a suggestion instead.
+   *
+   * Set when the owner approves or edits a direct stay, so the rate card
+   * of a booked stay stays true even after the standard rate changes.
+   */
+  nightlyRate: number | null;
+  /**
+   * The cleaning fee this booking was agreed at, on the same terms as
+   * `nightlyRate`. Null = no fee of its own.
+   */
+  cleaningFee: number | null;
   platformFee: number;
   paymentStatus: PaymentStatus;
   contactInfo: string;
