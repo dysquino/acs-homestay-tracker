@@ -418,7 +418,7 @@ export function PaymentSettingsForm({
           </p>
         ) : null}
 
-        <Button type="submit" variant="primary" disabled={pending}>
+        <Button type="submit" variant="primary" loading={pending} disabled={pending}>
           {pending ? "Saving…" : "Save"}
         </Button>
       </div>

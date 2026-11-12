@@ -74,6 +74,8 @@ function ExpensesPageContent() {
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Expense | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Expense | null>(null);
+  /** The delete is in flight — the confirmation dialog spins. */
+  const [deleting, setDeleting] = useState(false);
   // Which expense has the reimbursement prompt open, if any.
   const [reimbursing, setReimbursing] = useState<Expense | null>(null);
   // The expense whose details are open; looked up fresh so an edit shows.
@@ -569,6 +571,7 @@ function ExpensesPageContent() {
 
       <ConfirmDialog
         open={pendingDelete !== null}
+        loading={deleting}
         title="Delete expense?"
         message={
           pendingDelete ? (
@@ -582,12 +585,17 @@ function ExpensesPageContent() {
         onCancel={() => setPendingDelete(null)}
         onConfirm={async () => {
           const target = pendingDelete;
-          setPendingDelete(null);
           if (!target) return;
+          // The dialog stays open with a spinner until the delete comes back,
+          // so there's no doubt about whether it went through.
+          setDeleting(true);
           try {
             await deleteExpense(target.id);
+            setPendingDelete(null);
           } catch {
             alert("Couldn't delete this expense. Please try again.");
+          } finally {
+            setDeleting(false);
           }
         }}
       />

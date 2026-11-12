@@ -235,7 +235,7 @@ function QuickPayoutForm({
       footer={
         <>
           <Button onClick={onClose}>Cancel</Button>
-          <Button type="submit" form={FORM_ID} variant="primary" disabled={submit.saving}>
+          <Button type="submit" form={FORM_ID} variant="primary" loading={submit.saving} disabled={submit.saving}>
             {submit.saving ? "Saving…" : "Save payout"}
           </Button>
         </>

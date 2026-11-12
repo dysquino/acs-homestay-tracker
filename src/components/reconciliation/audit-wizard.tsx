@@ -432,7 +432,7 @@ function StatementStep({ month, onSaved }: { month: string; onSaved: () => Promi
       ) : null}
 
       <div className="mt-4 flex items-center gap-3">
-        <Button variant="primary" onClick={save} disabled={busy}>
+        <Button variant="primary" onClick={save} loading={busy} disabled={busy}>
           {busy ? "Saving…" : "Save statement"}
         </Button>
         {saved ? <span className="text-xs text-emerald-700">Saved.</span> : null}
@@ -567,7 +567,7 @@ function FinalizeStep({
             <Button onClick={onConfirm} disabled={busy}>
               Not yet
             </Button>
-            <Button variant="primary" onClick={onFinalize} disabled={busy}>
+            <Button variant="primary" onClick={onFinalize} loading={busy} disabled={busy}>
               {busy ? "Finalizing…" : "Yes, finalize"}
             </Button>
           </div>
@@ -642,7 +642,7 @@ function ReopenDialog({
           <Button onClick={onCancel} disabled={busy}>
             Cancel
           </Button>
-          <Button variant="primary" onClick={onConfirm} disabled={busy || !reason.trim()}>
+          <Button variant="primary" onClick={onConfirm} loading={busy} disabled={busy || !reason.trim()}>
             {busy ? "Reopening…" : "Reopen"}
           </Button>
         </>

@@ -125,6 +125,7 @@ export function ActionItems() {
                 <Button
                   size="sm"
                   variant={item.urgency === "overdue" ? "primary" : "secondary"}
+                  loading={busy === item.id}
                   disabled={busy === item.id}
                   onClick={() => act(item)}
                 >

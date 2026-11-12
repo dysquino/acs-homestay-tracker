@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   expenseOutstandingAmount,
+  expenseOutstandingExcluding,
   expensePayoutSummary,
   expensePayoutView,
 } from "../expense-payout";
@@ -121,5 +122,43 @@ describe("expensePayoutView", () => {
       fullySettled: true,
       recorded: true,
     });
+  });
+});
+
+describe("expenseOutstandingExcluding", () => {
+  /**
+   * The outstanding an EDIT is measured against.
+   *
+   * The settlement being edited is being replaced, not added to, so it has to
+   * be left out of the sum. Counting it made the outstanding read as ₱0 on an
+   * already-settled expense, and the edit form then refused every change with
+   * "Cannot exceed the ₱0.00 remaining balance."
+   */
+  it("leaves the settlement being edited out of the balance", () => {
+    const settlements = [{ id: "a", amount: 1_000, status: "active" as const }];
+    expect(expenseOutstandingExcluding(1_000, settlements, "a")).toBe(1_000);
+  });
+
+  it("keeps the other settlements in the balance", () => {
+    const settlements = [
+      { id: "a", amount: 1_000, status: "active" as const },
+      { id: "b", amount: 500, status: "active" as const },
+    ];
+    // ₱2,000 expense, ₱500 still recorded besides the one being edited.
+    expect(expenseOutstandingExcluding(2_000, settlements, "a")).toBe(1_500);
+  });
+
+  it("does not count a voided settlement toward the balance", () => {
+    const settlements = [
+      { id: "a", amount: 1_000, status: "active" as const },
+      { id: "b", amount: 300, status: "voided" as const },
+    ];
+    // Only the voided one is left, so the whole amount can still be recorded.
+    expect(expenseOutstandingExcluding(2_000, settlements, "a")).toBe(2_000);
+  });
+
+  it("behaves like the plain outstanding when nothing is excluded", () => {
+    const settlements = [{ id: "a", amount: 400, status: "active" as const }];
+    expect(expenseOutstandingExcluding(1_000, settlements, null)).toBe(600);
   });
 });

@@ -2,6 +2,8 @@ import { settleableAmount, sum, toAmount, toCentavos } from "./finance";
 import { isBankPayer, type ExpenseSettlement } from "./types";
 
 type SettlementAmount = Pick<ExpenseSettlement, "amount" | "status">;
+/** A settlement row as the UI knows it — with the id, so one can be excluded. */
+type SettlementWithId = Pick<ExpenseSettlement, "id" | "amount" | "status">;
 
 /** Remaining amount that can still be paid, with centavo-safe arithmetic. */
 export function expenseOutstandingAmount(
@@ -34,6 +36,24 @@ export function expensePayoutSummary(
     outstanding,
     fullySettled: outstanding === 0,
   };
+}
+
+/**
+ * How much of an expense can still be recorded, ignoring one settlement.
+ *
+ * An *edit* of an existing settlement has to leave that settlement out of the
+ * sum: the amount it already holds is being replaced, not added to. Measuring
+ * the new amount against an outstanding that still counted the old row made
+ * every edit of a fully-settled expense impossible ("Cannot exceed the ₱0.00
+ * remaining balance") — the very edits the owner needed to make.
+ */
+export function expenseOutstandingExcluding(
+  expenseAmount: number | string,
+  settlements: SettlementWithId[],
+  excludeId: string | null,
+): number {
+  const kept = excludeId ? settlements.filter((s) => s.id !== excludeId) : settlements;
+  return expensePayoutSummary(expenseAmount, kept).outstanding;
 }
 
 /**

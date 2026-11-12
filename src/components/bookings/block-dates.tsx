@@ -47,7 +47,7 @@ export function BlockDatesForm({ open, onClose }: { open: boolean; onClose: () =
       footer={
         <>
           <Button onClick={onClose}>Cancel</Button>
-          <Button type="submit" form={FORM_ID} variant="primary" disabled={submit.saving}>
+          <Button type="submit" form={FORM_ID} variant="primary" loading={submit.saving} disabled={submit.saving}>
             {submit.saving ? "Blocking…" : "Block dates"}
           </Button>
         </>
@@ -209,21 +209,28 @@ function RemoveBlockDialog({
   onCancel: () => void;
 }) {
   const { deleteDateBlock } = useStore();
+  /** The removal is in flight — the confirmation dialog spins. */
+  const [removing, setRemoving] = useState(false);
   return (
     <ConfirmDialog
       open={block !== null}
+      loading={removing}
       title="Remove this block?"
       confirmLabel="Remove"
       message={block ? <>{blockSpan(block)} will open for bookings again.</> : null}
       onCancel={onCancel}
       onConfirm={async () => {
         const target = block;
-        onDone();
         if (!target) return;
+        // The dialog stays open with a spinner until the removal comes back.
+        setRemoving(true);
         try {
           await deleteDateBlock(target.id);
+          onDone();
         } catch {
           alert("Couldn't remove this block. Please try again.");
+        } finally {
+          setRemoving(false);
         }
       }}
     />

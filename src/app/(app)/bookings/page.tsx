@@ -69,6 +69,8 @@ function BookingsPageContent() {
   const [viewingBlock, setViewingBlock] = useState<DateBlock | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Booking | null>(null);
   const [alsoDeleteCleanings, setAlsoDeleteCleanings] = useState(false);
+  /** The delete is in flight — the confirmation dialog spins. */
+  const [deleting, setDeleting] = useState(false);
   // Cleanings a plain delete would keep — offered for deletion as well, e.g.
   // the pre-paid cleaning of an imported booking that was then cancelled.
   const keptCleanings = useMemo(
@@ -81,6 +83,7 @@ function BookingsPageContent() {
 
   function askDelete(booking: Booking) {
     setAlsoDeleteCleanings(false);
+    setDeleting(false);
     setPendingDelete(booking);
   }
 
@@ -240,6 +243,7 @@ function BookingsPageContent() {
 
       <ConfirmDialog
         open={pendingDelete !== null}
+        loading={deleting}
         title="Delete booking?"
         message={
           pendingDelete ? (
@@ -288,12 +292,17 @@ function BookingsPageContent() {
         onConfirm={async () => {
           const target = pendingDelete;
           const withCleanings = alsoDeleteCleanings;
-          setPendingDelete(null);
           if (!target) return;
+          // The dialog stays open with a spinner until the delete comes back,
+          // so there's no doubt about whether it went through.
+          setDeleting(true);
           try {
             await deleteBooking(target.id, { withCleanings });
+            setPendingDelete(null);
           } catch {
             alert("Couldn't delete this booking. Please try again.");
+          } finally {
+            setDeleting(false);
           }
         }}
       />

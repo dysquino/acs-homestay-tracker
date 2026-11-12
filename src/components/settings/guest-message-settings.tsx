@@ -198,6 +198,7 @@ export function GuestMessageSettings({ initial }: { initial: StayPreparationData
         <div className="mt-4 flex justify-end">
           <Button
             variant="primary"
+            loading={busy === "details"}
             disabled={busy !== null || detailsUnchanged}
             onClick={() => void saveDetails()}
           >
@@ -261,6 +262,7 @@ export function GuestMessageSettings({ initial }: { initial: StayPreparationData
                       <Button
                         size="sm"
                         variant="danger"
+                        loading={busy === template.id}
                         disabled={busy !== null}
                         onClick={() => void removeTemplate(template.id)}
                       >
@@ -280,6 +282,7 @@ export function GuestMessageSettings({ initial }: { initial: StayPreparationData
                   <Button
                     size="sm"
                     variant="primary"
+                    loading={busy === template.id}
                     disabled={busy !== null || unchanged}
                     onClick={() => void saveTemplate(template)}
                   >
@@ -323,6 +326,7 @@ export function GuestMessageSettings({ initial }: { initial: StayPreparationData
               <Button
                 size="sm"
                 variant="primary"
+                loading={busy === "new"}
                 disabled={busy !== null}
                 onClick={() => void addTemplate()}
               >

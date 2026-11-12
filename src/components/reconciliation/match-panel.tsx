@@ -350,7 +350,7 @@ export function MatchPanel({
           <Button className="flex-1" onClick={onClear} disabled={busy}>
             Clear
           </Button>
-          <Button className="flex-1" variant="primary" onClick={onConfirm} disabled={!canConfirm}>
+          <Button className="flex-1" variant="primary" onClick={onConfirm} loading={busy} disabled={!canConfirm}>
             {busy ? "Matching…" : grouped ? `Match ${batch.count} as one` : "Match it"}
           </Button>
         </div>

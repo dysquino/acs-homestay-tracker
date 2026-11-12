@@ -13,7 +13,7 @@ import {
   updateExpenseSettlement,
   voidExpenseSettlement,
 } from "@/lib/data/expense-settlements";
-import { expensePayoutView } from "@/lib/expense-payout";
+import { expenseOutstandingExcluding, expensePayoutView } from "@/lib/expense-payout";
 import { toCentavos } from "@/lib/finance";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { useSubmit } from "@/lib/use-submit";
@@ -48,6 +48,8 @@ export function ExpenseSettlements({
   const [error, setError] = useState<string | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [editingSettlement, setEditingSettlement] = useState<ExpenseSettlement | null>(null);
+  /** Which settlement is being voided right now — its button spins. */
+  const [voidingId, setVoidingId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -74,12 +76,15 @@ export function ExpenseSettlements({
   }, [expense.id]);
 
   async function voidSettlement(s: ExpenseSettlement) {
+    setVoidingId(s.id);
     try {
       await voidExpenseSettlement(s.id, user?.name ?? "Unknown");
       await load();
       onChanged();
     } catch {
       setError("Couldn't void this settlement. Please try again.");
+    } finally {
+      setVoidingId(null);
     }
   }
 
@@ -88,6 +93,22 @@ export function ExpenseSettlements({
       ? null
       : expensePayoutView(expense.amount, settlements, expense.paidBy);
 
+  /**
+   * How much of the expense can still be recorded.
+   *
+   * While editing, the settlement being edited is left out of the sum — its
+   * amount is being replaced, not added to. Counting it made the outstanding
+   * read as ₱0 on an already-settled expense, which then blocked every edit
+   * with "Cannot exceed the ₱0.00 remaining balance."
+   */
+  const outstanding = editingSettlement
+    ? expenseOutstandingExcluding(
+        expense.amount,
+        settlements ?? [],
+        editingSettlement.id,
+      )
+    : (payout?.outstanding ?? 0);
+
   return (
     <div className="mt-3 rounded-lg border border-slate-200 bg-white p-3">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -95,7 +116,7 @@ export function ExpenseSettlements({
         <Button
           size="sm"
           variant="primary"
-          disabled={payout === null || payout.fullySettled}
+          disabled={voidingId !== null || payout === null || payout.fullySettled}
           onClick={() => setFormOpen(true)}
         >
           {payout?.fullySettled
@@ -167,10 +188,21 @@ export function ExpenseSettlements({
               </div>
               {s.status === "active" ? (
                 <div className="flex gap-1">
-                  <Button size="sm" variant="ghost" onClick={() => { setEditingSettlement(s); setFormOpen(true); }}>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    disabled={voidingId !== null}
+                    onClick={() => { setEditingSettlement(s); setFormOpen(true); }}
+                  >
                     Edit
                   </Button>
-                  <Button size="sm" variant="ghost" onClick={() => void voidSettlement(s)}>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    loading={voidingId === s.id}
+                    disabled={voidingId !== null && voidingId !== s.id}
+                    onClick={() => void voidSettlement(s)}
+                  >
                     Void
                   </Button>
                 </div>
@@ -184,7 +216,7 @@ export function ExpenseSettlements({
         open={formOpen}
         expense={expense}
         editingSettlement={editingSettlement}
-        outstanding={payout?.outstanding ?? 0}
+        outstanding={outstanding}
         onClose={() => { setFormOpen(false); setEditingSettlement(null); }}
         onSaved={async () => {
           setFormOpen(false);
@@ -234,7 +266,7 @@ function SettlementForm({
       footer={
         <>
           <Button onClick={onClose}>Cancel</Button>
-          <Button type="submit" form={FORM_ID} variant="primary" disabled={submit.saving}>
+          <Button type="submit" form={FORM_ID} variant="primary" loading={submit.saving} disabled={submit.saving}>
             {submit.saving ? "Saving…" : isEditing ? "Save changes" : "Save payout"}
           </Button>
         </>

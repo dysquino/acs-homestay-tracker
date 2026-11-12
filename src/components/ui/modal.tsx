@@ -118,6 +118,7 @@ export function ConfirmDialog({
   confirmLabel = "Delete",
   onConfirm,
   onCancel,
+  loading = false,
 }: {
   open: boolean;
   title: string;
@@ -125,17 +126,26 @@ export function ConfirmDialog({
   confirmLabel?: string;
   onConfirm: () => void;
   onCancel: () => void;
+  /**
+   * The confirmation is being carried out. The confirm button spins and the
+   * dialog stays put until the write comes back — closing it first would
+   * leave the owner with no sign of whether the delete happened, and a
+   * second tap on the row behind the dialog would start it again.
+   */
+  loading?: boolean;
 }) {
   return (
     <Modal
       open={open}
-      onClose={onCancel}
+      onClose={loading ? () => {} : onCancel}
       title={title}
       footer={
         <>
-          <Button onClick={onCancel}>Cancel</Button>
-          <Button variant="danger" onClick={onConfirm}>
-            {confirmLabel}
+          <Button onClick={onCancel} disabled={loading}>
+            Cancel
+          </Button>
+          <Button variant="danger" onClick={onConfirm} loading={loading}>
+            {loading ? `${confirmLabel}…` : confirmLabel}
           </Button>
         </>
       }

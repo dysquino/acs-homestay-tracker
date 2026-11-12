@@ -32,6 +32,8 @@ export function BookingRequests({ onApprove }: { onApprove: (request: BookingReq
   const taken = [...bookings, ...airbnbBlocks.map(blockAsBooking), ...dateBlocks.map(dateBlockAsBooking)];
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [toDecline, setToDecline] = useState<BookingRequest | null>(null);
+  /** The decline is in flight — the confirmation dialog spins. */
+  const [declining, setDeclining] = useState(false);
 
   if (bookingRequests.length === 0) return null;
 
@@ -108,6 +110,7 @@ export function BookingRequests({ onApprove }: { onApprove: (request: BookingReq
 
       <ConfirmDialog
         open={toDecline !== null}
+        loading={declining}
         title="Decline this request?"
         confirmLabel="Decline"
         message={
@@ -121,13 +124,19 @@ export function BookingRequests({ onApprove }: { onApprove: (request: BookingReq
         onCancel={() => setToDecline(null)}
         onConfirm={async () => {
           const target = toDecline;
-          setToDecline(null);
           if (!target) return;
+          // The dialog stays open with a spinner until the decline comes back,
+          // so there's no doubt about whether it went through.
+          setDeclining(true);
           try {
             const result = await declineRequest(target.id);
+            setToDecline(null);
             if (!result.ok) setErrors((e) => ({ ...e, [target.id]: result.error }));
           } catch {
+            setToDecline(null);
             setErrors((e) => ({ ...e, [target.id]: "Couldn't decline this request. Please try again." }));
+          } finally {
+            setDeclining(false);
           }
         }}
       />

@@ -348,7 +348,7 @@ export function BookingRequestForm({
 
       {/* Submit lives at the very bottom of the form so guests see the bank
           details before they finalize the request. */}
-      <Button type="submit" variant="primary" className="w-full" disabled={pending}>
+      <Button type="submit" variant="primary" className="w-full" loading={pending} disabled={pending}>
         {pending ? "Sending…" : "Send booking request"}
       </Button>
       <p className="text-center text-xs text-slate-500">
