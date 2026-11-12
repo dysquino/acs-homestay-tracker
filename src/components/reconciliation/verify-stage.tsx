@@ -2,6 +2,7 @@
 
 import { formatExactCentavos } from "@/lib/finance";
 import { cn } from "@/lib/cn";
+import { Button } from "@/components/ui/button";
 import { formatCurrency, formatShortDate } from "@/lib/format";
 import {
   CATEGORY_LABELS,
@@ -73,14 +74,16 @@ export function VerifyStage({
                 Reconciliation changes are locked. Reopen it if something needs
                 correcting — the report you sealed is kept either way.
               </p>
-              <button
+              <Button
                 type="button"
+                variant="primary"
+                className="mt-3 w-full"
                 onClick={onReopen}
+                loading={busy}
                 disabled={busy}
-                className="mt-3 w-full rounded-md bg-brand-700 px-3.5 py-2 text-sm font-medium text-white hover:bg-brand-800 disabled:opacity-50"
               >
                 {busy ? "Working…" : "Reopen this month"}
-              </button>
+              </Button>
             </>
           ) : (
             <>
@@ -89,14 +92,16 @@ export function VerifyStage({
                 Seals the month and writes a report that records these figures,
                 who sealed it, and when. You can reopen it later with a reason.
               </p>
-              <button
+              <Button
                 type="button"
+                variant="primary"
+                className="mt-3 w-full"
                 onClick={onFinalize}
+                loading={busy}
                 disabled={busy || blocker !== null}
-                className="mt-3 w-full rounded-md bg-brand-700 px-3.5 py-2 text-sm font-medium text-white hover:bg-brand-800 disabled:opacity-50"
               >
                 {busy ? "Finalizing…" : "Finalize the month"}
-              </button>
+              </Button>
               {blocker ? <p className="mt-2 text-xs text-slate-500">{blocker}</p> : null}
             </>
           )}

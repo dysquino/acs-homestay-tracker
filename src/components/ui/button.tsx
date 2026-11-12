@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { ButtonHTMLAttributes, ComponentProps } from "react";
 
+import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/cn";
 
 type Variant = "primary" | "secondary" | "ghost" | "danger";
@@ -32,6 +33,14 @@ const BASE =
 type Props = ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: Variant;
   size?: Size;
+  /**
+   * Shows a spinner and blocks further clicks while a write is in flight.
+   *
+   * The button keeps its label, so the text still says what is happening
+   * ("Saving…"), and `disabled` is applied on top of whatever the caller
+   * asked for — a loading button never accepts a second click.
+   */
+  loading?: boolean;
 };
 
 export function Button({
@@ -39,14 +48,22 @@ export function Button({
   size = "md",
   className,
   type = "button",
+  loading = false,
+  disabled,
+  children,
   ...props
 }: Props) {
   return (
     <button
       type={type}
       className={cn(BASE, VARIANTS[variant], SIZES[size], className)}
+      disabled={disabled || loading}
+      aria-busy={loading || undefined}
       {...props}
-    />
+    >
+      {loading ? <Spinner className="-ml-0.5" /> : null}
+      {children}
+    </button>
   );
 }
 

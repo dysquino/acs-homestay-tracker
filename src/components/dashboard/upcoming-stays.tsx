@@ -298,7 +298,7 @@ function StayPreparationModal({
                 </p>
               ) : null}
             </div>
-            <Button variant="primary" disabled={saving !== null || passcode.trim() === data.doorPasscodes[booking.id]?.trim()} onClick={() => void saveCode()}>
+            <Button variant="primary" loading={saving === "passcode"} disabled={saving !== null || passcode.trim() === data.doorPasscodes[booking.id]?.trim()} onClick={() => void saveCode()}>
               {saving === "passcode" ? "Saving…" : "Save passcode"}
             </Button>
           </div>
@@ -339,7 +339,7 @@ function StayPreparationModal({
                 {knownCleaners(cleaning).map((name) => <option key={name} value={name} />)}
               </datalist>
             </div>
-            <Button variant="primary" disabled={saving !== null || cleaner.trim() === (turnover?.cleanerName ?? "").trim()} onClick={() => void saveCleaner()}>
+            <Button variant="primary" loading={saving === "cleaner"} disabled={saving !== null || cleaner.trim() === (turnover?.cleanerName ?? "").trim()} onClick={() => void saveCleaner()}>
               {saving === "cleaner" ? "Saving…" : "Save cleaner"}
             </Button>
           </div>

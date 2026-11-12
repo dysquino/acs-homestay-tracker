@@ -63,6 +63,8 @@ export default function CleaningPage() {
   const [pendingDelete, setPendingDelete] = useState<CleaningRecord | null>(
     null,
   );
+  /** The delete is in flight — the confirmation dialog spins. */
+  const [deleting, setDeleting] = useState(false);
   // The record whose details are open; looked up fresh so an edit shows.
   const [selectedId, setSelectedId] = useState<string | null>(null);
   // Which record has the payout prompt open, if any. "Mark paid" asks for the
@@ -466,6 +468,7 @@ export default function CleaningPage() {
 
       <ConfirmDialog
         open={pendingDelete !== null}
+        loading={deleting}
         title="Delete cleaning record?"
         message={
           pendingDelete ? (
@@ -478,12 +481,17 @@ export default function CleaningPage() {
         onCancel={() => setPendingDelete(null)}
         onConfirm={async () => {
           const target = pendingDelete;
-          setPendingDelete(null);
           if (!target) return;
+          // The dialog stays open with a spinner until the delete comes back,
+          // so there's no doubt about whether it went through.
+          setDeleting(true);
           try {
             await deleteCleaning(target.id);
+            setPendingDelete(null);
           } catch {
             alert("Couldn't delete this record. Please try again.");
+          } finally {
+            setDeleting(false);
           }
         }}
       />

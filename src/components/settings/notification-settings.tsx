@@ -211,7 +211,7 @@ export function NotificationSettings() {
       {state === "off" ? (
         <div className="space-y-3">
           <p>Get an alert on this device for new booking requests, a morning summary, and new Airbnb reservations.</p>
-          <Button variant="primary" onClick={turnOn} disabled={busy}>
+          <Button variant="primary" onClick={turnOn} loading={busy} disabled={busy}>
             {busy ? "Turning on…" : "Turn on notifications"}
           </Button>
           <p className="text-xs text-slate-500">Each phone is set up on its own — do this on every device that should get alerts.</p>
@@ -241,10 +241,10 @@ export function NotificationSettings() {
             ))}
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button onClick={test} disabled={busy}>
+            <Button onClick={test} loading={busy} disabled={busy}>
               Send a test
             </Button>
-            <Button variant="ghost" onClick={turnOff} disabled={busy}>
+            <Button variant="ghost" onClick={turnOff} loading={busy} disabled={busy}>
               Turn off on this device
             </Button>
           </div>

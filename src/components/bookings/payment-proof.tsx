@@ -196,7 +196,7 @@ export function PaymentProof({
             >
               Cancel
             </Button>
-            <Button variant="primary" onClick={submitAttach} disabled={!bytes || busy}>
+            <Button variant="primary" onClick={submitAttach} loading={busy} disabled={!bytes || busy}>
               {busy ? "Uploading…" : "Attach"}
             </Button>
           </>
@@ -270,6 +270,7 @@ function RemoveButton({
         }
       }}
       disabled={busy}
+      loading={busy}
       className="px-2 py-1 text-xs text-red-700 hover:text-red-800"
     >
       <TrashIcon className="h-3.5 w-3.5" />

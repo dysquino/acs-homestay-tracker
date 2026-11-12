@@ -48,6 +48,8 @@ export function ExpenseSettlements({
   const [error, setError] = useState<string | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [editingSettlement, setEditingSettlement] = useState<ExpenseSettlement | null>(null);
+  /** Which settlement is being voided right now — its button spins. */
+  const [voidingId, setVoidingId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -74,12 +76,15 @@ export function ExpenseSettlements({
   }, [expense.id]);
 
   async function voidSettlement(s: ExpenseSettlement) {
+    setVoidingId(s.id);
     try {
       await voidExpenseSettlement(s.id, user?.name ?? "Unknown");
       await load();
       onChanged();
     } catch {
       setError("Couldn't void this settlement. Please try again.");
+    } finally {
+      setVoidingId(null);
     }
   }
 
@@ -111,7 +116,7 @@ export function ExpenseSettlements({
         <Button
           size="sm"
           variant="primary"
-          disabled={payout === null || payout.fullySettled}
+          disabled={voidingId !== null || payout === null || payout.fullySettled}
           onClick={() => setFormOpen(true)}
         >
           {payout?.fullySettled
@@ -183,10 +188,21 @@ export function ExpenseSettlements({
               </div>
               {s.status === "active" ? (
                 <div className="flex gap-1">
-                  <Button size="sm" variant="ghost" onClick={() => { setEditingSettlement(s); setFormOpen(true); }}>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    disabled={voidingId !== null}
+                    onClick={() => { setEditingSettlement(s); setFormOpen(true); }}
+                  >
                     Edit
                   </Button>
-                  <Button size="sm" variant="ghost" onClick={() => void voidSettlement(s)}>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    loading={voidingId === s.id}
+                    disabled={voidingId !== null && voidingId !== s.id}
+                    onClick={() => void voidSettlement(s)}
+                  >
                     Void
                   </Button>
                 </div>
@@ -250,7 +266,7 @@ function SettlementForm({
       footer={
         <>
           <Button onClick={onClose}>Cancel</Button>
-          <Button type="submit" form={FORM_ID} variant="primary" disabled={submit.saving}>
+          <Button type="submit" form={FORM_ID} variant="primary" loading={submit.saving} disabled={submit.saving}>
             {submit.saving ? "Saving…" : isEditing ? "Save changes" : "Save payout"}
           </Button>
         </>

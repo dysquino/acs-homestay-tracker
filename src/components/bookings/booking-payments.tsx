@@ -55,6 +55,8 @@ export function BookingPayments({
   const [error, setError] = useState<string | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [editingPayment, setEditingPayment] = useState<BookingPayment | null>(null);
+  /** Which payment is being voided right now — its button spins. */
+  const [voidingId, setVoidingId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -83,12 +85,15 @@ export function BookingPayments({
   }, [bookingId]);
 
   async function voidPayment(p: BookingPayment) {
+    setVoidingId(p.id);
     try {
       await voidBookingPayment(p.id, user?.name ?? "Unknown");
       await load();
       onChanged();
     } catch {
       setError("Couldn't void this payment. Please try again.");
+    } finally {
+      setVoidingId(null);
     }
   }
 
@@ -100,7 +105,12 @@ export function BookingPayments({
     <div className="rounded-lg border border-slate-200 bg-white p-3">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h3 className="text-sm font-semibold text-slate-900">Payments received</h3>
-        <Button size="sm" variant="primary" onClick={() => setFormOpen(true)}>
+        <Button
+          size="sm"
+          variant="primary"
+          disabled={voidingId !== null}
+          onClick={() => setFormOpen(true)}
+        >
           Record payment
         </Button>
       </div>
@@ -152,10 +162,21 @@ export function BookingPayments({
               </div>
               {p.status === "active" ? (
                 <div className="flex gap-1">
-                  <Button size="sm" variant="ghost" onClick={() => { setEditingPayment(p); setFormOpen(true); }}>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    disabled={voidingId !== null}
+                    onClick={() => { setEditingPayment(p); setFormOpen(true); }}
+                  >
                     Edit
                   </Button>
-                  <Button size="sm" variant="ghost" onClick={() => void voidPayment(p)}>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    loading={voidingId === p.id}
+                    disabled={voidingId !== null && voidingId !== p.id}
+                    onClick={() => void voidPayment(p)}
+                  >
                     Void
                   </Button>
                 </div>
@@ -240,7 +261,7 @@ function BookingPaymentForm({
       footer={
         <>
           <Button onClick={onClose}>Cancel</Button>
-          <Button type="submit" form={FORM_ID} variant="primary" disabled={submit.saving}>
+          <Button type="submit" form={FORM_ID} variant="primary" loading={submit.saving} disabled={submit.saving}>
             {submit.saving ? "Saving…" : isEditing ? "Save changes" : "Save payment"}
           </Button>
         </>

@@ -54,6 +54,7 @@ export function GateForm({ from }: { from: string }) {
             type="submit"
             variant="primary"
             className="w-full"
+            loading={pending}
             disabled={pending}
           >
             {pending ? "Checking…" : "Continue"}

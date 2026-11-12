@@ -199,7 +199,7 @@ export function RoomStatusWidget() {
             >
               Cancel
             </Button>
-            <Button variant="primary" disabled={saving} onClick={confirm}>
+            <Button variant="primary" loading={saving} disabled={saving} onClick={confirm}>
               {saving ? "Saving…" : "Confirm"}
             </Button>
           </>

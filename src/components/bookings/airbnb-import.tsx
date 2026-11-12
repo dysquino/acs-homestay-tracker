@@ -105,7 +105,7 @@ export function AirbnbImportModal({ open, onClose }: { open: boolean; onClose: (
           <>
             <Button onClick={close}>Cancel</Button>
             {stage.name === "preview" ? (
-              <Button variant="primary" disabled={chosen.length === 0 || submit.saving} onClick={confirm}>
+              <Button variant="primary" loading={submit.saving} disabled={chosen.length === 0 || submit.saving} onClick={confirm}>
                 {submit.saving
                   ? "Importing…"
                   : chosen.length === 0
