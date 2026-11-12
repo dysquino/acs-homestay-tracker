@@ -13,7 +13,7 @@ import {
   updateExpenseSettlement,
   voidExpenseSettlement,
 } from "@/lib/data/expense-settlements";
-import { expensePayoutView } from "@/lib/expense-payout";
+import { expenseOutstandingExcluding, expensePayoutView } from "@/lib/expense-payout";
 import { toCentavos } from "@/lib/finance";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { useSubmit } from "@/lib/use-submit";
@@ -87,6 +87,22 @@ export function ExpenseSettlements({
     settlements === null
       ? null
       : expensePayoutView(expense.amount, settlements, expense.paidBy);
+
+  /**
+   * How much of the expense can still be recorded.
+   *
+   * While editing, the settlement being edited is left out of the sum — its
+   * amount is being replaced, not added to. Counting it made the outstanding
+   * read as ₱0 on an already-settled expense, which then blocked every edit
+   * with "Cannot exceed the ₱0.00 remaining balance."
+   */
+  const outstanding = editingSettlement
+    ? expenseOutstandingExcluding(
+        expense.amount,
+        settlements ?? [],
+        editingSettlement.id,
+      )
+    : (payout?.outstanding ?? 0);
 
   return (
     <div className="mt-3 rounded-lg border border-slate-200 bg-white p-3">
@@ -184,7 +200,7 @@ export function ExpenseSettlements({
         open={formOpen}
         expense={expense}
         editingSettlement={editingSettlement}
-        outstanding={payout?.outstanding ?? 0}
+        outstanding={outstanding}
         onClose={() => { setFormOpen(false); setEditingSettlement(null); }}
         onSaved={async () => {
           setFormOpen(false);

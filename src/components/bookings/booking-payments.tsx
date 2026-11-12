@@ -16,6 +16,7 @@ import {
   voidBookingPayment,
 } from "@/lib/data/booking-payments";
 import { formatCurrency, formatDate } from "@/lib/format";
+import { validatePaymentForm } from "@/lib/payment-form";
 import { useSubmit } from "@/lib/use-submit";
 import {
   BOOKING_PAYMENT_METHODS,
@@ -312,14 +313,16 @@ function BookingPaymentFields({
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    const next: Partial<Record<keyof FormState, string>> = {};
-    if (form.amount === "" || Number(form.amount) <= 0)
-      next.amount = "Enter an amount greater than zero.";
-    if (!form.receivedDate) next.receivedDate = "Received date is required.";
-    const nextScreenshotError = paymentScreenshot ? null : "A payment screenshot is required.";
-    setErrors(next);
-    setScreenshotError(nextScreenshotError);
-    if (Object.keys(next).length > 0 || nextScreenshotError) return;
+    // The screenshot is only required when recording a NEW payment. An edit
+    // has no upload field — its proof is managed from the payment details —
+    // so demanding one here blocked every edit before it reached the server.
+    const validation = validatePaymentForm(form, {
+      isEditing,
+      hasScreenshot: paymentScreenshot !== null,
+    });
+    setErrors(validation.errors);
+    setScreenshotError(validation.screenshotError);
+    if (!validation.ok) return;
 
     setSubmitError(null);
     await submit.run(async () => {
